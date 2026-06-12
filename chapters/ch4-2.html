@@ -137,7 +137,7 @@
       <tr><td>제조사</td><td>Synopsys</td><td>Cadence</td><td>Siemens EDA</td></tr>
       <tr><td>실행 명령</td><td><code>vcs</code> → <code>simv</code></td><td><code>xrun</code> (통합)</td><td><code>vlog/vsim</code></td></tr>
       <tr><td>기본 디버거</td><td><strong class="hl">Verdi</strong></td><td><strong class="hl2">SimVision / Indago</strong></td><td>Visualizer</td></tr>
-      <tr><td>주 파형 포맷</td><td><strong>FSDB</strong></td><td><strong>SHM</strong> / FSDB</td><td>WLF / FSDB</td></tr>
+      <tr><td>주 파형 포맷</td><td><strong>VPD</strong>(네이티브) / FSDB(Verdi 연동)</td><td><strong>SHM</strong> / FSDB</td><td>WLF / FSDB</td></tr>
       <tr><td>UVM/SVA/커버리지</td><td>지원</td><td>지원</td><td>지원</td></tr>
       <tr><td>특징</td><td>고성능, 업계 점유율 높음</td><td>통합 단일 명령, 강한 디버그</td><td>입문 친화(ModelSim 계열)</td></tr>
     </table>
@@ -241,7 +241,7 @@
       </div>
       <div class="card">
         <h3><span class="ico">✅</span> SVA</h3>
-        <p>SystemVerilog Assertion. "이 조건은 항상 참이어야 한다"를 검사하는 <strong class="hl">런타임 단언</strong>. 위반 시 즉시 멈춤.</p>
+        <p>SystemVerilog Assertion. "이 조건은 항상 참이어야 한다"를 검사하는 <strong class="hl">런타임 단언</strong>. 위반하면 에러를 리포트하고(기본 severity는 <code>$error</code>라 시뮬레이션은 계속됨), <code>$fatal</code>로 지정했을 때만 즉시 중단.</p>
       </div>
       <div class="card">
         <h3><span class="ico">📊</span> Coverage DB</h3>

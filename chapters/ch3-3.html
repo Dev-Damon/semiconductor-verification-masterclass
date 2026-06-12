@@ -165,7 +165,7 @@
       <tr><td>내가 씀 (E 상태에서)</td><td>E → <span class="pill violet">M</span></td><td>나만 가졌으니 조용히 고침</td></tr>
       <tr><td>내가 씀 (S 상태에서)</td><td>남 사본 invalidate 후 S → <span class="pill violet">M</span></td><td>고치기 전 남의 사본 정리</td></tr>
       <tr><td><strong>남이</strong> 그 주소를 씀</td><td>내 라인 → <span class="pill" style="background:rgba(108,124,149,.2);color:var(--muted)">I</span></td><td>내 사본은 이제 옛값, 버림</td></tr>
-      <tr><td>남이 그 주소를 읽는데 내가 M이면</td><td>M → S (최신값을 남에게 넘김)</td><td>dirty 데이터를 먼저 공급</td></tr>
+      <tr><td>남이 그 주소를 읽는데 내가 M이면</td><td>M → S (최신값을 남에게 공급 + 메모리에도 write-back)</td><td>남이 읽기 전 메모리에도 최신값을 다시 적어 둘 다 clean한 S가 됨. (dirty 채로 소유권을 넘기는 건 순수 MESI가 아니라 MOESI의 Owned 상태)</td></tr>
     </table>
     <div class="dev-bridge mt"><p style="margin:6px 0">상태머신(state machine)으로 보면 친숙하죠? 각 캐시 라인이 작은 FSM이고, "내 코어의 read/write"와 "버스에서 들려온 남의 read/write"가 입력 이벤트입니다. 그 이벤트에 따라 M·E·S·I 사이를 전이합니다.</p></div>
   </section>
@@ -203,7 +203,7 @@
     <p>Part 3에서 본 <strong>AMBA</strong>(AXI 등)는 원래 coherency를 다루지 않았습니다. 멀티코어 시대에 ARM이 coherency를 버스 차원에서 처리하도록 확장한 프로토콜이 <strong class="hl">ACE</strong>와 <strong class="hl2">CHI</strong>입니다.</p>
     <table>
       <tr><th>프로토콜</th><th>정체</th><th>특징</th></tr>
-      <tr><td><span class="pill teal">AXI</span></td><td>기본 고성능 버스 (non-coherent)</td><td>읽기/쓰기 전송만, 일관성 개념 없음</td></tr>
+      <tr><td><span class="pill teal">AXI</span></td><td>기본 고성능 버스 (non-coherent)</td><td>읽기/쓰기 전송만, 캐시 일관성(스눕·캐시상태 추적) 기능 없음 — 전송 순서 규칙과 캐시 가능/버퍼 속성(AxCACHE)은 있지만 다른 캐시를 들여다보진 않음</td></tr>
       <tr><td><span class="pill blue">ACE</span></td><td><strong>AXI Coherency Extensions</strong></td><td>AXI에 snoop 채널·캐시 상태 신호 추가 → 캐시 일관성 지원</td></tr>
       <tr><td><span class="pill violet">CHI</span></td><td><strong>Coherent Hub Interface</strong></td><td>중앙 허브 기반, 다수 코어 확장에 유리한 차세대 coherent 인터커넥트</td></tr>
     </table>

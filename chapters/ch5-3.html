@@ -69,8 +69,8 @@
     <div class="grid3">
       <div class="card">
         <h3><span class="ico">🔌</span> Power Gating</h3>
-        <p>안 쓰는 블록의 <strong class="hl">전원을 통째로 차단</strong>. 누설 전력(leakage)까지 0으로 만듭니다.</p>
-        <div class="analogy" style="margin-top:10px"><p style="margin:4px 0;font-size:14px">집에서 <strong>안 쓰는 방의 전등을 끄는 것</strong>. 그 방은 전기를 1도 안 먹죠.</p></div>
+        <p>안 쓰는 블록의 <strong class="hl">전원을 통째로 차단</strong>. 누설 전력(leakage)을 거의 0에 가깝게(보통 10~1000배) 줄입니다. (완전한 0은 아님 — power switch 자체, always-on 버퍼, 항상 켜진 retention 회로 등에서 미세 누설은 남습니다.)</p>
+        <div class="analogy" style="margin-top:10px"><p style="margin:4px 0;font-size:14px">집에서 <strong>안 쓰는 방의 전등을 끄는 것</strong>. 그 방은 전기를 거의 안 먹죠(콘센트 대기전력처럼 아주 미세한 양만 남습니다).</p></div>
       </div>
       <div class="card">
         <h3><span class="ico">🎚️</span> Multi-Voltage</h3>
@@ -270,7 +270,7 @@
     <table class="compare">
       <tr><th>관점</th><th>Simulation</th><th>Emulation</th><th>FPGA Prototype</th></tr>
       <tr><td>실행 방식</td><td>SW가 회로를 흉내</td><td>전용 HW에 매핑</td><td>실제 FPGA 보드에 매핑</td></tr>
-      <tr><td>속도</td><td><strong class="hl3">가장 느림</strong> (Hz~kHz)</td><td>빠름 (MHz급)</td><td><strong class="hl">가장 빠름</strong> (수십 MHz)</td></tr>
+      <tr><td>속도</td><td><strong class="hl3">가장 느림</strong> (대형 SoC 기준 Hz~kHz; 작은 블록 RTL은 수십 kHz 이상)</td><td>빠름 (MHz급)</td><td><strong class="hl">가장 빠름</strong> (수십 MHz)</td></tr>
       <tr><td>디버깅 가시성</td><td><strong class="hl">최고</strong> (모든 신호 추적)</td><td>좋음 (전용 디버그 HW)</td><td>낮음 (제한적)</td></tr>
       <tr><td>컴파일/셋업</td><td>빠름 (분)</td><td>보통 (시간)</td><td>느림 (장시간)</td></tr>
       <tr><td>주 용도</td><td>블록 단위 정밀 검증</td><td><strong>SW/펌웨어 통합·OS 부팅</strong></td><td>실속도 데모·SW 선개발</td></tr>

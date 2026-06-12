@@ -109,7 +109,7 @@
         </defs>
       </svg>
     </div>
-    <div class="note mt">핵심만: FSM에는 두 갈래(IR 경로 / DR 경로)가 있고, <strong>TMS의 0/1 시퀀스</strong>로 원하는 경로의 Shift 상태로 들어가 비트를 밀어 넣은 뒤 Update로 확정합니다. 16개 상태 이름을 외울 필요는 없습니다.</div>
+    <div class="note mt">핵심만: FSM에는 두 갈래(IR 경로 / DR 경로)가 있고, <strong>TMS의 0/1 시퀀스</strong>로 원하는 경로로 들어갑니다. 각 경로는 실제로 Capture(값을 병렬로 적재)→Shift(비트 이동)→Update(확정) 순서로 동작하며, 다이어그램의 Shift 박스는 이 묶음을 줄인 것입니다. 16개 상태 이름을 외울 필요는 없습니다.</div>
   </section>
 
   <!-- 6. IR / DR -->
@@ -122,7 +122,7 @@
         <h3><span class="ico">📜</span> IR (Instruction Register)</h3>
         <ul>
           <li>"이번엔 어떤 동작?"을 고르는 <strong class="hl3">명령어 레지스터</strong></li>
-          <li>예: <code>BYPASS</code>, <code>IDCODE</code>, <code>EXTEST</code>, <code>SAMPLE</code></li>
+          <li>예: <code>BYPASS</code>·<code>SAMPLE/PRELOAD</code>·<code>EXTEST</code>(필수), <code>IDCODE</code>(옵션) — IDCODE는 device ID 레지스터를 구현한 경우에만 제공</li>
           <li>IR 값이 <strong>어느 DR이 연결될지</strong>를 결정</li>
         </ul>
       </div>
@@ -224,7 +224,7 @@
   <section class="slide">
     <div class="kicker">버스로 가는 다리</div>
     <h2>JTAG2APB — JTAG 접근을 <span class="hl2">APB 트랜잭션</span>으로 변환</h2>
-    <p>디버거는 JTAG라는 <strong>직렬</strong> 세계에 있고, 칩 내부 레지스터·주변장치는 <strong>APB 버스</strong>라는 병렬 세계에 있습니다. <strong>JTAG2APB</strong>는 그 사이의 <strong class="hl">브리지(번역기)</strong>입니다. JTAG로 들어온 "주소+데이터"를 진짜 APB 읽기/쓰기 트랜잭션으로 바꿔 줍니다.</p>
+    <p>디버거는 JTAG라는 <strong>직렬</strong> 세계에 있고, 칩 내부 레지스터·주변장치는 <strong>APB 버스</strong>라는 병렬 세계에 있습니다. <strong>JTAG2APB</strong>는 그 사이의 <strong class="hl">브리지(번역기)</strong>입니다. (이는 IEEE 표준명이 아니라 업계에서 부르는 일반 기능 명칭이며, ARM에서는 CoreSight DAP의 APB-AP/AHB-AP가 같은 역할을 합니다.) JTAG로 들어온 "주소+데이터"를 진짜 APB 읽기/쓰기 트랜잭션으로 바꿔 줍니다.</p>
     <div class="diagram mt" style="text-align:left">
       <div class="flow" style="justify-content:flex-start">
         <div class="box">디버거<br><span class="dim" style="font-size:11px">OpenOCD/gdb</span></div>

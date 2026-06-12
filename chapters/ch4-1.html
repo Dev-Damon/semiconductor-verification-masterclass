@@ -37,7 +37,7 @@
         <p><strong class="hl">실제 조리.</strong> 시뮬레이션 시간이 흐르며 이벤트가 발생하고 파형이 그려짐. <span class="dim">시간 진행</span></p>
       </div>
     </div>
-    <div class="note mt">이 3단계는 표준(IEEE 1800/1364)에 정의된 정식 흐름이며, VCS·Questa·Xcelium 등 모든 상용 시뮬레이터가 따릅니다.</div>
+    <div class="note mt">elaboration이라는 단계 자체는 IEEE 1800/1364가 의미론적으로 정의합니다(인스턴스화·파라미터 확정·generate 펼치기 등). 다만 표준은 이를 compile→elaboration→simulation이라는 별개의 '툴 실행 단계'로 강제하지는 않습니다 — 이 3박자 빌드 흐름은 VCS·Questa·Xcelium 등 상용 시뮬레이터의 공통 관행이며, compile과 elaboration의 정확한 경계는 툴마다 조금씩 다릅니다.</div>
   </section>
 
   <!-- 3. 개발자 비유 -->
@@ -199,7 +199,7 @@ fifo #(.WIDTH(<span class="str">4</span>))  u_small (...);
         <ul>
           <li><strong>이벤트 큐:</strong> "시각 t에 신호 X 변함" 이벤트를 시간순 처리</li>
           <li>매 시각마다 영향받는 블록만 재평가 → 효율적</li>
-          <li>결과를 <strong>파형(VCD/FSDB)</strong>으로 덤프 → 파형 뷰어로 디버그</li>
+          <li>결과를 <strong>파형(VCD/FSDB)</strong>으로 덤프 → 파형 뷰어로 디버그 <span class="dim">(VCD는 IEEE 1364에 정의된 공개 표준 포맷, FSDB는 Synopsys Verdi의 독점·고압축 포맷)</span></li>
           <li>SW의 "프로그램 실행(runtime)"에 해당</li>
         </ul>
       </div>
@@ -236,7 +236,7 @@ fifo #(.WIDTH(<span class="str">4</span>))  u_small (...);
       </tr>
     </table>
     <div class="warnbox mt">
-      <p style="margin:6px 0"><strong>면접 함정:</strong> "없는 모듈을 인스턴스화하면?" → <strong class="hl3">elaboration-time</strong> 에러입니다(컴파일 X). 모듈 하나만 볼 땐 문법이 멀쩡하고, <strong>연결하려는 순간</strong> 비로소 "그런 모듈 없다"가 드러나니까요. SW에서 함수 선언만 있고 정의가 없을 때 <strong>링크 단계</strong>에서 undefined reference가 뜨는 것과 똑같습니다.</p>
+      <p style="margin:6px 0"><strong>면접 함정:</strong> "없는 모듈을 인스턴스화하면?" → 모듈 연결을 시도하는 <strong class="hl3">elaboration-time</strong>에 비로소 드러나므로 거의 모든 툴이 elaboration 에러로 보고합니다(면접 정답은 'elaboration'). 단, compile과 elaboration을 한 번에 처리하는 single-step 툴이나 일부 컴파일러(예: Icarus Verilog)는 컴파일 메시지처럼 보고하기도 합니다 — 검출 시점은 표준이 강제하지 않아 툴마다 조금 다릅니다. 모듈 하나만 볼 땐 문법이 멀쩡하고, <strong>연결하려는 순간</strong> 비로소 "그런 모듈 없다"가 드러나니까요. SW에서 함수 선언만 있고 정의가 없을 때 <strong>링크 단계</strong>에서 undefined reference가 뜨는 것과 똑같습니다.</p>
     </div>
   </section>
 

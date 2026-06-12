@@ -22,7 +22,7 @@
   <section class="slide">
     <div class="kicker">한 문장 정의</div>
     <h2>SystemVerilog = <span class="hl">Verilog + OOP + 테스트 프레임워크</span></h2>
-    <p class="lead">SystemVerilog(SV)는 Verilog의 <strong>상위호환(superset)</strong>입니다. 기존 Verilog 코드는 그대로 돌아가고, 그 위에 두 갈래의 강력한 기능이 얹혀 있습니다.</p>
+    <p class="lead">SystemVerilog(SV)는 Verilog의 <strong>상위호환(superset)</strong>입니다. 기존 Verilog 코드는 거의 그대로 돌아가고(SV가 새로 추가한 예약어 <code>logic</code>·<code>bit</code> 등과 충돌하는 드문 레거시만 예외), 그 위에 두 갈래의 강력한 기능이 얹혀 있습니다.</p>
     <div class="grid2 mt">
       <div class="card" style="border-color:var(--accent)">
         <h3><span class="ico">🏗️</span> 설계측(Design) 개선</h3>
@@ -176,7 +176,7 @@ Packet p = <span class="kw">new</span>();
       </div>
       <div class="dev-bridge">
         <p style="margin:6px 0 12px"><strong>이게 바로 Property-based testing</strong>입니다. QuickCheck/Hypothesis로 "입력은 이 조건을 만족해야 한다"를 선언하면 프레임워크가 수천 케이스를 뽑아주던 그 패턴.</p>
-        <p style="margin:6px 0">차이점: <code>constraint</code>는 <strong class="hl">SAT 솔버</strong>가 풀어, 단순 범위가 아니라 변수 간 복잡한 관계식까지 만족하는 값을 생성합니다.</p>
+        <p style="margin:6px 0">차이점: <code>constraint</code>는 <strong class="hl">제약 솔버</strong>(constraint solver — 내부적으로 BDD·SAT 등 형식 엔진을 혼합해 씀)가 풀어, 단순 범위가 아니라 변수 간 복잡한 관계식까지 만족하는 값을 생성합니다.</p>
       </div>
     </div>
     <div class="note mt">왜 중요한가? 사람은 "정상 케이스 + 떠오르는 코너 케이스" 정도만 짭니다. 제약 랜덤은 <strong class="hl">사람이 상상 못 한 조합</strong>을 끝없이 던져 숨은 버그를 캐냅니다. 이를 CRV(Constrained-Random Verification)라 부릅니다.</div>
@@ -194,7 +194,7 @@ Packet p = <span class="kw">new</span>();
       <tr><td><code class="hl">mailbox</code></td><td>스레드 간 데이터 전달 큐 (FIFO)</td><td>스레드-세이프 큐 / 채널</td></tr>
       <tr><td><code class="hl">semaphore</code></td><td>공유 자원 동시 접근 제한</td><td>세마포어 (그대로!)</td></tr>
     </table>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: Go의 <strong>goroutine + channel</strong>, 또는 Java의 <strong>ExecutorService + BlockingQueue</strong>와 똑같은 그림입니다. 검증 환경에서 컴포넌트들은 mailbox를 통해 트랜잭션을 주고받으며 느슨하게 결합됩니다 — UVM의 데이터 흐름이 바로 이것.</p></div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: Go의 <strong>goroutine + channel</strong>, 또는 Java의 <strong>ExecutorService + BlockingQueue</strong>와 똑같은 그림입니다. 검증 환경에서 컴포넌트들은 이런 느슨한 결합으로 트랜잭션을 주고받습니다 — UVM도 같은 원리를 raw mailbox가 아닌 TLM 포트(analysis_port·uvm_tlm_fifo 등)로 구현합니다.</p></div>
   </section>
 
   <!-- 10. covergroup + assertion -->

@@ -148,7 +148,7 @@
       <div>
         <pre class="code"><code><span class="cmt">// reset vector = 전원 켤 때마다</span>
 <span class="cmt">// CPU가 무조건 점프하는 고정 주소</span>
-<span class="kw">#define</span> RESET_VECTOR  <span class="str">0x00000000</span>
+<span class="kw">#define</span> RESET_VECTOR  <span class="str">0x00000000</span>   <span class="cmt">// 예시값 — 실제 주소는 칩/아키텍처마다 다름(ARMv8은 RVBAR가 결정, 흔히 BootROM 베이스)</span>
 
 <span class="cmt">// 그 주소엔 BootROM이 매핑됨 (읽기전용)</span>
 <span class="kw">void</span> <span class="fn">bootrom_main</span>() {

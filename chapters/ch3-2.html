@@ -41,7 +41,7 @@
         </ul>
       </div>
     </div>
-    <div class="note mt">AMBA 제품군: 저속·단순 제어용 <strong>APB</strong>, 고성능 <strong>AHB</strong>, 그리고 최고 성능의 <strong class="hl">AXI</strong>. 이번 챕터는 AXI에 집중합니다.</div>
+    <div class="note mt">AMBA 제품군: 저속·단순 제어용 <strong>APB</strong>, 중간 성능의 <strong>AHB</strong>(Advanced High-performance Bus), 그리고 최고 성능의 <strong class="hl">AXI</strong>. (캐시 일관성이 필요한 멀티코어에는 더 상위인 ACE·CHI가 쓰입니다.) 이번 챕터는 AXI에 집중합니다.</div>
   </section>
 
   <!-- 3. 개발자 비유 -->
@@ -238,7 +238,7 @@ r2 = <span class="fn">read</span>(B);
     <div class="grid3 mt">
       <div class="card">
         <h3><span class="ico">📏</span> LEN</h3>
-        <p>버스트 안 전송 <strong>개수</strong>(beats). 인코딩은 <code>AxLEN = beats−1</code> → 예: AxLEN=3 이면 <strong>4 beats</strong>.</p>
+        <p>버스트 안 전송 <strong>개수</strong>(beats). 인코딩은 <code>AxLEN = beats−1</code> → 예: AxLEN=3 이면 <strong>4 beats</strong>. <span class="dim" style="font-size:12px">(AXI3: AxLEN 4비트 → 모든 버스트 최대 16 beats. AXI4: AxLEN 8비트 → INCR만 최대 256 beats, FIXED·WRAP은 여전히 최대 16 beats.)</span></p>
       </div>
       <div class="card">
         <h3><span class="ico">📦</span> SIZE</h3>
@@ -246,7 +246,7 @@ r2 = <span class="fn">read</span>(B);
       </div>
       <div class="card">
         <h3><span class="ico">🔀</span> BURST 타입</h3>
-        <p><strong>INCR</strong>: 주소 증가. <strong>WRAP</strong>: 경계서 되감김(캐시 라인). <span class="dim">(FIXED도 있음)</span></p>
+        <p><strong>INCR</strong>: 주소 증가. <strong>WRAP</strong>: 경계서 되감김(캐시 라인 충전용, 버스트 길이는 2·4·8·16 beats만 허용). <span class="dim">(FIXED도 있음 — 같은 주소 반복)</span></p>
       </div>
     </div>
     <div class="diagram mt" style="text-align:left">

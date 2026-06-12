@@ -76,7 +76,7 @@ http.<span class="fn">post</span>(<span class="str">"/reg/0x14"</span>, <span cl
   <!-- 5. 신호들 -->
   <section class="slide">
     <div class="kicker">핵심 신호 (Signals)</div>
-    <h2>APB가 주고받는 9개의 선</h2>
+    <h2>APB의 핵심 신호 9개</h2>
     <p>버스는 결국 <strong>전선 묶음 + 약속</strong>입니다. APB는 신호가 적어서 외우기 쉽습니다. <strong class="hl3">Master(요청자, 보통 브리지)</strong> ↔ <strong class="hl">Slave(주변장치)</strong> 사이 신호를 봅시다.</p>
     <div class="grid2">
       <dl class="kv">
@@ -90,10 +90,11 @@ http.<span class="fn">post</span>(<span class="str">"/reg/0x14"</span>, <span cl
         <dt>PWDATA</dt><dd>쓸 데이터 (Master→Slave).</dd>
         <dt>PRDATA</dt><dd>읽은 데이터 (Slave→Master).</dd>
         <dt>PREADY</dt><dd>슬레이브 "준비됨/끝났음" 신호.</dd>
-        <dt>PSLVERR</dt><dd>에러 응답 (1이면 실패).</dd>
+        <dt>PSLVERR</dt><dd>에러 응답. 전송 완료 클럭(PREADY=1)에만 유효, 1이면 실패.</dd>
       </dl>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 매핑: <code>PADDR</code>=URL 경로, <code>PWRITE</code>=GET/POST 구분, <code>PWDATA</code>=요청 바디, <code>PRDATA</code>=응답 바디, <code>PREADY</code>=200 응답 도착(블로킹 해제), <code>PSLVERR</code>=HTTP 500/4xx. <strong class="hl">P</strong>는 전부 Peripheral의 P입니다.</p></div>
+    <div class="note mt">이 외에 리셋 <code>PRESETn</code>(active-low)이 항상 있고, 선택 신호 <code>PPROT</code>(보호)·<code>PSTRB</code>(바이트 strobe, APB4~)도 존재합니다.</div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 매핑: <code>PADDR</code>=URL 경로, <code>PWRITE</code>=GET/POST 구분, <code>PWDATA</code>=요청 바디, <code>PRDATA</code>=응답 바디, <code>PREADY</code>=200 응답 도착(블로킹 해제), <code>PSLVERR</code>=HTTP 500/4xx. 모든 신호의 <strong class="hl">P</strong> 접두사는 이게 APB(Peripheral 버스) 신호라는 표식입니다. (예: <code>PSLVERR</code> = P(APB 신호) + SLV(Slave) + ERR(에러)처럼, P 뒤 글자들은 별개 약어입니다.)</p></div>
   </section>
 
   <!-- 6. 2-phase 상태 -->
@@ -197,7 +198,7 @@ http.<span class="fn">post</span>(<span class="str">"/reg/0x14"</span>, <span cl
     </div>
     <div class="qa">
       <div class="q">PREADY와 PSLVERR의 역할은?</div>
-      <div class="a"><code>PREADY</code>는 슬레이브의 핸드셰이크 신호로, 0이면 아직 준비 안 됨(대기 사이클을 삽입해 마스터를 블로킹), 1이면 이번 클럭에 전송 완료를 뜻합니다. 느린 주변장치가 속도를 맞추는 수단이죠. <code>PSLVERR</code>은 에러 응답으로, ACCESS의 마지막 클럭에 1이면 그 트랜잭션이 실패(잘못된 주소·쓰기 금지 영역 등)했음을 알립니다. HTTP로 치면 PREADY는 응답 도착, PSLVERR은 500 에러에 해당합니다.</div>
+      <div class="a"><code>PREADY</code>는 슬레이브의 핸드셰이크 신호로, 0이면 아직 준비 안 됨(대기 사이클을 삽입해 마스터를 블로킹), 1이면 이번 클럭에 전송 완료를 뜻합니다. 느린 주변장치가 속도를 맞추는 수단이죠. <code>PSLVERR</code>은 에러 응답으로, <code>PSEL</code>·<code>PENABLE</code>·<code>PREADY</code>가 모두 1인 전송의 마지막 클럭(즉 전송이 완료되는 클럭)에만 유효하며, 이때 1이면 그 트랜잭션이 실패(잘못된 주소·쓰기 금지 영역 등)했음을 알립니다. HTTP로 치면 PREADY는 응답 도착, PSLVERR은 500 에러에 해당합니다.</div>
     </div>
   </section>
 
@@ -210,7 +211,7 @@ http.<span class="fn">post</span>(<span class="str">"/reg/0x14"</span>, <span cl
         <ul>
           <li><strong>APB</strong> = AMBA 패밀리 중 <strong class="hl">가장 단순·저속·저전력</strong> 버스, 제어 레지스터용</li>
           <li>위계: <strong class="hl2">AXI</strong>(최고속) ↔ AHB ↔ <strong class="hl">APB</strong>(저속). 보통 브리지로 연결</li>
-          <li>신호: PCLK/PSEL/PENABLE/PADDR/PWRITE/PWDATA/PRDATA/<strong>PREADY</strong>/<strong>PSLVERR</strong></li>
+          <li>핵심 신호: PCLK/PSEL/PENABLE/PADDR/PWRITE/PWDATA/PRDATA/<strong>PREADY</strong>/<strong>PSLVERR</strong></li>
           <li>상태: <strong>IDLE → SETUP → ACCESS</strong> (2 활성 페이즈)</li>
           <li><strong class="hl">비파이프라인</strong>: 한 번에 하나, 거래가 겹치지 않음</li>
         </ul>

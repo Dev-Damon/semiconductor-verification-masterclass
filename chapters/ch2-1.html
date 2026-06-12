@@ -150,7 +150,7 @@
       <tr><td><span class="pill violet">sequencer</span></td><td>sequence를 받아 driver에게 item을 <strong>중계</strong></td><td>조감독</td></tr>
       <tr><td><span class="pill teal">driver</span></td><td>item을 받아 <strong>실제 핀 신호</strong>로 변환·구동</td><td>배우</td></tr>
       <tr><td><span class="pill blue">monitor</span></td><td>핀 신호를 <strong>관찰</strong>해 다시 트랜잭션으로 복원</td><td>카메라</td></tr>
-      <tr><td><span class="pill blue">agent</span></td><td><strong>sequencer + driver + monitor</strong> 한 묶음</td><td>한 팀</td></tr>
+      <tr><td><span class="pill blue">agent</span></td><td><strong>sequencer + driver + monitor</strong> 한 묶음 <span class="dim">(active 기준; passive는 <code>is_active=UVM_PASSIVE</code>로 monitor만 생성)</span></td><td>한 팀</td></tr>
       <tr><td><span class="pill violet">scoreboard</span></td><td><strong>기대값 vs 실제값</strong> 비교 (합/불 판정)</td><td>평론가</td></tr>
       <tr><td><span class="pill blue">env</span></td><td>agent·scoreboard를 묶은 <strong>재사용 단위</strong></td><td>제작사</td></tr>
       <tr><td><span class="pill violet">test</span></td><td>env 생성 + 어떤 sequence를 돌릴지 결정</td><td>감독</td></tr>
@@ -241,12 +241,15 @@
       <span class="arrow">→</span>
       <div class="box on">run_phase<br><span class="hl" style="font-size:11px">자극 실행(시간 소모)</span></div>
       <span class="arrow">→</span>
+      <div class="box"><span class="dim">…</span><br><span class="dim" style="font-size:11px">(extract/check 생략)</span></div>
+      <span class="arrow">→</span>
       <div class="box">report_phase<br><span class="dim" style="font-size:11px">결과 집계</span></div>
     </div>
+    <div class="note mt">위 흐름도는 핵심 단계만 추렸습니다. 표준 common phase의 full 순서는 <strong>build → connect → end_of_elaboration → start_of_simulation → run → extract → check → report → final</strong> 9단계로, 여기선 start_of_simulation·extract·check·final을 생략했습니다.</div>
     <dl class="kv mt">
       <dt>build_phase</dt><dd>위에서 아래(top-down)로 컴포넌트 객체를 <code>create()</code>로 생성. 여기서 factory·config_db가 작동.</dd>
       <dt>connect_phase</dt><dd>아래에서 위(bottom-up)로 TLM 포트를 서로 <code>connect()</code>로 연결.</dd>
-      <dt>run_phase</dt><dd>유일하게 <strong class="hl">시간이 흐르는</strong> 단계. sequence가 돌고 driver가 핀을 흔든다. (task)</dd>
+      <dt>run_phase</dt><dd><strong class="hl">시간을 소모하는</strong> task 기반 단계. sequence가 돌고 driver가 핀을 흔든다. build/connect 같은 function phase는 0시간에 실행되고, <strong>run 계열(task) phase에서만</strong> 시뮬레이션 시간이 흐른다.</dd>
       <dt>report_phase</dt><dd>pass/fail, 에러 수, 커버리지 등을 정리해 보고.</dd>
     </dl>
     <div class="note mt">왜 단계를 나눌까? <strong>"모두 다 만든 뒤(build) → 다 연결한 뒤(connect) → 그제서야 실행(run)"</strong> 순서를 강제하면, 절반만 만들어진 환경에서 신호가 도는 사고를 막습니다.</div>
@@ -285,8 +288,9 @@ uvm_config_db#(<span class="kw">virtual</span> my_if)::<span class="fn">set</spa
       <div>
         <table class="compare">
           <tr><th>구분</th><th>의미</th></tr>
-          <tr><td>put/get port</td><td>1:1, 한 곳이 보내면 한 곳이 받음 (driver↔sequencer)</td></tr>
+          <tr><td>put/get port</td><td>컴포넌트 간 1:1 블로킹 통신 (한 곳이 보내면 한 곳이 받음)</td></tr>
           <tr><td><strong class="hl">analysis port</strong></td><td>1:N <strong>브로드캐스트</strong>. monitor가 하나 쏘면 scoreboard·coverage가 동시에 구독</td></tr>
+          <tr><td>seq_item pull port</td><td>driver↔sequencer 전용 <strong>양방향 1:1 pull</strong> (driver가 <code>get_next_item()</code>으로 item을 능동적으로 당겨옴)</td></tr>
         </table>
         <div class="analogy mt"><p style="margin:6px 0">analysis port는 <strong>Pub/Sub(이벤트 버스)</strong>입니다. monitor가 "트랜잭션 발생!"을 publish하면, 구독자(scoreboard, 커버리지 수집기)가 각자 받아 처리합니다.</p></div>
       </div>
@@ -338,7 +342,7 @@ uvm_config_db#(<span class="kw">virtual</span> my_if)::<span class="fn">set</spa
         <ul>
           <li>UVM = <strong>SystemVerilog 클래스 라이브러리 + 표준 방법론</strong></li>
           <li>계층: <strong>sequence → sequencer → driver → DUT → monitor → scoreboard</strong></li>
-          <li><strong>agent</strong> = sequencer+driver+monitor / <strong>env</strong>가 묶고 / <strong>test</strong>가 지휘</li>
+          <li><strong>agent</strong> = sequencer+driver+monitor <span class="dim">(active 기준; passive는 monitor만)</span> / <strong>env</strong>가 묶고 / <strong>test</strong>가 지휘</li>
           <li><strong>phases</strong>로 build→connect→run 순서를 강제</li>
           <li><strong>factory/config_db</strong> = 의존성 주입, <strong>TLM/analysis port</strong> = 느슨한 통신</li>
         </ul>

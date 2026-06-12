@@ -45,7 +45,7 @@
       <p class="dim" style="margin-bottom:6px">RTL 시뮬 = 디버그 빌드(이상화), GLS = 릴리즈 빌드(실제 지연·실제 게이트). 컴파일러가 코드를 바꿔놓듯, 합성(synthesis)이 RTL을 게이트로 재구성하면서 새 버그가 드러납니다.</p>
     </div>
     <div class="grid3 mt">
-      <div class="card"><h3><span class="ico">🏁</span> Race condition</h3><p class="dim" style="font-size:14px">두 신호의 도착 순서에 결과가 좌우됨 = setup/hold 위반의 본질</p></div>
+      <div class="card"><h3><span class="ico">🏁</span> Race condition</h3><p class="dim" style="font-size:14px">두 신호의 도착 순서(상대 타이밍)에 결과가 좌우됨 — setup/hold 위반도 일종의 race(데이터 vs 클럭 도착 경쟁)로 볼 수 있다</p></div>
       <div class="card"><h3><span class="ico">🫥</span> 초기화 안 된 변수</h3><p class="dim" style="font-size:14px">리셋 안 된 레지스터 = GLS에서 <code>X</code>(불확정)로 드러남</p></div>
       <div class="card"><h3><span class="ico">🔧</span> 최적화 후 발현</h3><p class="dim" style="font-size:14px">합성 최적화로 사라진/바뀐 로직이 GLS에서야 보임</p></div>
     </div>
@@ -178,7 +178,7 @@
       </div>
       <div class="card">
         <h3><span class="ico">🧬</span> DFT 로직</h3>
-        <p>scan chain·테스트 회로(DFT)는 합성 단계에서 삽입됩니다. RTL엔 없으니 <strong>GLS에서 처음</strong> 검증됩니다.</p>
+        <p>scan chain·테스트 회로(DFT)는 합성/DFT 삽입 단계에서 추가됩니다(scan flip-flop 교체는 합성 중, scan chain stitching은 게이트 네트리스트에서). RTL엔 없으니 <strong>GLS에서 처음</strong> 검증됩니다.</p>
       </div>
       <div class="card">
         <h3><span class="ico">🕰️</span> 클럭 게이팅</h3>

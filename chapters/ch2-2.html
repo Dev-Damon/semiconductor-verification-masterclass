@@ -125,7 +125,7 @@
     <table class="compare">
       <tr><th>방식</th><th>어떻게</th><th>속도 / 현실성</th></tr>
       <tr><td>Frontdoor load</td><td>실제 버스 트랜잭션으로 한 워드씩 정상 경로로 기록 (실제 부트로더가 플래시에서 읽어오듯)</td><td>느림 · <strong>현실에 가장 가까움</strong></td></tr>
-      <tr><td>Backdoor load</td><td>시뮬레이터가 메모리 배열에 <strong class="hl">직접</strong> 값을 꽂음 (<code>$readmemh</code> 등). 버스를 거치지 않음</td><td><strong class="hl">매우 빠름</strong> · 부팅 단축</td></tr>
+      <tr><td>Backdoor load</td><td>시뮬레이터가 메모리 배열에 <strong class="hl">직접</strong> 값을 꽂음 (<code>$readmemh</code> 프리로드 등). 버스를 거치지 않는 이런 직접-주입을 통칭 backdoor라 부른다. 단 외부에서 계층 경로(<code>dut.ram.mem</code>)로 남의 메모리를 채우는 것은 시뮬레이터마다 허용도가 다르며, 엄밀한 UVM backdoor는 HDL path 기반 <code>uvm_hdl_deposit</code>/<code>force</code>(DPI 경유)로 동작한다.</td><td><strong class="hl">매우 빠름</strong> · 부팅 단축</td></tr>
     </table>
     <pre class="code"><code><span class="cmt">// 컴파일된 펌웨어 이미지를 메모리 모델에 backdoor로 주입</span>
 <span class="kw">initial</span> <span class="fn">$readmemh</span>(<span class="str">"test.hex"</span>, dut.ram.mem);  <span class="cmt">// 버스 안 거치고 곧바로</span>
@@ -141,7 +141,7 @@ cpu_rst_n = <span class="kw">1</span>;  <span class="cmt">// 이제부터 진짜
     <h2>SystemVerilog ↔ C, 두 세계를 잇는 다리</h2>
     <div class="grid2">
       <div>
-        <p><strong class="hl3">DPI-C</strong>(Direct Programming Interface)는 SystemVerilog에서 <strong>C 함수를 직접 호출</strong>하거나 그 반대를 가능하게 하는 표준 인터페이스입니다. 두 언어가 같은 시뮬레이션 안에서 함수처럼 서로를 부릅니다.</p>
+        <p><strong class="hl3">DPI</strong>(Direct Programming Interface)는 SystemVerilog에서 <strong>C 함수를 직접 호출</strong>하거나 그 반대를 가능하게 하는 표준 인터페이스입니다. <code>import "DPI-C"</code>에서 끝의 <strong>-C</strong>는 약어의 일부가 아니라 "C 언어 연동(C linkage) 계층"을 가리키는 식별자입니다. 두 언어가 같은 시뮬레이션 안에서 함수처럼 서로를 부릅니다.</p>
         <ul>
           <li><strong>import</strong>: SV가 C 함수를 호출 (예: 복잡한 알고리즘·레퍼런스 모델을 C로)</li>
           <li><strong>export</strong>: C가 SV 함수를 호출</li>
