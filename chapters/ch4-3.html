@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>4-3 · Gate-Level Sim & Timing Check</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-title="Part 4 · 4-3 Gate-Level Sim & Timing Check">
+<div class="deck">
+
+  <!-- 1. Title -->
+  <section class="slide title-slide">
+    <div class="part-badge">Part 4 · 시뮬레이션과 타이밍</div>
+    <h1>Gate-Level Sim &amp; Timing Check<br>"논리는 맞는데 시간이 안 맞는다"</h1>
+    <p class="hook">RTL에선 모든 게 0초 만에 일어났습니다. 하지만 진짜 회로엔 <strong>지연(delay)</strong>이 있죠.
+      이 챕터는 "코드는 통과했는데 빌드 최적화 후 터지는 버그"의 하드웨어 버전입니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
+  </section>
+
+  <!-- 2. 왜 배우나 / 한 문장 정의 -->
+  <section class="slide">
+    <div class="kicker">한 문장 정의</div>
+    <h2>GLS = 합성 후 <span class="hl">진짜 게이트 회로</span>로 다시 돌려보기</h2>
+    <p class="lead">Gate-Level Simulation(GLS)은 RTL을 합성해 나온 <strong>게이트 네트리스트</strong>를, 실제 게이트의 <strong>지연 시간까지 반영</strong>해서 시뮬레이션하는 검증 단계입니다.</p>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">⚡</span> RTL 시뮬의 세계</h3>
+        <p>모든 연산이 <strong class="hl">지연 0</strong>의 이상화된 모델. "논리가 맞는가"만 본다. 빠르고 편하다.</p>
+      </div>
+      <div class="card" style="border-color:var(--accent)">
+        <h3><span class="ico">⏱️</span> GLS의 세계</h3>
+        <p>실제 게이트엔 신호가 통과하는 데 <strong class="hl">picosecond 단위 지연</strong>이 있다. "이 속도(클럭)에서 시간 안에 동작하는가"까지 본다.</p>
+      </div>
+    </div>
+    <div class="note mt">왜 굳이? RTL 검증이 완벽해도, 게이트로 깎아낸 뒤 <strong class="hl">"논리는 맞지만 타이밍/초기화가 안 맞는"</strong> 버그가 새로 생길 수 있기 때문입니다. 그걸 tape-out 전에 잡는 마지막 그물망이 GLS입니다.</div>
+  </section>
+
+  <!-- 3. 개발자 비유 -->
+  <section class="slide">
+    <div class="kicker">개발자 직관으로 번역</div>
+    <h2>"디버그 빌드는 통과, 릴리즈 빌드에서 터진다"</h2>
+    <div class="dev-bridge">
+      <p style="margin:6px 0">당신도 겪어봤을 겁니다 — 디버그 빌드에선 멀쩡한데 <strong>최적화(-O2) 빌드에서만 깨지는 버그</strong>. 보통 범인은 <strong class="hl">race condition</strong>, 초기화 안 된 변수, 타이밍 의존성입니다.</p>
+      <p class="dim" style="margin-bottom:6px">RTL 시뮬 = 디버그 빌드(이상화), GLS = 릴리즈 빌드(실제 지연·실제 게이트). 컴파일러가 코드를 바꿔놓듯, 합성(synthesis)이 RTL을 게이트로 재구성하면서 새 버그가 드러납니다.</p>
+    </div>
+    <div class="grid3 mt">
+      <div class="card"><h3><span class="ico">🏁</span> Race condition</h3><p class="dim" style="font-size:14px">두 신호의 도착 순서에 결과가 좌우됨 = setup/hold 위반의 본질</p></div>
+      <div class="card"><h3><span class="ico">🫥</span> 초기화 안 된 변수</h3><p class="dim" style="font-size:14px">리셋 안 된 레지스터 = GLS에서 <code>X</code>(불확정)로 드러남</p></div>
+      <div class="card"><h3><span class="ico">🔧</span> 최적화 후 발현</h3><p class="dim" style="font-size:14px">합성 최적화로 사라진/바뀐 로직이 GLS에서야 보임</p></div>
+    </div>
+  </section>
+
+  <!-- 4. setup/hold 핵심 비유 + 파형 다이어그램 (필수) -->
+  <section class="slide">
+    <div class="kicker">핵심 비유 · setup / hold</div>
+    <h2>버스 타기로 이해하는 setup &amp; hold</h2>
+    <div class="grid2">
+      <div class="analogy">
+        <p style="margin-top:6px"><strong class="hl">버스(=클럭 엣지)</strong>가 정류장에 도착합니다. 당신(=데이터)이 안전하게 타려면:</p>
+        <ul>
+          <li><strong>setup</strong> = 버스 오기 <em>전에 미리</em> 줄 서 있어야 한다 (데이터가 클럭 엣지 <strong>전</strong>에 안정돼 있어야)</li>
+          <li><strong>hold</strong> = 문 닫힐 때까지 <em>안 움직여야</em> 한다 (클럭 엣지 <strong>직후</strong>에도 데이터가 안 바뀌어야)</li>
+          <li>둘 중 하나라도 어기면 → <strong class="hl">못 탐 = 메타스테이빌리티</strong></li>
+        </ul>
+      </div>
+      <div class="diagram">
+        <svg viewBox="0 0 420 260" width="420" font-family="var(--mono)">
+          <!-- clock -->
+          <text x="14" y="34" fill="#9fb0c7" font-size="12">CLK</text>
+          <polyline points="55,40 130,40 130,18 205,18 205,40 280,40 280,18 355,18 355,40 400,40"
+                    fill="none" stroke="#5b9cff" stroke-width="2.5"/>
+          <!-- rising edge marker -->
+          <line x1="205" y1="6" x2="205" y2="240" stroke="#ffce6b" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <text x="205" y="252" fill="#ffce6b" font-size="11" text-anchor="middle">↑ 클럭 엣지 (버스 도착)</text>
+          <!-- setup window -->
+          <rect x="160" y="70" width="45" height="150" fill="#38e1c6" opacity="0.12"/>
+          <text x="182" y="64" fill="#38e1c6" font-size="11" text-anchor="middle">setup</text>
+          <!-- hold window -->
+          <rect x="205" y="70" width="35" height="150" fill="#b388ff" opacity="0.14"/>
+          <text x="222" y="64" fill="#b388ff" font-size="11" text-anchor="middle">hold</text>
+          <!-- data -->
+          <text x="14" y="160" fill="#9fb0c7" font-size="12">DATA</text>
+          <polyline points="55,180 105,180 120,120 240,120 255,180 400,180"
+                    fill="none" stroke="#5ee6a0" stroke-width="2.5"/>
+          <text x="155" y="110" fill="#5ee6a0" font-size="11" text-anchor="middle">데이터 안정 구간</text>
+          <text x="80" y="205" fill="#6c7c95" font-size="10" text-anchor="middle">변할 수 있음</text>
+          <text x="320" y="205" fill="#6c7c95" font-size="10" text-anchor="middle">변할 수 있음</text>
+          <!-- caption -->
+          <text x="210" y="236" fill="#9fb0c7" font-size="11" text-anchor="middle">데이터는 setup~hold 윈도우 동안 절대 변하면 안 된다</text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. setup vs hold violation 상세 -->
+  <section class="slide">
+    <div class="kicker">두 가지 위반</div>
+    <h2>setup violation vs hold violation</h2>
+    <table class="compare">
+      <tr><th>구분</th><th>Setup violation</th><th>Hold violation</th></tr>
+      <tr><td>의미</td><td>데이터가 <strong class="hl">너무 늦게</strong> 도착 (클럭 엣지 전에 못 안정)</td><td>데이터가 <strong class="hl">너무 빨리</strong> 바뀜 (엣지 직후 흔들림)</td></tr>
+      <tr><td>원인</td><td>경로(logic)가 길어 한 클럭 안에 못 도달</td><td>경로가 너무 짧아 다음 단으로 곧장 새어 들어감</td></tr>
+      <tr><td>해결</td><td>클럭을 <strong>느리게</strong> 하면 해결됨</td><td>클럭 속도와 <strong class="hl">무관</strong> — 느려도 안 풀림 (더 위험)</td></tr>
+      <tr><td>검증 체크</td><td><code>$setup</code> timing check</td><td><code>$hold</code> timing check</td></tr>
+    </table>
+    <div class="warnbox mt"><p style="margin:6px 0"><strong>면접 포인트:</strong> "setup은 클럭을 늦추면 풀리지만 hold violation은 클럭 주기와 무관해서 회로를 고쳐야(buffer 삽입 등) 합니다." — 이 차이를 정확히 말하면 깊이 있어 보입니다.</p></div>
+  </section>
+
+  <!-- 6. 메타스테이빌리티 + X / glitch -->
+  <section class="slide">
+    <div class="kicker">위반하면 생기는 일</div>
+    <h2>메타스테이빌리티 · X · glitch</h2>
+    <div class="grid3">
+      <div class="card">
+        <h3><span class="ico">🌀</span> 메타스테이빌리티</h3>
+        <p>setup/hold를 어기면 플립플롭이 <strong>0도 1도 아닌</strong> 어중간한 상태로 한동안 떨다가 <strong class="hl">랜덤</strong>하게 정착. 비결정적 동작의 근원.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">❓</span> X (불확정값)</h3>
+        <p>시뮬레이터가 "값을 알 수 없음"을 표시하는 <code>X</code>. 리셋 안 된 FF, 미초기화 메모리, 위반 등에서 발생.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">⚡</span> Glitch (스파이크)</h3>
+        <p>게이트 지연 차이로 신호가 <strong>잠깐 잘못된 값</strong>으로 튀는 현상. RTL(지연0)엔 없고 GLS에서만 보임.</p>
+      </div>
+    </div>
+    <div class="analogy mt"><p style="margin:6px 0">메타스테이빌리티 = <strong>두 스레드가 동시에 같은 변수에 쓰는 data race</strong>. 결과가 그때그때 다르고 재현이 어렵습니다. 하드웨어에선 클럭 도메인을 건널 때(CDC) 이걸 막으려고 <strong class="hl">동기화 플립플롭(synchronizer)</strong>을 둡니다.</p></div>
+  </section>
+
+  <!-- 7. SDF back-annotation -->
+  <section class="slide">
+    <div class="kicker">실제 지연을 어떻게 넣나</div>
+    <h2>SDF Back-Annotation — 지연값을 회로에 입히기</h2>
+    <p><strong class="hl3">SDF (Standard Delay Format)</strong>는 각 게이트·경로의 실제 지연값을 적어 둔 표준 파일입니다. 이걸 게이트 네트리스트에 <strong>덧입히는(back-annotate)</strong> 과정이 full-timing GLS의 핵심입니다.</p>
+    <div class="diagram mt">
+      <div class="flow">
+        <div class="box">RTL</div>
+        <span class="arrow">→</span>
+        <div class="box on">합성<br><span class="dim" style="font-size:12px">Synthesis</span></div>
+        <span class="arrow">→</span>
+        <div class="box">게이트<br>네트리스트</div>
+        <span class="arrow">+</span>
+        <div class="box on" style="border-color:var(--accent3)">SDF<br><span class="dim" style="font-size:12px">지연값 파일</span></div>
+        <span class="arrow">→</span>
+        <div class="box on" style="border-color:var(--accent)">Full-timing<br>GLS</div>
+      </div>
+    </div>
+    <pre class="code mt"><code><span class="cmt">// 시뮬레이터에서 SDF를 네트리스트에 back-annotation</span>
+<span class="kw">initial</span> <span class="fn">$sdf_annotate</span>(<span class="str">"chip_top.sdf"</span>, dut);
+<span class="cmt">// → 이후 모든 게이트가 SDF에 적힌 실제 지연을 갖고 동작</span>
+<span class="cmt">// → $setup/$hold 체크가 위반 시 경고를 띄움</span></code></pre>
+    <div class="note mt">SDF는 합성/배치배선 도구가 만들어 줍니다. corner(typ/min/max), 온도·전압 조건별로 여러 버전이 있고, 보통 <strong>max(느린) corner로 setup</strong>, <strong>min(빠른) corner로 hold</strong>를 봅니다.</div>
+  </section>
+
+  <!-- 8. unit-delay vs full-timing -->
+  <section class="slide">
+    <div class="kicker">GLS의 두 가지 모드</div>
+    <h2>Unit-delay GLS vs Full-timing(SDF) GLS</h2>
+    <table class="compare">
+      <tr><th>관점</th><th>Unit-delay GLS</th><th>Full-timing GLS (SDF)</th></tr>
+      <tr><td>지연 모델</td><td>모든 게이트 지연 = <strong>동일한 1단위</strong></td><td>게이트별 <strong class="hl">실제 지연</strong> (SDF)</td></tr>
+      <tr><td>주로 잡는 것</td><td>연결성·리셋·초기화·X 전파</td><td>위 + <strong>setup/hold 타이밍 위반</strong></td></tr>
+      <tr><td>속도</td><td>상대적으로 빠름</td><td>느림 (계산 무거움)</td></tr>
+      <tr><td>언제</td><td>합성 직후 sanity 확인</td><td>tape-out 직전 사인오프 근처</td></tr>
+    </table>
+    <div class="dev-bridge mt"><p style="margin:6px 0">개발 비유: unit-delay = <strong>린트 + 스모크 테스트</strong>(연결·기본동작 빠른 확인), full-timing = <strong>실제 부하 환경에서의 통합 테스트</strong>(현실 조건의 타이밍까지). 둘 다 필요합니다.</p></div>
+  </section>
+
+  <!-- 9. RTL 통과해도 GLS가 잡는 것 -->
+  <section class="slide">
+    <div class="kicker">왜 RTL만으론 부족한가</div>
+    <h2>RTL을 통과해도 GLS가 새로 잡아내는 것들</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3><span class="ico">🔄</span> 리셋 / 초기화 (X 전파)</h3>
+        <p>RTL은 변수에 초기값을 가정하기 쉽지만, 실제 FF는 리셋 안 하면 <code>X</code>. GLS는 <strong class="hl">리셋 누락</strong>을 X 전파로 폭로합니다.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🧬</span> DFT 로직</h3>
+        <p>scan chain·테스트 회로(DFT)는 합성 단계에서 삽입됩니다. RTL엔 없으니 <strong>GLS에서 처음</strong> 검증됩니다.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🕰️</span> 클럭 게이팅</h3>
+        <p>전력 절감용 clock gating cell도 합성이 넣습니다. 잘못 게이팅되면 <strong class="hl">클럭이 안 들어가</strong> 데이터가 멈추는 버그.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">📐</span> 실제 타이밍 위반</h3>
+        <p>SDF 반영 시 setup/hold 위반이 실제 동작에 미치는 영향을 <strong>동적으로</strong> 관찰.</p>
+      </div>
+    </div>
+    <div class="note mt">정리: RTL은 "논리가 맞는가", GLS는 "합성으로 추가된 것들까지 포함해 <strong class="hl">진짜 실리콘처럼</strong> 도는가"를 봅니다.</div>
+  </section>
+
+  <!-- 10. STA vs GLS -->
+  <section class="slide">
+    <div class="kicker">정적 vs 동적</div>
+    <h2>STA(정적 타이밍 분석) vs GLS(동적)</h2>
+    <table class="compare">
+      <tr><th>관점</th><th>STA (Static Timing Analysis)</th><th>GLS (Gate-Level Sim)</th></tr>
+      <tr><td>방식</td><td><strong class="hl">입력 없이</strong> 모든 경로 지연을 수학적으로 분석</td><td><strong class="hl2">실제 자극(stimulus)</strong>을 넣어 시뮬레이션</td></tr>
+      <tr><td>비유(SW)</td><td>정적 분석기 (타입체커·linter)</td><td>실제 실행 테스트 (런타임 테스트)</td></tr>
+      <tr><td>커버리지</td><td>모든 경로 <strong>완전 검사</strong> (빠짐없이)</td><td>넣은 자극이 지난 경로만</td></tr>
+      <tr><td>잡는 것</td><td>setup/hold 마진(여유) 계산이 주특기</td><td>기능+타이밍 상호작용, X/glitch, 리셋</td></tr>
+      <tr><td>한계</td><td>실제 동작/기능은 못 봄, false path 처리 필요</td><td>느리고, 안 넣은 케이스는 못 잡음</td></tr>
+    </table>
+    <div class="takeaway mt"><p style="margin:6px 0">"타이밍 사인오프의 주력은 <strong>STA</strong>입니다. GLS는 STA가 못 보는 <strong class="hl">기능과 타이밍의 상호작용·리셋/초기화·X 전파</strong>를 동적으로 보완하는 역할이고, 둘은 대체가 아니라 보완 관계입니다."</p></div>
+  </section>
+
+  <!-- 11. Q&A -->
+  <section class="slide">
+    <div class="kicker">면접 예상 질문</div>
+    <h2>이렇게 물어보면, 이렇게 답한다</h2>
+    <div class="qa">
+      <div class="q">RTL 검증이 끝났는데 GLS를 왜 또 하나요?</div>
+      <div class="a">RTL은 지연 0의 이상화된 모델이라 "논리"만 봅니다. 합성 후엔 게이트 지연, 합성이 삽입한 DFT/클럭게이팅, 실제 리셋/초기화가 생기는데, 이건 RTL엔 없어 검증된 적이 없습니다. GLS는 합성 네트리스트로 다시 돌려 이런 항목과 X 전파, 타이밍 위반을 잡는 마지막 그물망입니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">SDF가 뭔가요?</div>
+      <div class="a">Standard Delay Format. 각 게이트와 경로의 실제 지연값을 담은 표준 파일입니다. 시뮬레이터가 <code>$sdf_annotate</code>로 네트리스트에 back-annotation하면, 게이트들이 실제 지연을 갖고 동작하고 $setup/$hold 타이밍 체크가 활성화됩니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">setup violation과 hold violation의 차이는?</div>
+      <div class="a">setup은 데이터가 클럭 엣지 전에 제때 안정되지 못한 것으로 클럭을 느리게 하면 풀립니다. hold는 엣지 직후 데이터가 너무 빨리 바뀐 것으로 클럭 주기와 무관해서 회로 수정(버퍼 삽입 등)으로만 해결됩니다. 둘 다 어기면 메타스테이빌리티가 생길 수 있습니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">STA와 GLS의 차이는? X-propagation이란?</div>
+      <div class="a">STA는 입력 없이 모든 경로 지연을 정적으로 분석해 타이밍 마진을 빠짐없이 검사하고, GLS는 실제 자극을 넣는 동적 시뮬입니다. X-propagation은 리셋 안 된 FF 등에서 생긴 불확정값 X가 회로를 따라 퍼지는 현상으로, GLS가 리셋/초기화 누락을 폭로하는 핵심 메커니즘입니다.</div>
+    </div>
+  </section>
+
+  <!-- 12. 요약 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>이 챕터, 한 손에 잡기</h2>
+    <div class="grid2">
+      <div>
+        <ul>
+          <li><strong>GLS</strong> = 합성 후 게이트 네트리스트로 다시 돌리는 검증</li>
+          <li>RTL은 지연 0 → 실제 게이트 지연을 <strong>SDF</strong>로 back-annotation</li>
+          <li><strong class="hl">setup</strong>(엣지 전 안정)·<strong class="hl">hold</strong>(엣지 후 유지) 위반 → 메타스테이빌리티</li>
+          <li>unit-delay(연결·리셋·X) vs full-timing(+타이밍)</li>
+          <li>GLS가 새로 잡는 것: 리셋/초기화 X, DFT, 클럭게이팅</li>
+          <li><strong>STA=정적·완전</strong>, <strong>GLS=동적·보완</strong></li>
+        </ul>
+      </div>
+      <div class="takeaway">
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"GLS는 RTL이 못 보는 <strong class="hl">실제 게이트 지연·합성 삽입 로직·리셋 초기화</strong>를 SDF로 입혀 동적으로 검증하는 단계이고, 정적인 STA와 보완 관계입니다."</p>
+        <p class="dim" style="margin-bottom:6px">— 면접에서 이 한 문장이면 핵심을 다 담습니다.</p>
+      </div>
+    </div>
+    <div class="note mt">다음 → <strong>4-4 Power-Aware & Low-Power Verification</strong>: UPF, 전원 도메인, isolation/retention. 칩을 "끄고 켜는" 검증의 세계로.</div>
+  </section>
+
+</div>
+<script src="../assets/slides.js"></script>
+</body>
+</html>

@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>0-3 · 검증이란 무엇인가</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-title="Part 0 · 0-3 검증이란 무엇인가">
+<div class="deck">
+
+  <!-- 1. Title -->
+  <section class="slide title-slide">
+    <div class="part-badge">Part 0 · 기초 다리</div>
+    <h1>검증이란 무엇인가<br>칩을 두드리는 모든 방법</h1>
+    <p class="hook">테스트벤치, 커버리지, CRV, assertion, 그리고 시뮬레이션·에뮬레이션·포멀까지 —
+      흩어진 검증 용어들을 "테스트를 짜는 개발자"의 머릿속에 한 장의 지형도로 깔아 드립니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
+  </section>
+
+  <!-- 2. 왜 배우나 / 한 문장 정의 -->
+  <section class="slide">
+    <div class="kicker">한 문장 정의</div>
+    <h2>검증 = "설계가 스펙대로 도는지 <span class="hl">증명</span>하는 일"</h2>
+    <p class="lead">검증(Design Verification)이란, 아직 실물이 아닌 <strong>설계(RTL)</strong>를 컴퓨터 위에서 온갖 입력으로 두드려 <strong class="hl">스펙과 일치함을 보이는</strong> 활동입니다.</p>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">🎯</span> 무엇을 증명하나</h3>
+        <ul>
+          <li>"이 입력에 이 출력이 나와야 한다" — 기능의 정확성</li>
+          <li>"어떤 입력에도 멈추거나 깨지지 않는다" — 견고함</li>
+          <li>"스펙의 모든 경우를 다 확인했다" — 빠짐없음</li>
+        </ul>
+      </div>
+      <div class="analogy">
+        <p style="margin-top:6px">검증은 <strong class="hl">신약 임상시험</strong>과 같습니다. 약(설계)을 출시하기 전, 온갖 환자군(입력 케이스)에 투여해 부작용이 없는지, 효능이 스펙대로인지 두드려 봅니다.</p>
+        <p class="dim" style="margin-bottom:6px">"안 두드려 본 경우 = 임상 안 한 환자군" — 거기서 사고가 납니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. 개발자 비유 -->
+  <section class="slide">
+    <div class="kicker">개발자 직관으로 번역</div>
+    <h2>당신은 이미 검증을 해봤습니다 — "테스트"라는 이름으로</h2>
+    <table class="compare">
+      <tr><th>당신의 세계 (SW 테스트)</th><th>검증 엔지니어의 세계 (HW)</th></tr>
+      <tr><td>테스트 대상 함수·모듈 (SUT)</td><td><strong class="hl">DUT</strong> (Design Under Test)</td></tr>
+      <tr><td>테스트 코드 / test harness</td><td><strong class="hl">테스트벤치</strong> (Testbench)</td></tr>
+      <tr><td><code>assert(result == expected)</code></td><td>scoreboard / checker 비교</td></tr>
+      <tr><td>코드 커버리지 (line/branch)</td><td>code coverage + <strong>functional coverage</strong></td></tr>
+      <tr><td>퍼징 / property-based test</td><td><strong>constrained-random</strong> 검증 (CRV)</td></tr>
+      <tr><td>invariant 단언 (불변식)</td><td><strong>assertion</strong> (SVA)</td></tr>
+    </table>
+    <div class="dev-bridge mt">
+      <p style="margin:6px 0">핵심 멘탈 모델: 검증은 새로운 외계 학문이 아니라, <strong>당신이 짜던 단위·통합·E2E 테스트를 하드웨어에 옮긴 것</strong>입니다. 용어만 갈아끼우면 머릿속 지도의 90%는 이미 그려져 있습니다.</p>
+    </div>
+  </section>
+
+  <!-- 4. 테스트벤치 구조 (다이어그램) -->
+  <section class="slide">
+    <div class="kicker">테스트벤치 구조</div>
+    <h2>DUT를 둘러싸는 테스트 환경의 해부도</h2>
+    <p>테스트벤치는 <strong>DUT를 감싸는 껍질</strong>입니다. 입력을 만들어 넣고, 출력을 지켜보고, 정답과 비교합니다. 흐름은 늘 같습니다.</p>
+    <div class="diagram mt">
+      <svg viewBox="0 0 820 280" width="820">
+        <!-- testbench outer -->
+        <rect x="6" y="6" width="808" height="268" rx="14" fill="none" stroke="#22304a" stroke-dasharray="5 5"/>
+        <text x="20" y="28" fill="#6c7c95" font-size="13">Testbench (검증 환경)</text>
+        <!-- stimulus -->
+        <rect x="30" y="95" width="130" height="80" rx="10" fill="#172236" stroke="#38e1c6"/>
+        <text x="95" y="128" fill="#e8eef7" font-size="14" text-anchor="middle" font-weight="bold">Stimulus</text>
+        <text x="95" y="148" fill="#9fb0c7" font-size="11" text-anchor="middle">자극 생성</text>
+        <text x="95" y="163" fill="#6c7c95" font-size="10" text-anchor="middle">(driver)</text>
+        <!-- DUT -->
+        <rect x="225" y="80" width="150" height="110" rx="10" fill="#1a2740" stroke="#ffce6b" stroke-width="2"/>
+        <text x="300" y="125" fill="#ffce6b" font-size="18" text-anchor="middle" font-weight="bold">DUT</text>
+        <text x="300" y="148" fill="#9fb0c7" font-size="11" text-anchor="middle">검증 대상 설계</text>
+        <text x="300" y="164" fill="#6c7c95" font-size="10" text-anchor="middle">(RTL)</text>
+        <!-- monitor -->
+        <rect x="440" y="95" width="130" height="80" rx="10" fill="#172236" stroke="#5b9cff"/>
+        <text x="505" y="128" fill="#e8eef7" font-size="14" text-anchor="middle" font-weight="bold">Monitor</text>
+        <text x="505" y="148" fill="#9fb0c7" font-size="11" text-anchor="middle">출력 관찰</text>
+        <text x="505" y="163" fill="#6c7c95" font-size="10" text-anchor="middle">(checker)</text>
+        <!-- scoreboard -->
+        <rect x="640" y="55" width="150" height="80" rx="10" fill="#172236" stroke="#b388ff"/>
+        <text x="715" y="88" fill="#b388ff" font-size="14" text-anchor="middle" font-weight="bold">Scoreboard</text>
+        <text x="715" y="108" fill="#9fb0c7" font-size="11" text-anchor="middle">기대값과 비교</text>
+        <!-- golden model -->
+        <rect x="640" y="160" width="150" height="70" rx="10" fill="#172236" stroke="#5ee6a0"/>
+        <text x="715" y="190" fill="#5ee6a0" font-size="13" text-anchor="middle" font-weight="bold">Golden Model</text>
+        <text x="715" y="208" fill="#9fb0c7" font-size="11" text-anchor="middle">정답 생성</text>
+        <!-- arrows -->
+        <line x1="160" y1="135" x2="223" y2="135" stroke="#38e1c6" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="375" y1="135" x2="438" y2="135" stroke="#5b9cff" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="570" y1="120" x2="638" y2="100" stroke="#b388ff" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="715" y1="160" x2="715" y2="138" stroke="#5ee6a0" stroke-width="2" marker-end="url(#ah)"/>
+        <defs><marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#9fb0c7"/></marker></defs>
+      </svg>
+    </div>
+    <div class="note mt">흐름 한 줄: <strong class="hl">Stimulus가 입력을 만들어 → DUT에 넣고 → Monitor가 실제 출력을 뽑아 → Scoreboard가 Golden Model의 기대 출력과 비교</strong>해 PASS/FAIL을 판정합니다.</div>
+  </section>
+
+  <!-- 5. 골든/레퍼런스 모델 -->
+  <section class="slide">
+    <div class="kicker">Golden / Reference Model</div>
+    <h2>"정답"은 누가 알려주나 — 레퍼런스 모델</h2>
+    <div class="grid2">
+      <div>
+        <p>scoreboard가 "맞다/틀리다"를 판정하려면 <strong>기대 출력(정답)</strong>이 있어야 합니다. 그 정답을 만들어 주는 것이 <strong class="hl">골든/레퍼런스 모델</strong>입니다.</p>
+        <ul>
+          <li>대개 <strong>C/C++/SystemC/파이썬</strong>으로 짠 <strong>동작 모델</strong></li>
+          <li>RTL과 <strong>독립적으로</strong> 스펙만 보고 구현 → 같은 버그를 공유하지 않음</li>
+          <li>같은 입력을 DUT와 모델 양쪽에 넣고 출력을 비교</li>
+        </ul>
+      </div>
+      <div class="dev-bridge">
+        <p style="margin:6px 0">개발자 비유: 테스트에서 <code>expected</code> 값을 손으로 적는 대신, <strong>검증된 다른 구현(또는 명세 그대로의 참조 구현)</strong>으로 정답을 계산해 비교하는 것과 같습니다. "두 개의 독립 구현이 같은 답을 내면 신뢰도가 올라간다"는 발상입니다.</p>
+      </div>
+    </div>
+    <div class="warnbox mt"><p style="margin:6px 0">주의: 골든 모델 자체에 버그가 있으면 정답이 틀립니다. 그래서 모델은 <strong>최대한 단순·명세 충실하게</strong> 짜고, RTL 설계자와 다른 사람이 작성하는 것이 이상적입니다.</p></div>
+  </section>
+
+  <!-- 6. 커버리지 -->
+  <section class="slide">
+    <div class="kicker">커버리지 — "어디까지 검증했나"</div>
+    <h2>코드 커버리지 vs 기능 커버리지</h2>
+    <p>검증을 "언제 멈춰도 되는가"의 핵심 척도입니다. 두 종류를 <strong>반드시</strong> 구분해야 합니다.</p>
+    <table class="compare">
+      <tr><th>구분</th><th>Code Coverage</th><th>Functional Coverage</th></tr>
+      <tr><td>측정 대상</td><td>RTL 코드의 어떤 줄·분기·상태가 <strong>실행</strong>됐나</td><td>스펙상 의도한 <strong>시나리오·경우</strong>가 일어났나</td></tr>
+      <tr><td>생성 방식</td><td>도구가 <strong>자동</strong>으로 계측 (line/branch/toggle/FSM)</td><td>엔지니어가 <strong>직접 정의</strong> (covergroup/coverpoint)</td></tr>
+      <tr><td>답하는 질문</td><td>"코드를 <strong>빠짐없이 돌렸나?</strong>"</td><td>"<strong>의미 있는 경우</strong>를 다 봤나?"</td></tr>
+      <tr><td>SW 대응</td><td>line/branch coverage</td><td>요구사항 추적 매트릭스 / 시나리오 체크리스트</td></tr>
+    </table>
+    <div class="analogy mt"><p style="margin:6px 0">커버리지 = <strong class="hl">체크리스트 소진율</strong>. 코드 커버리지는 "모든 방의 전등을 켜봤나", 기능 커버리지는 "비 오는 날·정전·동시 입력 같은 <strong>의미 있는 상황</strong>을 다 시험했나"입니다. 코드를 100% 실행해도, 두 입력이 <strong>동시에</strong> 들어오는 경우는 안 봤을 수 있습니다.</p></div>
+  </section>
+
+  <!-- 7. 검증 완료 판단 + directed vs CRV -->
+  <section class="slide">
+    <div class="kicker">검증 완료 판단 & 자극 전략</div>
+    <h2>언제 끝내나, 그리고 어떻게 두드리나</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3><span class="ico">🧭</span> Directed Test</h3>
+        <p class="dim" style="margin-top:0">"이 입력 → 이 출력" 케이스를 <strong>사람이 하나하나 콕 집어</strong> 작성.</p>
+        <ul>
+          <li>특정 코너 케이스를 <strong>확실히</strong> 짚을 때 강력</li>
+          <li>예상 못 한 버그는 못 잡음 · 수가 많아지면 손이 안 감</li>
+          <li>SW 비유: 손으로 짠 <strong>단위 테스트</strong></li>
+        </ul>
+      </div>
+      <div class="card" style="border-color:var(--accent)">
+        <h3><span class="ico">🎲</span> Constrained-Random (CRV)</h3>
+        <p class="dim" style="margin-top:0">제약(constraint) 안에서 <strong>난수로 입력을 대량 생성</strong>해 두드림.</p>
+        <ul>
+          <li>사람이 상상 못 한 <strong>조합·코너</strong>를 우연히 발견</li>
+          <li>어디까지 봤는지는 <strong>functional coverage</strong>로 측정</li>
+          <li>SW 비유: <strong class="hl">퍼징(fuzzing) / property-based test</strong></li>
+        </ul>
+      </div>
+    </div>
+    <div class="takeaway mt"><p style="margin:6px 0">"검증 완료"의 판단 = <strong class="hl">커버리지가 목표치에 도달 + 모든 테스트 PASS + 회귀(regression) 통과</strong>. 단순히 "버그가 안 나온다"가 아니라 "<strong>볼 것을 다 봤다는 증거</strong>"가 있어야 끝납니다.</p></div>
+  </section>
+
+  <!-- 8. Assertion (SVA) -->
+  <section class="slide">
+    <div class="kicker">Assertion · SVA</div>
+    <h2>"이건 절대 일어나면 안 돼" — 불변식 단언</h2>
+    <div class="grid2">
+      <div>
+        <p><strong class="hl">Assertion</strong>은 설계가 항상 지켜야 할 <strong>규칙(불변식)</strong>을 코드로 박아두고, 시뮬레이션 내내 자동 감시하는 장치입니다. SystemVerilog로 쓰면 <strong>SVA</strong>(SystemVerilog Assertions).</p>
+        <ul>
+          <li>규칙을 어기는 <strong>순간 그 자리에서</strong> FAIL → 디버깅이 쉬움</li>
+          <li>설계자가 RTL에 직접 박아 두기도 함 (white-box)</li>
+          <li>포멀 검증의 "증명할 명제"로도 그대로 쓰임</li>
+        </ul>
+      </div>
+      <div class="dev-bridge">
+        <p style="margin:6px 0">완전히 당신이 아는 <code>assert(invariant)</code>입니다. 단, "이 시점"이 아니라 <strong>시간(클럭)에 걸친 규칙</strong>도 표현합니다: "req가 뜨면 <strong>반드시 2클럭 안에</strong> ack가 떠야 한다" 처럼요.</p>
+      </div>
+    </div>
+    <pre class="code"><code><span class="cmt">// SVA 한 줄 맛보기: req 다음엔 반드시 ack가 온다</span>
+<span class="kw">assert property</span> (@(<span class="kw">posedge</span> clk)
+    req <span class="fn">|-></span> <span class="fn">##</span>[<span class="str">1:2</span>] ack);
+<span class="cmt">// "req가 1이면, 1~2클럭 뒤 ack가 1이어야 한다. 아니면 FAIL"</span></code></pre>
+  </section>
+
+  <!-- 9. 검증 플랫폼 지형도 -->
+  <section class="slide">
+    <div class="kicker">검증 플랫폼 지형도</div>
+    <h2>같은 칩을 검증하는 4가지 무대 — 트레이드오프</h2>
+    <table class="compare">
+      <tr><th>플랫폼</th><th>한 줄 정의</th><th>속도</th><th>장점 / 약점</th></tr>
+      <tr><td><span class="pill teal">Simulation</span></td><td>SW로 RTL을 한 클럭씩 흉내</td><td><strong>느림</strong></td><td>유연·디버깅 최고 / 대규모는 너무 느림</td></tr>
+      <tr><td><span class="pill blue">Emulation</span></td><td>전용 하드웨어 박스에 설계를 매핑</td><td><strong class="hl2">빠름</strong></td><td>대규모·OS 부팅 가능 / 장비 매우 비쌈</td></tr>
+      <tr><td><span class="pill violet">FPGA Prototyping</span></td><td>실제 FPGA에 설계를 올려 구동</td><td><strong class="hl3">매우 빠름</strong></td><td>실속도에 근접 / 디버깅 가시성 낮음·세팅 오래</td></tr>
+      <tr><td><span class="pill" style="background:rgba(94,230,160,.18);color:var(--good)">Formal</span></td><td>입력 안 넣고 <strong>수학으로 증명</strong></td><td>해당없음</td><td>모든 경우 한 번에 증명 / 큰 블록엔 상태폭발</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="analogy"><p style="margin:6px 0">Simulation→Emulation→FPGA는 <strong class="hl">같은 검증을 점점 빠른 무대로</strong> 옮기는 것. 속도를 얻는 대신 "무대 안을 들여다보기(디버깅)"가 어려워지고 비용이 오릅니다.</p></div>
+      <div class="dev-bridge"><p style="margin:6px 0"><strong>Formal</strong>은 테스트를 "실행"하는 게 아니라 <strong>수학적으로 증명</strong>합니다. 가능한 모든 입력을 따로 안 넣어도 "이 규칙은 절대 안 깨진다"를 보장 — SW의 정적 분석·모델 체킹과 같은 결입니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 10. 속도/정확도/비용 시각화 -->
+  <section class="slide">
+    <div class="kicker">트레이드오프 한눈에</div>
+    <h2>속도를 얻으면 가시성을 잃는다</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 780 300" width="780">
+        <!-- axes -->
+        <line x1="70" y1="250" x2="740" y2="250" stroke="#22304a" stroke-width="1.5"/>
+        <line x1="70" y1="250" x2="70" y2="30" stroke="#22304a" stroke-width="1.5"/>
+        <text x="405" y="285" fill="#9fb0c7" font-size="13" text-anchor="middle">실행 속도 (느림 → 빠름) ▶</text>
+        <text x="30" y="140" fill="#9fb0c7" font-size="13" text-anchor="middle" transform="rotate(-90 30 140)">디버깅 가시성 ▲</text>
+        <!-- trend line -->
+        <line x1="100" y1="70" x2="700" y2="230" stroke="#6c7c95" stroke-width="1.5" stroke-dasharray="6 5"/>
+        <!-- points -->
+        <circle cx="150" cy="85" r="9" fill="#38e1c6"/>
+        <text x="150" y="68" fill="#38e1c6" font-size="13" text-anchor="middle" font-weight="bold">Simulation</text>
+        <text x="150" y="108" fill="#6c7c95" font-size="10" text-anchor="middle">느림·가시성↑·저비용</text>
+        <circle cx="380" cy="140" r="9" fill="#5b9cff"/>
+        <text x="380" y="123" fill="#5b9cff" font-size="13" text-anchor="middle" font-weight="bold">Emulation</text>
+        <text x="380" y="163" fill="#6c7c95" font-size="10" text-anchor="middle">빠름·대규모·고비용</text>
+        <circle cx="640" cy="210" r="9" fill="#b388ff"/>
+        <text x="640" y="193" fill="#b388ff" font-size="13" text-anchor="middle" font-weight="bold">FPGA Proto</text>
+        <text x="640" y="233" fill="#6c7c95" font-size="10" text-anchor="middle">실속도·가시성↓</text>
+        <!-- formal callout -->
+        <rect x="500" y="40" width="230" height="58" rx="10" fill="#172236" stroke="#5ee6a0"/>
+        <text x="615" y="63" fill="#5ee6a0" font-size="13" text-anchor="middle" font-weight="bold">Formal Verification</text>
+        <text x="615" y="83" fill="#9fb0c7" font-size="10.5" text-anchor="middle">입력 실행 X · 수학적 증명 (다른 축)</text>
+      </svg>
+    </div>
+    <div class="note mt">실무에선 한 가지만 쓰지 않습니다. <strong class="hl">초기엔 Simulation</strong>으로 빠르게 디버깅하고, <strong class="hl2">규모가 커지면 Emulation/FPGA</strong>로 OS 부팅까지 돌리며, <strong class="hl3" style="color:var(--good)">핵심 안전 속성은 Formal</strong>로 못 박는 — 조합으로 갑니다.</div>
+  </section>
+
+  <!-- 11. Q&A -->
+  <section class="slide">
+    <div class="kicker">면접 예상 질문</div>
+    <h2>이렇게 물어보면, 이렇게 답한다</h2>
+    <div class="qa">
+      <div class="q">테스트벤치의 구성요소를 설명해 보세요.</div>
+      <div class="a">자극을 만드는 stimulus(driver), 검증 대상인 DUT, 출력을 뽑는 monitor, 그리고 골든/레퍼런스 모델의 기대값과 실제 출력을 비교해 PASS/FAIL을 판정하는 scoreboard로 구성됩니다. 입력 생성 → DUT → 출력 관찰 → 기대값 비교의 흐름이 핵심입니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">코드 커버리지와 기능 커버리지의 차이는?</div>
+      <div class="a">코드 커버리지는 도구가 자동 계측하며 RTL 코드의 줄·분기·상태가 실행됐는지를 봅니다. 기능 커버리지는 엔지니어가 covergroup으로 직접 정의하며, 스펙이 의도한 시나리오·경우가 실제로 발생했는지를 봅니다. 코드를 100% 실행해도 의미 있는 조합은 빠질 수 있어, 둘 다 봐야 합니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">directed test와 constrained-random 검증의 차이, 그리고 시뮬레이션·에뮬레이션·포멀은?</div>
+      <div class="a">directed는 사람이 케이스를 콕 집어 짜는 방식이고, CRV는 제약 안에서 난수 입력을 대량 생성해 예상 못 한 코너까지 두드린 뒤 functional coverage로 진척을 측정합니다. 플랫폼은, 시뮬레이션은 느리지만 유연·디버깅이 쉽고, 에뮬레이션/FPGA는 빠르고 대규모에 유리하나 비싸고 가시성이 낮으며, 포멀은 입력 없이 수학적으로 속성을 증명합니다.</div>
+    </div>
+  </section>
+
+  <!-- 12. 요약 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>이 챕터, 한 손에 잡기</h2>
+    <div class="grid2">
+      <div>
+        <ul>
+          <li>검증 = 설계가 스펙대로 도는지 <strong>증명</strong> (≈ 신약 임상시험)</li>
+          <li>테스트벤치: <strong>stimulus → DUT → monitor → scoreboard</strong>, 정답은 <strong>골든 모델</strong></li>
+          <li>커버리지 = 체크리스트 소진율 · <strong>코드</strong>(자동)와 <strong>기능</strong>(직접 정의)을 구분</li>
+          <li><strong>directed</strong>(콕 집기) vs <strong>CRV</strong>(퍼징식 난수) · assertion=invariant 단언</li>
+          <li>플랫폼: <strong>Simulation</strong>(유연·느림)·<strong>Emulation/FPGA</strong>(빠름·대규모·고비용)·<strong>Formal</strong>(수학 증명)</li>
+        </ul>
+      </div>
+      <div class="takeaway">
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"저는 테스트벤치로 DUT를 두드리고, <strong class="hl">커버리지로 완료를 증명</strong>하며, 케이스 성격에 따라 directed·CRV와 simulation·emulation·formal을 <strong class="hl">골라 쓰는</strong> 검증 엔지니어입니다."</p>
+      </div>
+    </div>
+    <div class="note mt">다음 → <strong>Part 1: SystemVerilog</strong>: 검증의 언어. 자료형·인터페이스·클래스로 위 테스트벤치를 실제로 짜기 시작합니다.</div>
+  </section>
+
+</div>
+<script src="../assets/slides.js"></script>
+</body>
+</html>

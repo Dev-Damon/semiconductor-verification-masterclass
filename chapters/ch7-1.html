@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>7-1 · Git in 하드웨어 팀</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-title="Part 7 · 7-1 Git in 하드웨어 팀">
+<div class="deck">
+
+  <!-- 1. Title -->
+  <section class="slide title-slide">
+    <div class="part-badge">Part 7 · 협업과 도구</div>
+    <h1>Git in 하드웨어 팀<br>당신이 아는 Git, 칩 만드는 팀에선 뭐가 다를까</h1>
+    <p class="hook">좋은 소식: 당신은 이미 Git을 안다. 이번엔 새 도구를 배우는 게 아니라,
+      "산출물이 무겁고, 잘못 머지하면 수십억짜리 칩이 잘못 나간다"는 무게의 차이만 익히면 됩니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
+  </section>
+
+  <!-- 2. 왜 배우나 / 한 문장 정의 -->
+  <section class="slide">
+    <div class="kicker">왜 배우나 · 한 문장 정의</div>
+    <h2>"RTL도 결국 코드다" — 그래서 하드웨어 팀도 Git을 쓴다</h2>
+    <p class="lead">RTL(Verilog/SystemVerilog)과 검증 코드(UVM testbench)는 <strong class="hl">텍스트 소스</strong>입니다. 텍스트인 이상 버전 관리·리뷰·브랜치가 그대로 필요합니다.</p>
+    <p>다만 두 가지가 다릅니다. ① 함께 굴러다니는 <strong>산출물이 거대</strong>합니다(파형, 라이브러리, 넷리스트가 수백 MB~수 GB). ② 빌드 산출물이 소프트웨어처럼 "다시 배포"되는 게 아니라 <strong class="hl2">물리적 실물 칩</strong>으로 굳어버립니다 — 한 번 제조하면 못 고칩니다.</p>
+    <div class="row mt">
+      <span class="tag">RTL 버전관리</span><span class="tag">재현성(reproducibility)</span>
+      <span class="tag">.gitignore</span><span class="tag">Git LFS</span><span class="tag">브랜치 전략</span>
+      <span class="tag">코드 리뷰</span><span class="tag">tape-out tag</span><span class="tag">서브모듈/IP 통합</span>
+      <span class="tag">Perforce / SVN</span>
+    </div>
+    <div class="note mt">면접에서 "Git 쓸 줄 아냐"가 아니라, <strong class="hl">"하드웨어 팀의 무게를 이해하느냐"</strong>를 봅니다. 그 차이가 이 챕터의 전부입니다.</div>
+  </section>
+
+  <!-- 3. 개발자 비유 -->
+  <section class="slide">
+    <div class="kicker">개발자 직관으로 번역</div>
+    <h2>당신은 이미 다 안다 — 단지 단어만 바꿔 끼우면 된다</h2>
+    <div class="grid2">
+      <div class="dev-bridge">
+        <p style="margin-top:6px">당신이 SW에서 하던 그대로, 매핑만 갈아끼우세요.</p>
+        <table class="compare">
+          <tr><th>당신의 SW 세계</th><th>하드웨어 팀</th></tr>
+          <tr><td>소스 코드 (.py/.js)</td><td>RTL (.v/.sv) · UVM 테스트벤치</td></tr>
+          <tr><td>대용량 에셋(이미지/모델) → <strong>Git LFS</strong></td><td>파형(FSDB)·라이브러리·넷리스트 → <strong class="hl">LFS</strong></td></tr>
+          <tr><td>릴리스 <code>v1.2.0</code> 태깅</td><td><strong class="hl">tape-out</strong> 스냅샷 태깅</td></tr>
+          <tr><td>CI 통과해야 머지</td><td><strong>회귀(regression)</strong> 통과해야 머지</td></tr>
+          <tr><td>빌드 산출물 = 배포 가능</td><td>빌드 산출물 = <strong class="hl2">실물 칩(못 고침)</strong></td></tr>
+        </table>
+      </div>
+      <div class="analogy">
+        <p style="margin-top:6px"><strong>모노레포를 운영해 본 경험</strong>이 그대로 통합니다.</p>
+        <ul>
+          <li>여러 IP(CPU·GPU·메모리 컨트롤러)가 각자 repo → SoC repo가 <strong class="hl">서브모듈</strong>로 묶음</li>
+          <li>생성물은 절대 커밋 안 함 → <code>.gitignore</code></li>
+          <li>꼭 버전 관리할 큰 바이너리만 → <strong>LFS</strong></li>
+        </ul>
+        <p style="margin:6px 0">즉 새 워크플로를 배우는 게 아니라, <strong>당신의 좋은 습관을 "칩 무게"에 맞춰 더 엄격하게</strong> 적용하는 것뿐입니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. 대용량 산출물 다이어그램 (필수) -->
+  <section class="slide">
+    <div class="kicker">핵심 개념 ① · 무엇을 넣고 무엇을 빼나</div>
+    <h2>소스는 Git, 큰 바이너리는 LFS, 생성물은 .gitignore</h2>
+    <p>가장 흔한 사고는 <strong class="hl">생성물을 통째로 커밋</strong>하는 것입니다. 파형 한 번에 GB 단위라 repo가 순식간에 부풀어 clone이 불가능해집니다.</p>
+    <div class="diagram mt" style="text-align:left">
+      <svg viewBox="0 0 760 230" width="760">
+        <rect x="6" y="6" width="748" height="218" rx="12" fill="none" stroke="#22304a"/>
+        <text x="20" y="30" fill="#6c7c95" font-size="12">파일을 세 갈래로 분류한다</text>
+        <!-- Git -->
+        <rect x="30" y="50" width="210" height="150" rx="10" fill="#172236" stroke="#38e1c6"/>
+        <text x="135" y="78" fill="#38e1c6" font-size="15" text-anchor="middle" font-weight="bold">Git (일반)</text>
+        <text x="135" y="100" fill="#9fb0c7" font-size="12" text-anchor="middle">사람이 손으로 쓴 텍스트</text>
+        <text x="135" y="128" fill="#e8eef7" font-size="12" text-anchor="middle">RTL  .v / .sv</text>
+        <text x="135" y="150" fill="#e8eef7" font-size="12" text-anchor="middle">UVM testbench</text>
+        <text x="135" y="172" fill="#e8eef7" font-size="12" text-anchor="middle">스크립트 · 제약(.sdc)</text>
+        <!-- LFS -->
+        <rect x="275" y="50" width="210" height="150" rx="10" fill="#172236" stroke="#5b9cff"/>
+        <text x="380" y="78" fill="#5b9cff" font-size="15" text-anchor="middle" font-weight="bold">Git LFS</text>
+        <text x="380" y="100" fill="#9fb0c7" font-size="12" text-anchor="middle">꼭 보존할 큰 바이너리</text>
+        <text x="380" y="128" fill="#e8eef7" font-size="12" text-anchor="middle">셀 라이브러리(.lib/.db)</text>
+        <text x="380" y="150" fill="#e8eef7" font-size="12" text-anchor="middle">고정 IP 넷리스트</text>
+        <text x="380" y="172" fill="#e8eef7" font-size="12" text-anchor="middle">레퍼런스 모델</text>
+        <!-- ignore -->
+        <rect x="520" y="50" width="210" height="150" rx="10" fill="#172236" stroke="#ff7a85"/>
+        <text x="625" y="78" fill="#ff7a85" font-size="15" text-anchor="middle" font-weight="bold">.gitignore</text>
+        <text x="625" y="100" fill="#9fb0c7" font-size="12" text-anchor="middle">매번 다시 만드는 생성물</text>
+        <text x="625" y="128" fill="#e8eef7" font-size="12" text-anchor="middle">파형 FSDB / VCD</text>
+        <text x="625" y="150" fill="#e8eef7" font-size="12" text-anchor="middle">시뮬 빌드 · 로그</text>
+        <text x="625" y="172" fill="#e8eef7" font-size="12" text-anchor="middle">합성/PnR 결과물</text>
+      </svg>
+    </div>
+    <div class="note mt">판단 기준 한 줄: <strong class="hl">"사람이 손으로 썼나(→Git), 다시 못 만드는 큰 바이너리인가(→LFS), 명령 한 번에 재생성되나(→ignore)"</strong></div>
+  </section>
+
+  <!-- 5. Git LFS 자세히 -->
+  <section class="slide">
+    <div class="kicker">핵심 개념 ② · Git LFS</div>
+    <h2>대용량 파일은 어떻게? — "포인터만 커밋"하는 LFS</h2>
+    <div class="grid2">
+      <div>
+        <p>Git은 텍스트의 <strong>줄 단위 diff</strong>엔 천재지만, GB짜리 바이너리엔 약합니다. 매 커밋마다 통째로 새 사본을 저장해 히스토리가 폭발하죠.</p>
+        <p><strong class="hl2">Git LFS(Large File Storage)</strong>는 실제 큰 파일은 별도 서버에 두고, repo 안에는 <strong class="hl">작은 텍스트 포인터(해시)만</strong> 커밋합니다. checkout할 때 필요한 버전만 내려받습니다.</p>
+        <ul>
+          <li>repo는 가벼워지고 clone이 빨라짐</li>
+          <li>버전별로 어떤 큰 파일이 쓰였는지 <strong>이력은 그대로</strong> 남음</li>
+          <li>SW의 이미지·ML 가중치 관리와 <strong>완전히 같은 도구·같은 명령</strong></li>
+        </ul>
+      </div>
+      <div>
+        <pre class="code"><code><span class="cmt"># 어떤 패턴을 LFS로 다룰지 등록</span>
+<span class="fn">git lfs track</span> <span class="str">"*.lib"</span> <span class="str">"*.fsdb"</span> <span class="str">"*.db"</span>
+
+<span class="cmt"># .gitattributes에 규칙이 기록됨 → 이건 커밋</span>
+<span class="fn">git add</span> .gitattributes
+
+<span class="cmt"># 큰 파일은 포인터로 커밋됨 (실파일은 LFS 서버)</span>
+<span class="fn">git add</span> models/ref_model.db
+<span class="fn">git commit</span> -m <span class="str">"add ref model"</span></code></pre>
+        <div class="dev-bridge"><p style="margin:6px 0">정확히 SW에서 <strong>대용량 에셋·ML 모델을 LFS로 다루던 그 방식</strong>입니다. 파일 종류만 <code>.png</code> → <code>.fsdb</code>로 바뀌었을 뿐.</p></div>
+      </div>
+    </div>
+    <div class="warnbox mt"><p style="margin:6px 0"><strong>주의:</strong> LFS는 "꼭 보존해야 하는 입력 자산"용입니다. 매번 재생성되는 파형·로그는 LFS가 아니라 <strong class="hl">.gitignore</strong>로 빼야 합니다 — 안 그러면 LFS 서버까지 부풀어 버립니다.</p></div>
+  </section>
+
+  <!-- 6. 재현성 / 커밋 = RTL 스냅샷 -->
+  <section class="slide">
+    <div class="kicker">핵심 개념 ③ · 재현성</div>
+    <h2>특정 커밋 = 특정 칩의 RTL 스냅샷</h2>
+    <p>SW에서 "이 커밋으로 빌드하면 이 바이너리가 나온다"는 재현성을 챙기듯, 하드웨어 팀에선 <strong class="hl">"이 커밋 = 이 시점의 칩 설계 그 자체"</strong>입니다. 버그 리포트가 오면 <strong>그 커밋으로 checkout</strong>해 똑같은 상태를 재현합니다.</p>
+    <div class="diagram mt" style="text-align:left">
+      <div class="flow" style="justify-content:flex-start">
+        <div class="box">버그 발견<br><span class="dim" style="font-size:12px">실리콘/시뮬</span></div>
+        <span class="arrow">→</span>
+        <div class="box on">어떤 커밋?<br><span class="hl" style="font-size:12px">SHA로 고정</span></div>
+        <span class="arrow">→</span>
+        <div class="box">그 커밋 checkout<br><span class="dim" style="font-size:12px">동일 RTL 복원</span></div>
+        <span class="arrow">→</span>
+        <div class="box on">재현 → 디버그<br><span class="hl" style="font-size:12px">결정적(deterministic)</span></div>
+      </div>
+    </div>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">🔁</span> 왜 결정적이어야 하나</h3>
+        <p>같은 RTL + 같은 테스트 + 같은 <strong class="hl">시드(seed)</strong> = 같은 결과여야 합니다. 그래야 "어제 실패한 그 케이스"를 오늘 똑같이 재현해 고칠 수 있습니다. 재현 안 되는 버그는 못 잡습니다.</p>
+      </div>
+      <div class="dev-bridge">
+        <p style="margin-top:6px">SW의 <strong>lockfile(package-lock·go.sum)</strong>로 의존성을 못 박는 감각과 같습니다. 커밋 SHA가 "이 칩은 이 코드로 만들어졌다"를 못 박는 락(lock)인 셈이죠.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. 브랜치 전략 + 리뷰 + 회귀 연결 -->
+  <section class="slide">
+    <div class="kicker">핵심 개념 ④ · 협업 워크플로</div>
+    <h2>브랜치 · 코드 리뷰 · 회귀 결과를 커밋에 연결</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3><span class="ico">🌿</span> 브랜치 전략</h3>
+        <ul>
+          <li><strong class="hl">IP별 브랜치</strong>: CPU팀·메모리팀이 각자 작업</li>
+          <li><strong>release / stable 브랜치</strong>: tape-out 후보가 모이는 곳</li>
+          <li>feature 브랜치 → 리뷰 → main 머지 (SW와 동일)</li>
+        </ul>
+        <p class="dim">규모 큰 SoC는 IP마다 별도 repo로 쪼개고 상위에서 통합하는 게 일반적입니다.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">👀</span> 코드 리뷰</h3>
+        <p>RTL 리뷰는 SW PR 리뷰보다 <strong class="hl2">무게가 큽니다</strong>. 잘못 머지된 한 줄이 실리콘에 그대로 굳어 <strong>리스핀(re-spin) 비용 수억~수십억</strong>으로 돌아오니까요.</p>
+        <ul>
+          <li>합성 가능성, 타이밍, 클럭 도메인까지 본다</li>
+          <li>2인 이상 승인 + 회귀 통과를 머지 게이트로 강제</li>
+        </ul>
+      </div>
+    </div>
+    <div class="diagram mt" style="text-align:left">
+      <div class="flow" style="justify-content:flex-start">
+        <div class="box">PR 올림<br><span class="dim" style="font-size:12px">RTL 변경</span></div>
+        <span class="arrow">→</span>
+        <div class="box on">회귀 자동 실행<br><span class="hl" style="font-size:12px">수천 개 테스트</span></div>
+        <span class="arrow">→</span>
+        <div class="box">결과를 커밋에 첨부<br><span class="dim" style="font-size:12px">pass/fail·커버리지</span></div>
+        <span class="arrow">→</span>
+        <div class="box on">초록 + 리뷰 승인<br><span class="hl" style="font-size:12px">→ 머지 허용</span></div>
+      </div>
+    </div>
+    <div class="note mt">SW의 <strong>"CI 초록불 + 리뷰 승인 = 머지"</strong>와 정확히 같은 게이트. 다만 CI 자리에 <strong class="hl">회귀(regression)</strong>가 들어갑니다 — 특정 커밋의 회귀 결과를 항상 추적 가능하게 묶어 둡니다.</div>
+  </section>
+
+  <!-- 8. tape-out tag + 서브모듈 -->
+  <section class="slide">
+    <div class="kicker">핵심 개념 ⑤ · 출하 스냅샷 고정</div>
+    <h2>tape-out은 git tag로 박제한다</h2>
+    <p><strong class="hl">tape-out</strong>(설계를 제조 공장에 넘기는 순간)은 절대 흔들리면 안 되는 시점입니다. 그래서 정확히 그 상태를 <strong>tag</strong>로 못 박아, 언제든 그 칩의 소스로 되돌아갈 수 있게 합니다.</p>
+    <div class="grid2">
+      <div>
+        <pre class="code"><code><span class="cmt"># tape-out 스냅샷을 영구 고정</span>
+<span class="fn">git tag</span> -a <span class="str">tapeout-A0</span> -m <span class="str">"ChipX A0 to fab"</span>
+<span class="fn">git push</span> origin <span class="str">tapeout-A0</span>
+
+<span class="cmt"># 1년 뒤, 그 칩과 100% 동일한 RTL 복원</span>
+<span class="fn">git checkout</span> <span class="str">tapeout-A0</span></code></pre>
+        <p class="dim">실리콘에서 버그가 나오면 이 태그로 돌아가, 출하된 칩과 똑같은 RTL에서 디버깅합니다.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🧩</span> 여러 IP repo 통합</h3>
+        <p>SoC는 보통 여러 repo의 합입니다. 상위 repo가 각 IP를 <strong class="hl">서브모듈</strong>로 가리키되 <strong>특정 커밋에 핀(pin)</strong> 고정합니다.</p>
+        <ul>
+          <li>tape-out 시: 모든 서브모듈 커밋이 함께 고정됨</li>
+          <li>= "이 칩은 CPU IP의 이 커밋 + 메모리 IP의 저 커밋"으로 완전 명세</li>
+        </ul>
+        <p class="dim">SW의 <strong>모노레포/서브모듈·고정 의존성</strong>과 같은 그림입니다.</p>
+      </div>
+    </div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">SW의 <strong>릴리스 태깅(<code>v1.2.0</code>)</strong> 감각 그대로입니다. 차이는 단 하나 — 이 릴리스의 "빌드 산출물"은 다시 배포 가능한 바이너리가 아니라 <strong class="hl2">되돌릴 수 없는 실물 칩</strong>이라는 무게.</p></div>
+  </section>
+
+  <!-- 9. Perforce / SVN / ClearCase -->
+  <section class="slide">
+    <div class="kicker">현실 · 왜 아직도 Perforce?</div>
+    <h2>일부 반도체 팀은 여전히 Perforce / SVN을 쓴다</h2>
+    <p>Git이 표준이 되어가지만, 큰 반도체 회사 상당수는 <strong class="hl3">Perforce(P4)</strong>·SVN·과거엔 ClearCase를 씁니다. "낡아서"가 아니라 <strong>하드웨어 워크플로에 더 잘 맞는 점</strong>이 있어서입니다.</p>
+    <table class="compare">
+      <tr><th>관점</th><th>Git (분산)</th><th>Perforce / SVN (중앙집중)</th></tr>
+      <tr><td>저장소 모델</td><td>전체 히스토리를 각자 복제</td><td>중앙 서버에 보관, 필요한 것만 받음</td></tr>
+      <tr><td>초대용량 자산</td><td>LFS 같은 보조 장치 필요</td><td><strong class="hl">TB급 단일 저장소</strong>를 기본으로 잘 다룸</td></tr>
+      <tr><td>권한</td><td>repo/브랜치 단위 위주</td><td><strong class="hl">파일·폴더 단위 세밀한 권한</strong></td></tr>
+      <tr><td>바이너리 충돌</td><td>머지 충돌 위험</td><td><strong class="hl2">파일 락(lock)</strong>으로 동시 편집 차단</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="analogy"><p style="margin:6px 0">핵심 직관: 머지가 불가능한 <strong>거대 바이너리(레이아웃·라이브러리)</strong>는 "두 사람이 동시에 고치면 합칠 방법이 없다" → 그래서 <strong class="hl2">선점 락</strong>이 있는 중앙집중형이 유리합니다.</p></div>
+      <div class="dev-bridge"><p style="margin:6px 0">게임 업계가 대용량 에셋 때문에 <strong>Perforce를 쓰는 것</strong>과 같은 이유입니다. "분산이 항상 정답은 아니다 — 자산 특성이 도구를 정한다"가 면접에서 빛나는 한마디.</p></div>
+    </div>
+  </section>
+
+  <!-- 10. 체크리스트 -->
+  <section class="slide">
+    <div class="kicker">실전 · 한 장 체크리스트</div>
+    <h2>하드웨어 repo, 이것만 지키면 사고 안 난다</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3><span class="ico">✅</span> 넣고 빼기</h3>
+        <ul>
+          <li>RTL·테스트벤치·스크립트 → <strong class="hl">Git</strong></li>
+          <li>꼭 보존할 큰 바이너리 → <strong class="hl2">LFS</strong></li>
+          <li>파형·로그·시뮬 빌드 → <strong>.gitignore</strong></li>
+          <li>절대 생성물 통째 커밋 금지</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="ico">✅</span> 협업·출하</h3>
+        <ul>
+          <li>회귀 통과 + 리뷰 승인 = 머지 게이트</li>
+          <li>회귀 결과를 <strong class="hl">커밋 SHA</strong>에 연결</li>
+          <li>tape-out은 <strong>tag</strong>로 영구 고정</li>
+          <li>서브모듈 커밋까지 함께 핀 고정</li>
+        </ul>
+      </div>
+    </div>
+    <div class="takeaway mt"><p style="margin:6px 0">한 줄 멘탈 모델: <strong class="hl">"소스는 가볍게(Git), 자산은 똑똑하게(LFS), 출하는 못 박게(tag) — 모든 커밋이 어떤 칩이었는지 추적 가능해야 한다."</strong></p></div>
+  </section>
+
+  <!-- 11. 면접 Q&A -->
+  <section class="slide">
+    <div class="kicker">면접 예상 질문</div>
+    <h2>이렇게 물어보면, 이렇게 답한다</h2>
+    <div class="qa">
+      <div class="q">왜 RTL을 Git으로 관리하나요? 대용량 파일은 어떻게 다루나요?</div>
+      <div class="a">RTL과 검증 코드는 결국 텍스트 소스라 버전 관리·리뷰·브랜치·재현성이 그대로 필요하기 때문입니다. 다만 파형·라이브러리·넷리스트 같은 큰 바이너리가 함께 다니는데, 매번 재생성되는 생성물은 .gitignore로 빼고, 꼭 보존할 큰 입력 자산만 Git LFS로 둡니다. LFS는 실제 파일을 별도 서버에 두고 repo엔 포인터만 커밋해 저장소를 가볍게 유지합니다 — SW에서 대용량 에셋·ML 모델을 다루던 방식과 같습니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">tape-out 시 버전 관리는 어떻게 하나요?</div>
+      <div class="a">tape-out 시점의 정확한 상태를 git tag로 영구 고정합니다. 그러면 특정 커밋 = 특정 칩의 RTL 스냅샷이 되어, 1년 뒤 실리콘에서 버그가 나와도 그 태그로 checkout해 출하된 칩과 100% 동일한 RTL에서 디버깅할 수 있습니다. SoC는 여러 IP repo의 합이라 서브모듈로 묶고, tape-out 때 각 서브모듈 커밋까지 함께 핀 고정해 칩 구성 전체를 명세합니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">반도체 팀이 Git 대신 Perforce를 쓰기도 하는 이유는?</div>
+      <div class="a">초대용량 자산과 워크플로 특성 때문입니다. Perforce/SVN 같은 중앙집중형은 TB급 단일 저장소를 기본으로 잘 다루고, 파일·폴더 단위의 세밀한 권한 제어가 가능하며, 머지가 불가능한 거대 바이너리에 대해 파일 락(lock)으로 동시 편집을 막아줍니다. 게임 업계가 대용량 에셋 때문에 Perforce를 쓰는 것과 같은 이유로, 자산 특성이 도구를 결정한다고 답하면 좋습니다.</div>
+    </div>
+  </section>
+
+  <!-- 12. 요약 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>이 챕터, 한 손에 잡기</h2>
+    <div class="grid2">
+      <div>
+        <ul>
+          <li><strong>RTL·검증 코드는 텍스트</strong> → Git의 버전관리·리뷰·재현성이 그대로 필요</li>
+          <li>생성물(파형·로그)은 <strong class="hl">.gitignore</strong>, 보존할 큰 자산만 <strong class="hl2">LFS</strong></li>
+          <li><strong>특정 커밋 = 특정 칩의 RTL 스냅샷</strong> → 결정적 재현</li>
+          <li>회귀 통과 + 리뷰 승인 = 머지 게이트, 결과를 커밋에 연결</li>
+          <li><strong class="hl">tape-out은 tag</strong>로 영구 고정, 서브모듈 커밋까지 핀</li>
+          <li>초대용량·세밀권한·파일락 때문에 <strong class="hl3">Perforce/SVN</strong>을 쓰기도</li>
+        </ul>
+      </div>
+      <div class="takeaway">
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"RTL도 코드라 Git으로 관리하지만, 빌드 산출물이 실물 칩인 만큼 더 엄격합니다 — 큰 자산은 LFS, 생성물은 ignore, tape-out은 tag로 못 박아 모든 커밋이 어떤 칩이었는지 추적되게 합니다."</p>
+        <p class="dim" style="margin-bottom:6px">— "당신이 아는 Git에, 칩의 무게만 더했다"고 말하면 면접관이 끄덕입니다.</p>
+      </div>
+    </div>
+    <div class="note mt">다음 → <strong>7-2 검증 환경과 EDA 흐름</strong>: 회귀를 실제로 돌리는 시뮬레이터·EDA 툴체인과 자동화 이야기로.</div>
+  </section>
+
+</div>
+<script src="../assets/slides.js"></script>
+</body>
+</html>

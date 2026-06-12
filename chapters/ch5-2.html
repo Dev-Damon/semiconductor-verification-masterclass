@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>5-2 · DVFS</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-title="Part 5 · 5-2 DVFS">
+<div class="deck">
+
+  <!-- 1. Title -->
+  <section class="slide title-slide">
+    <div class="part-badge">Part 5 · 저전력 설계</div>
+    <h1>DVFS<br>칩이 스스로 기어를 바꾼다</h1>
+    <p class="hook">평지에선 연비주행, 언덕에선 풀악셀. 칩도 부하에 맞춰 전압과 주파수를 실시간으로 바꿉니다.
+      이 한 글자 공식 <strong>P ∝ C·V²·f</strong> 만 이해하면, DVFS의 90%는 끝납니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기</div>
+  </section>
+
+  <!-- 2. 왜 배우나 / 한 문장 정의 -->
+  <section class="slide">
+    <div class="kicker">한 문장 정의</div>
+    <h2>DVFS = 부하에 맞춰 <span class="hl">전압·주파수를 동적으로 조절</span></h2>
+    <p class="lead">DVFS는 <strong>Dynamic Voltage and Frequency Scaling</strong>의 약자입니다. 일이 많으면 전압(V)·주파수(f)를 올려 성능을 내고, 일이 적으면 둘 다 내려 전력을 아끼는 기법입니다.</p>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">🔋</span> 왜 중요한가</h3>
+        <ul>
+          <li>스마트폰 = 배터리, 데이터센터 = 전기요금 + 발열</li>
+          <li>"항상 최고 성능"으로 돌면 <strong class="hl">배터리가 순식간에 닳고</strong> 칩이 뜨거워짐</li>
+          <li>대부분의 시간, 칩은 <strong>한가하다</strong> → 그때 절전이 핵심</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🎚️</span> 무엇을 조절하나</h3>
+        <ul>
+          <li><strong class="hl2">V</strong> = 공급 전압 (PMIC가 조절)</li>
+          <li><strong class="hl">f</strong> = 클럭 주파수 (PLL이 조절)</li>
+          <li>이 둘을 묶은 한 쌍을 <strong>동작점(operating point)</strong>이라 부름</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note mt">검증 엔지니어에게 DVFS는 "전압·주파수가 동작 중에 바뀌는데, 그래도 칩이 멀쩡히 돌아가는가?"를 증명해야 하는 시나리오입니다.</div>
+  </section>
+
+  <!-- 3. 개발자 비유 -->
+  <section class="slide">
+    <div class="kicker">개발자 직관으로 번역</div>
+    <h2>이미 당신은 DVFS를 매일 쓰고 있다</h2>
+    <div class="dev-bridge">
+      <p style="margin:6px 0">리눅스의 <strong>CPU governor</strong> — <code>performance</code> / <code>powersave</code> / <code>ondemand</code> — 를 만져본 적 있나요? 그게 바로 DVFS의 정책 부분입니다. 부하를 보고 클럭을 올렸다 내렸다 하죠.</p>
+      <p style="margin:6px 0">클라우드를 다뤄봤다면 <strong>오토스케일링</strong>을 떠올리세요. 트래픽이 몰리면 인스턴스를 늘리고(성능↑), 한가하면 줄여서 비용을 아낍니다(전력↑). DVFS는 <strong class="hl2">칩 내부에서 일어나는 오토스케일링</strong>입니다.</p>
+    </div>
+    <table class="compare mt">
+      <tr><th>DVFS</th><th>당신이 아는 것</th></tr>
+      <tr><td>부하 모니터링 → V/f 결정</td><td>오토스케일러가 CPU 사용률 보고 인스턴스 수 결정</td></tr>
+      <tr><td>governor (정책 엔진)</td><td>스케일링 정책 (target tracking 등)</td></tr>
+      <tr><td>operating point 테이블</td><td>인스턴스 타입 목록 (small/medium/large)</td></tr>
+      <tr><td>전력 절감 vs 성능</td><td>비용 절감 vs 응답 속도</td></tr>
+    </table>
+  </section>
+
+  <!-- 4. 핵심 공식 P = C V^2 f -->
+  <section class="slide">
+    <div class="kicker">DVFS의 심장</div>
+    <h2>동적 전력 공식: <span class="hl">P ∝ C · V² · f</span></h2>
+    <p>칩이 스위칭할 때 소모하는 <strong>동적 전력(dynamic power)</strong>은 이 세 가지에 비례합니다. 외울 가치가 있는 면접 1순위 공식입니다.</p>
+    <div class="diagram mt">
+      <svg viewBox="0 0 760 230" width="760">
+        <text x="380" y="55" fill="#e8eef7" font-size="34" text-anchor="middle" font-weight="bold" font-family="monospace">P  =  C · V² · f</text>
+        <!-- C -->
+        <rect x="70" y="100" width="170" height="100" rx="12" fill="#172236" stroke="#b388ff"/>
+        <text x="155" y="130" fill="#b388ff" font-size="20" text-anchor="middle" font-weight="bold">C</text>
+        <text x="155" y="155" fill="#9fb0c7" font-size="13" text-anchor="middle">정전용량 (회로 크기)</text>
+        <text x="155" y="178" fill="#6c7c95" font-size="12" text-anchor="middle">설계로 고정 → 못 바꿈</text>
+        <!-- V -->
+        <rect x="295" y="100" width="170" height="100" rx="12" fill="#172236" stroke="#5b9cff" stroke-width="2.5"/>
+        <text x="380" y="130" fill="#5b9cff" font-size="20" text-anchor="middle" font-weight="bold">V²</text>
+        <text x="380" y="155" fill="#9fb0c7" font-size="13" text-anchor="middle">전압의 제곱!</text>
+        <text x="380" y="178" fill="#5ee6a0" font-size="12" text-anchor="middle" font-weight="bold">★ 효과가 가장 큼</text>
+        <!-- f -->
+        <rect x="520" y="100" width="170" height="100" rx="12" fill="#172236" stroke="#38e1c6"/>
+        <text x="605" y="130" fill="#38e1c6" font-size="20" text-anchor="middle" font-weight="bold">f</text>
+        <text x="605" y="155" fill="#9fb0c7" font-size="13" text-anchor="middle">클럭 주파수</text>
+        <text x="605" y="178" fill="#6c7c95" font-size="12" text-anchor="middle">선형 비례</text>
+      </svg>
+    </div>
+    <div class="warnbox mt"><p style="margin:4px 0">핵심 통찰: <strong class="hl2">전압을 절반으로 낮추면 V² 항 때문에 전력은 1/4로</strong> 떨어집니다. 그래서 DVFS는 "주파수만"이 아니라 반드시 <strong>전압까지 함께</strong> 낮춥니다. 전압 절감이 진짜 알맹이입니다.</p></div>
+  </section>
+
+  <!-- 5. 왜 V와 f를 같이 -->
+  <section class="slide">
+    <div class="kicker">왜 둘을 묶나</div>
+    <h2>주파수를 낮추면 전압도 낮출 수 있다 — 그게 핵심</h2>
+    <div class="grid2">
+      <div>
+        <p>주파수만 낮추면 전력은 <strong>겨우 선형</strong>으로만 줄어듭니다(f 항). 별로죠.</p>
+        <p>하지만 클럭이 느려지면 트랜지스터가 신호를 안정시킬 <strong>시간 여유</strong>가 생깁니다. 그러면 더 낮은 전압으로도 회로가 정상 동작합니다.</p>
+        <ul>
+          <li>느린 클럭 → 낮은 전압 허용 → <strong class="hl">V²의 큰 절감</strong></li>
+          <li>그래서 f와 V를 <strong>한 쌍</strong>으로 묶어 같이 내림</li>
+        </ul>
+      </div>
+      <div class="analogy">
+        <p style="margin-top:6px">자동차로 생각하세요. 천천히 달리면(낮은 f) 엔진을 살살 밟아도(낮은 V) 됩니다. 빨리 달리려면 RPM도 높이고 기름도 더 부어야 하죠.</p>
+        <p class="dim" style="margin-bottom:6px">DVFS는 "지금 얼마나 빨리 갈지"에 맞춰 엔진 출력을 통째로 조절하는 변속기입니다.</p>
+      </div>
+    </div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">물리 제약: <strong>주파수가 높을수록 더 높은 최소 전압이 필요</strong>합니다. 그래서 (V, f) 쌍은 아무렇게나 못 정하고, 검증·실측으로 보장된 조합만 테이블로 관리합니다. → 다음 슬라이드 OPP.</p></div>
+  </section>
+
+  <!-- 6. OPP 테이블 -->
+  <section class="slide">
+    <div class="kicker">동작점 테이블</div>
+    <h2>OPP — 미리 검증된 <span class="hl">(전압, 주파수) 메뉴판</span></h2>
+    <p><strong>OPP(Operating Performance Point)</strong>는 칩이 안전하게 동작하도록 보장된 (V, f) 쌍의 목록입니다. governor는 이 메뉴판 중 하나를 골라 적용합니다 — 임의의 값이 아니라 <strong class="hl">검증된 선택지</strong>만.</p>
+    <div class="diagram mt">
+      <svg viewBox="0 0 760 250" width="760">
+        <!-- axes -->
+        <line x1="90" y1="210" x2="700" y2="210" stroke="#22304a" stroke-width="2"/>
+        <line x1="90" y1="210" x2="90" y2="30" stroke="#22304a" stroke-width="2"/>
+        <text x="395" y="240" fill="#9fb0c7" font-size="13" text-anchor="middle">주파수 f (성능) →</text>
+        <text x="40" y="120" fill="#9fb0c7" font-size="13" text-anchor="middle" transform="rotate(-90 40 120)">전압 V →</text>
+        <!-- curve points (V rises with f, roughly convex) -->
+        <polyline points="150,195 300,165 450,120 600,55" fill="none" stroke="#5b9cff" stroke-width="2" stroke-dasharray="4 4"/>
+        <!-- OPP dots -->
+        <circle cx="150" cy="195" r="9" fill="#5ee6a0"/>
+        <text x="150" y="178" fill="#5ee6a0" font-size="12" text-anchor="middle">OPP0</text>
+        <text x="150" y="225" fill="#6c7c95" font-size="11" text-anchor="middle">0.7V·0.6GHz</text>
+        <circle cx="300" cy="165" r="9" fill="#38e1c6"/>
+        <text x="300" y="148" fill="#38e1c6" font-size="12" text-anchor="middle">OPP1</text>
+        <text x="300" y="225" fill="#6c7c95" font-size="11" text-anchor="middle">0.8V·1.2GHz</text>
+        <circle cx="450" cy="120" r="9" fill="#ffce6b"/>
+        <text x="450" y="103" fill="#ffce6b" font-size="12" text-anchor="middle">OPP2</text>
+        <text x="450" y="225" fill="#6c7c95" font-size="11" text-anchor="middle">0.95V·1.8GHz</text>
+        <circle cx="600" cy="55" r="9" fill="#ff7a85"/>
+        <text x="600" y="38" fill="#ff7a85" font-size="12" text-anchor="middle">OPP3 (turbo)</text>
+        <text x="600" y="225" fill="#6c7c95" font-size="11" text-anchor="middle">1.1V·2.4GHz</text>
+      </svg>
+    </div>
+    <div class="note mt">예시 값일 뿐 실제 칩마다 다릅니다. 핵심: <strong>높은 성능을 원할수록 더 높은 전압이 필요</strong>하고(우상향), 각 점은 미리 검증된 안전한 조합입니다. 절전 시 OPP0 쪽, 풀로드 시 OPP3 쪽으로 이동.</div>
+  </section>
+
+  <!-- 7. 누가 무엇을 조절하나 (구성요소) -->
+  <section class="slide">
+    <div class="kicker">DVFS를 구성하는 4인방</div>
+    <h2>정책은 governor, 실행은 PMIC와 PLL</h2>
+    <div class="diagram" style="text-align:left">
+      <div class="flow" style="justify-content:flex-start">
+        <div class="box">부하 모니터<br><span class="dim" style="font-size:12px">사용률 측정</span></div>
+        <span class="arrow">→</span>
+        <div class="box on">Governor<br><span class="hl" style="font-size:12px">정책: OPP 결정</span></div>
+        <span class="arrow">→</span>
+        <div class="box on" style="border-color:var(--accent2)">PMIC<br><span class="hl2" style="font-size:12px">전압 V 조절</span></div>
+        <div style="margin:0 10px;color:var(--dim)">＋</div>
+        <div class="box on">PLL<br><span class="hl" style="font-size:12px">주파수 f 조절</span></div>
+      </div>
+    </div>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">🧠</span> Governor (정책)</h3>
+        <p>"지금 어떤 OPP로 갈지"를 결정하는 두뇌. <code>performance</code>는 항상 최고, <code>powersave</code>는 항상 최저, <code>ondemand</code>는 부하 따라 동적. <strong>리눅스 governor와 같은 개념</strong>입니다.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">⚡</span> PMIC + PLL (실행)</h3>
+        <p><strong class="hl2">PMIC</strong>(Power Management IC)는 전압 레귤레이터로 <strong>V를 올리고 내림</strong>. <strong class="hl">PLL</strong>(Phase-Locked Loop)은 클럭을 만들어 <strong>f를 올리고 내림</strong>. governor의 결정을 물리적으로 집행하는 손발.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. 전환 순서 (안전 순서) -->
+  <section class="slide">
+    <div class="kicker">가장 자주 나오는 함정 질문</div>
+    <h2>전환 순서 — <span class="hl">올릴 땐 V 먼저, 내릴 땐 f 먼저</span></h2>
+    <p>V와 f를 동시에 못 바꿉니다. 순서가 틀리면 회로가 <strong class="hl3">셋업 타임 위반</strong>으로 오동작합니다. 규칙은 단 하나: <strong>항상 더 안전한 쪽을 먼저</strong>.</p>
+    <div class="grid2 mt">
+      <div class="card" style="border-color:var(--accent2)">
+        <h3><span class="ico">⬆️</span> 성능 올릴 때 (UP)</h3>
+        <div class="flow" style="justify-content:flex-start;margin:8px 0">
+          <div class="box on" style="border-color:var(--accent2)">① V 올림</div>
+          <span class="arrow">→</span>
+          <div class="box">② f 올림</div>
+        </div>
+        <p style="font-size:15px">먼저 전압을 충분히 올려놓아야, 높아진 주파수를 회로가 버틸 수 있습니다. f를 먼저 올리면 전압이 모자라 <strong class="hl3">동작 실패</strong>.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">⬇️</span> 성능 내릴 때 (DOWN)</h3>
+        <div class="flow" style="justify-content:flex-start;margin:8px 0">
+          <div class="box on">① f 내림</div>
+          <span class="arrow">→</span>
+          <div class="box" style="border-color:var(--accent2)">② V 내림</div>
+        </div>
+        <p style="font-size:15px">먼저 주파수를 낮춰 여유를 만든 뒤 전압을 낮춥니다. V를 먼저 낮추면 아직 빠른 클럭을 못 버텨 <strong class="hl3">동작 실패</strong>.</p>
+      </div>
+    </div>
+    <div class="takeaway mt"><p style="margin:6px 0;font-size:17px;color:var(--ink)">암기법: <strong>"항상 전압이 주파수보다 넉넉한 상태를 유지한다."</strong> 올릴 땐 전압이 먼저 앞서가고, 내릴 땐 전압이 가장 마지막에 내려옵니다.</p></div>
+  </section>
+
+  <!-- 9. 관련 개념: power domain, AVS -->
+  <section class="slide">
+    <div class="kicker">자주 따라 나오는 짝꿍 용어</div>
+    <h2>Power Domain · AVS, 한 줄씩만 알아두기</h2>
+    <dl class="kv mt">
+      <dt>Power Domain</dt>
+      <dd>칩을 <strong>전원을 따로 줄 수 있는 영역</strong>들로 나눈 것. CPU와 GPU에 서로 다른 V/f를 적용하거나, 안 쓰는 영역은 통째로 꺼버립니다(power gating). DVFS는 보통 도메인 단위로 동작.</dd>
+      <dt>AVS</dt>
+      <dd><strong>Adaptive Voltage Scaling</strong>. OPP는 "모든 칩에 안전한" 보수적 전압을 쓰는데, AVS는 <strong>그 칩 개체의 실제 상태(공정 편차·온도)를 센서로 측정</strong>해 전압을 더 깎습니다. "이 칩은 운이 좋으니 더 낮춰도 됨"을 실시간 반영.</dd>
+      <dt>DVFS vs AVS</dt>
+      <dd>DVFS = 부하에 맞춘 동적 조절(메뉴판 OPP 선택). AVS = 개체·환경에 맞춘 전압 미세 최적화. 둘은 함께 쓰입니다.</dd>
+    </dl>
+    <div class="note mt">면접에서 깊게 묻진 않습니다. "power domain은 전원 영역 단위, AVS는 칩 개체별로 전압을 더 정밀하게 깎는 기법" 정도만 말하면 충분합니다. Power domain은 다음 챕터 UPF와 직결됩니다.</div>
+  </section>
+
+  <!-- 10. 검증 관점 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>DVFS를 어떻게 검증하나</h2>
+    <p>당신의 임무는 "V/f가 동작 중에 <strong>실제로 바뀌는 그 순간</strong>에도 칩이 데이터를 잃거나 오동작하지 않는가"를 증명하는 것입니다.</p>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">🔀</span> 전환(transition) 검증</h3>
+        <ul>
+          <li>모든 OPP 간 전환을 시도 (OPP0↔3 등 모든 경로)</li>
+          <li><strong class="hl">V/f 변경 순서</strong>가 안전 규칙(올림: V→f, 내림: f→V)을 지키는지</li>
+          <li>전환 중 진행 중이던 <strong>트랜잭션이 깨지지 않는지</strong></li>
+          <li>핸드셰이크/ack 신호가 올바른 순서로 오가는지</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🧰</span> 어떻게</h3>
+        <ul>
+          <li><strong>UPF</strong>로 전원 의도를 기술하고 power-aware 시뮬레이션 (→ 5-3)</li>
+          <li>governor·PMIC·PLL 모델로 전환 시퀀스 재현</li>
+          <li><strong>커버리지</strong>: 모든 OPP·모든 전환 방향을 다 두드렸나</li>
+          <li>스트레스: 부하를 마구 흔들어 전환을 폭주시키기</li>
+        </ul>
+      </div>
+    </div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: 오토스케일링 도중에 <strong>요청이 유실되면 안 되듯</strong>, DVFS 전환 도중에도 인플라이트 트랜잭션은 살아남아야 합니다. 그 "전환 중 무결성"을 시뮬레이션으로 검증하는 게 당신의 일입니다.</p></div>
+  </section>
+
+  <!-- 11. Q&A -->
+  <section class="slide">
+    <div class="kicker">면접 예상 질문</div>
+    <h2>이렇게 물어보면, 이렇게 답한다</h2>
+    <div class="qa">
+      <div class="q">DVFS가 뭔가요? 왜 V²항이 핵심인가요?</div>
+      <div class="a">부하에 맞춰 전압과 주파수를 동적으로 조절해 전력과 성능을 맞바꾸는 기법입니다. 동적 전력이 P ∝ C·V²·f인데, 전압은 제곱으로 들어가서 절감 효과가 가장 큽니다. 주파수를 낮추면 더 낮은 전압으로도 동작 가능해지므로, V와 f를 한 쌍으로 묶어 같이 내립니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">OPP가 뭔가요?</div>
+      <div class="a">Operating Performance Point, 안전하게 동작하도록 미리 검증된 (전압, 주파수) 쌍의 목록입니다. governor가 부하를 보고 이 메뉴 중 하나를 골라 적용합니다. 임의 값이 아니라 검증된 조합만 쓰는 게 포인트입니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">V/f를 올리고 내릴 때 순서가 왜 중요한가요?</div>
+      <div class="a">전압이 항상 주파수를 감당할 만큼 넉넉해야 합니다. 그래서 올릴 땐 전압을 먼저, 주파수를 나중에 올리고, 내릴 땐 주파수를 먼저, 전압을 나중에 내립니다. 순서가 틀리면 전압이 부족한 상태에서 빠른 클럭이 돌아 셋업 위반으로 오동작합니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">DVFS는 어떻게 검증하나요?</div>
+      <div class="a">모든 OPP 간 전환을 자극으로 넣고, V/f 변경 순서와 핸드셰이크가 규칙대로인지, 전환 중 진행 중이던 트랜잭션이 깨지지 않는지를 확인합니다. UPF로 전원 의도를 기술해 power-aware 시뮬레이션을 돌리고, 모든 OPP와 전환 방향이 커버됐는지 커버리지로 측정합니다.</div>
+    </div>
+  </section>
+
+  <!-- 12. 요약 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>이 챕터, 한 손에 잡기</h2>
+    <div class="grid2">
+      <div>
+        <ul>
+          <li>DVFS = 부하 따라 <strong>V·f를 동적으로</strong> 조절 → 전력 ↔ 성능 트레이드</li>
+          <li><strong class="hl">P ∝ C·V²·f</strong> — 전압이 제곱이라 V 절감 효과가 가장 큼</li>
+          <li><strong>OPP</strong> = 검증된 (V, f) 메뉴판, <strong>governor</strong>가 선택</li>
+          <li><strong class="hl2">PMIC</strong>가 전압, <strong class="hl">PLL</strong>이 주파수를 집행</li>
+          <li>전환 순서: 올림은 <strong>V→f</strong>, 내림은 <strong>f→V</strong> (전압이 항상 넉넉)</li>
+          <li>검증 = 모든 OPP 전환에서 무결성 + 순서 + 커버리지</li>
+        </ul>
+      </div>
+      <div class="takeaway">
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"DVFS는 P ∝ C·V²·f에 기반해 부하에 맞춰 OPP를 바꾸는 칩의 오토스케일링이고, 저는 그 전압·주파수 <strong class="hl">전환이 안전하게 일어나는지를 검증</strong>합니다."</p>
+        <p class="dim" style="margin-bottom:6px">— 공식 + 검증 관점, 두 가지를 한 문장에.</p>
+      </div>
+    </div>
+    <div class="note mt">다음 → <strong>5-3 UPF</strong>: 전원 도메인·전압 전환을 설계에 어떻게 "기술"하고, power-aware 시뮬레이션으로 어떻게 검증하는가. DVFS의 검증 도구가 바로 여기서 등장합니다.</div>
+  </section>
+
+</div>
+<script src="../assets/slides.js"></script>
+</body>
+</html>

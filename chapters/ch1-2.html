@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>1-2 · SystemVerilog</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-title="Part 1 · 1-2 SystemVerilog">
+<div class="deck">
+
+  <!-- 1. Title -->
+  <section class="slide title-slide">
+    <div class="part-badge">Part 1 · 언어</div>
+    <h1>SystemVerilog<br>Verilog에 <span class="hl">OOP와 테스트</span>를 더하다</h1>
+    <p class="hook">Verilog가 "회로를 그리는 언어"였다면, SystemVerilog는 거기에 Java/C++급 객체지향과 테스트 기능을 통째로 내장한 슈퍼셋입니다.
+      검증 엔지니어의 진짜 무기가 여기서 시작됩니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
+  </section>
+
+  <!-- 2. 한 문장 정의 / 왜 배우나 -->
+  <section class="slide">
+    <div class="kicker">한 문장 정의</div>
+    <h2>SystemVerilog = <span class="hl">Verilog + OOP + 테스트 프레임워크</span></h2>
+    <p class="lead">SystemVerilog(SV)는 Verilog의 <strong>상위호환(superset)</strong>입니다. 기존 Verilog 코드는 그대로 돌아가고, 그 위에 두 갈래의 강력한 기능이 얹혀 있습니다.</p>
+    <div class="grid2 mt">
+      <div class="card" style="border-color:var(--accent)">
+        <h3><span class="ico">🏗️</span> 설계측(Design) 개선</h3>
+        <p><code>logic</code> 타입, <code>always_comb/ff</code>, <code>enum</code>, <code>struct</code>, <code>interface</code> — 설계를 더 안전하고 간결하게.</p>
+      </div>
+      <div class="card" style="border-color:var(--accent2)">
+        <h3><span class="ico">🔬</span> 검증측(Verification) 무기</h3>
+        <p><code>class</code>(OOP), <code>rand</code>+<code>constraint</code>, <code>fork-join</code>, <code>covergroup</code>, <strong>SVA</strong> assertion — 테스트를 코드로 짠다.</p>
+      </div>
+    </div>
+    <div class="note mt"><strong>왜 배우나?</strong> UVM을 비롯한 현대 검증 방법론은 전부 SystemVerilog의 클래스·랜덤·커버리지 기능 위에 세워져 있습니다. SV를 모르면 UVM은 한 줄도 못 읽습니다.</div>
+  </section>
+
+  <!-- 3. 개발자 비유 -->
+  <section class="slide">
+    <div class="kicker">개발자 직관으로 번역</div>
+    <h2>당신이 이미 아는 것으로 SV 전체가 설명된다</h2>
+    <div class="dev-bridge">
+      <p style="margin:6px 0 14px">SystemVerilog의 검증 기능은 사실 <strong>당신이 이미 쓰던 도구들의 하드웨어 버전</strong>입니다. 새로 외울 게 아니라, 이름만 바꿔 매핑하면 됩니다.</p>
+      <table class="compare" style="margin-bottom:0">
+        <tr><th>SystemVerilog</th><th>개발자가 아는 것</th></tr>
+        <tr><td><code>class</code> / 상속(extends)</td><td>Java/C++의 클래스·상속 — 테스트를 객체로 모델링</td></tr>
+        <tr><td><code>rand</code> + <code>constraint</code></td><td><strong class="hl">Property-based testing</strong> (QuickCheck/Hypothesis)</td></tr>
+        <tr><td>SVA assertion</td><td><strong class="hl">runtime invariant / assert()</strong> — 항상 참이어야 할 조건</td></tr>
+        <tr><td><code>fork ... join</code></td><td>스레드/async 병렬 실행</td></tr>
+        <tr><td><code>covergroup</code></td><td>코드 커버리지 도구 (어디까지 테스트했나)</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 4. logic vs wire/reg -->
+  <section class="slide">
+    <div class="kicker">설계측 개선 ①</div>
+    <h2><code>logic</code> 하나로 <code>wire</code>·<code>reg</code>를 통합</h2>
+    <p>Verilog에서 가장 헷갈리던 함정: "이 신호는 <code>wire</code>로 선언할까 <code>reg</code>로 선언할까?". SystemVerilog는 <strong class="hl">logic</strong> 타입 하나로 대부분 해결합니다.</p>
+    <table class="compare">
+      <tr><th>타입</th><th>Verilog에서의 의미</th><th>문제점</th></tr>
+      <tr><td><code>wire</code></td><td>연속 할당(assign)으로 구동되는 배선</td><td rowspan="2">어느 걸 써야 하나 매번 고민 → 실수 유발</td></tr>
+      <tr><td><code>reg</code></td><td>always 블록 안에서 할당되는 변수 (실제로 레지스터란 뜻 아님!)</td></tr>
+      <tr><td><code class="hl">logic</code></td><td colspan="2"><strong class="hl">둘 다 됨</strong> — 단, "한 곳에서만 구동" 규칙을 도구가 검사해 줌</td></tr>
+    </table>
+    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: <code>reg</code>라는 이름이 "register"처럼 보이지만 실제론 그냥 변수였습니다 — 마치 <code>var</code>가 변수인지 상수인지 헷갈리던 시절. <code>logic</code>은 그 모호함을 없앤 <strong>명확한 단일 타입</strong>입니다. (단, 여러 곳에서 동시에 구동되는 진짜 양방향 배선엔 여전히 <code>wire</code>를 씁니다.)</p></div>
+  </section>
+
+  <!-- 5. always_comb / always_ff -->
+  <section class="slide">
+    <div class="kicker">설계측 개선 ②</div>
+    <h2>의도를 <span class="hl">이름으로 선언</span>한다: always_*</h2>
+    <p>Verilog에선 모두 그냥 <code>always</code>였습니다. SV는 "이 블록이 <strong>조합논리</strong>냐 <strong>순차논리</strong>냐"를 이름으로 못박아, 도구가 실수를 잡아줍니다.</p>
+    <div class="grid3 mt">
+      <div class="card">
+        <h3><span class="ico">⚡</span> always_comb</h3>
+        <p><strong>조합논리</strong> (기억 없음, 입력→즉시 출력). 민감도 목록을 자동으로 채워줘 빠뜨림 버그 방지.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🕐</span> always_ff</h3>
+        <p><strong>플립플롭</strong> (클럭에 맞춰 기억). <code>@(posedge clk)</code>. "이건 레지스터를 만들겠다"는 의도 선언.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">⚠️</span> always_latch</h3>
+        <p><strong>래치</strong>를 의도적으로 만들 때. 의도치 않은 래치는 도구가 <strong class="hl">경고</strong>로 잡아줌.</p>
+      </div>
+    </div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: TypeScript의 타입 어노테이션과 같습니다. 동작은 같아도 <strong>"내 의도는 이거다"라고 명시</strong>하면, 컴파일러(여기선 합성 도구)가 의도와 실제 회로가 다를 때 에러를 띄워 줍니다.</p></div>
+  </section>
+
+  <!-- 6. interface -->
+  <section class="slide">
+    <div class="kicker">설계측 개선 ③ · 가장 중요</div>
+    <h2><code>interface</code> = 수십 가닥 배선을 <span class="hl">케이블 하나로</span></h2>
+    <p>버스 하나엔 신호가 수십 개(addr, data, valid, ready, write...). 이걸 모듈마다 일일이 연결하면 실수투성이. <strong class="hl">interface</strong>는 관련 신호를 한 묶음으로 추상화합니다.</p>
+    <div class="grid2 mt">
+      <div class="diagram" style="text-align:left">
+        <svg viewBox="0 0 380 220" width="380">
+          <text x="14" y="22" fill="#6c7c95" font-size="12">interface 없이: 가닥마다 일일이 배선</text>
+          <rect x="14" y="40" width="110" height="150" rx="10" fill="#172236" stroke="#5b9cff"/>
+          <text x="69" y="120" fill="#e8eef7" font-size="14" text-anchor="middle">Master</text>
+          <rect x="256" y="40" width="110" height="150" rx="10" fill="#172236" stroke="#ffce6b"/>
+          <text x="311" y="120" fill="#e8eef7" font-size="14" text-anchor="middle">Slave</text>
+          <line x1="124" y1="60" x2="256" y2="60" stroke="#6c7c95" stroke-width="1.5"/>
+          <line x1="124" y1="80" x2="256" y2="80" stroke="#6c7c95" stroke-width="1.5"/>
+          <line x1="124" y1="100" x2="256" y2="100" stroke="#6c7c95" stroke-width="1.5"/>
+          <line x1="124" y1="120" x2="256" y2="120" stroke="#6c7c95" stroke-width="1.5"/>
+          <line x1="124" y1="140" x2="256" y2="140" stroke="#6c7c95" stroke-width="1.5"/>
+          <line x1="124" y1="160" x2="256" y2="160" stroke="#6c7c95" stroke-width="1.5"/>
+          <text x="190" y="205" fill="#ff7a85" font-size="12" text-anchor="middle">연결 실수 위험 ↑</text>
+        </svg>
+      </div>
+      <div class="diagram" style="text-align:left">
+        <svg viewBox="0 0 380 220" width="380">
+          <text x="14" y="22" fill="#38e1c6" font-size="12">interface로: 케이블 한 줄</text>
+          <rect x="14" y="40" width="110" height="150" rx="10" fill="#172236" stroke="#5b9cff"/>
+          <text x="69" y="120" fill="#e8eef7" font-size="14" text-anchor="middle">Master</text>
+          <rect x="256" y="40" width="110" height="150" rx="10" fill="#172236" stroke="#ffce6b"/>
+          <text x="311" y="120" fill="#e8eef7" font-size="14" text-anchor="middle">Slave</text>
+          <rect x="150" y="100" width="80" height="34" rx="8" fill="#1a2740" stroke="#38e1c6"/>
+          <text x="190" y="122" fill="#38e1c6" font-size="12" text-anchor="middle" font-weight="bold">bus_if</text>
+          <line x1="124" y1="117" x2="150" y2="117" stroke="#38e1c6" stroke-width="5"/>
+          <line x1="230" y1="117" x2="256" y2="117" stroke="#38e1c6" stroke-width="5"/>
+          <text x="190" y="205" fill="#5ee6a0" font-size="12" text-anchor="middle">한 곳에서 정의 · 재사용</text>
+        </svg>
+      </div>
+    </div>
+    <div class="note mt"><strong>interface의 장점:</strong> ① 신호 묶음을 한 곳에서 정의 → 추가/수정 쉬움 ② <code>modport</code>로 방향(입력/출력) 지정 → 연결 실수 방지 ③ 검증에서 <strong class="hl">virtual interface</strong>로 클래스와 신호를 잇는 핵심 통로가 됨.</div>
+  </section>
+
+  <!-- 7. 왜 검증에 OOP -->
+  <section class="slide">
+    <div class="kicker">검증측 ① · 핵심 질문</div>
+    <h2>왜 검증에 <span class="hl2">OOP</span>가 필요한가?</h2>
+    <p>설계(RTL)는 병렬 회로라 OOP가 어울리지 않지만, <strong>테스트 코드</strong>는 일반 소프트웨어와 똑같습니다 — 재사용하고, 확장하고, 수천 개의 변형을 만들어야 하죠.</p>
+    <div class="grid3 mt">
+      <div class="card">
+        <h3><span class="ico">♻️</span> 재사용</h3>
+        <p>기본 트랜잭션 클래스를 만들어 두면 프로젝트마다 <strong>상속해 재활용</strong>. 매번 새로 안 짠다.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🧩</span> 확장</h3>
+        <p>기존 테스트를 건드리지 않고 <strong>extends로 변형</strong>. UVM의 factory override가 이걸 활용.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🎲</span> 랜덤 자극</h3>
+        <p>객체 안에 <code>rand</code> 변수를 두면 <strong>수천 개의 시나리오</strong>를 자동 생성. 사람이 일일이 못 만든다.</p>
+      </div>
+    </div>
+    <div class="analogy mt"><p style="margin:6px 0">비유: 테스트벤치를 하나의 <strong>애플리케이션</strong>이라 생각하세요. 그 앱을 절차적 코드로 짜겠습니까, 객체지향으로 짜겠습니까? 복잡한 칩일수록 답은 명확합니다 — <strong class="hl">OOP로 구조화</strong>해야 유지보수가 됩니다.</p></div>
+  </section>
+
+  <!-- 8. rand + constraint (예시) -->
+  <section class="slide">
+    <div class="kicker">검증측 ② · 랜덤화</div>
+    <h2><code>rand</code> + <code>constraint</code> = <span class="hl">제약 기반 랜덤</span></h2>
+    <p>핵심 아이디어: "값을 랜덤하게 뽑되, <strong>말이 되는 범위 안에서만</strong>". 변수에 <code>rand</code>를 붙이고, <code>constraint</code>로 규칙을 건 뒤 <code>randomize()</code>를 호출합니다.</p>
+    <div class="grid2 mt">
+      <div>
+        <pre class="code"><code><span class="kw">class</span> <span class="fn">Packet</span>;
+  <span class="kw">rand bit</span> [7:0] addr;
+  <span class="kw">rand bit</span> [7:0] len;
+
+  <span class="cmt">// 규칙: addr는 짝수, len은 1~16</span>
+  <span class="kw">constraint</span> rules {
+    addr % 2 == 0;
+    len <span class="kw">inside</span> {[1:16]};
+  }
+<span class="kw">endclass</span>
+
+<span class="cmt">// 사용</span>
+Packet p = <span class="kw">new</span>();
+<span class="kw">if</span> (p.<span class="fn">randomize</span>())  <span class="cmt">// 규칙 지킨 랜덤값 채움</span>
+  drive(p);</code></pre>
+      </div>
+      <div class="dev-bridge">
+        <p style="margin:6px 0 12px"><strong>이게 바로 Property-based testing</strong>입니다. QuickCheck/Hypothesis로 "입력은 이 조건을 만족해야 한다"를 선언하면 프레임워크가 수천 케이스를 뽑아주던 그 패턴.</p>
+        <p style="margin:6px 0">차이점: <code>constraint</code>는 <strong class="hl">SAT 솔버</strong>가 풀어, 단순 범위가 아니라 변수 간 복잡한 관계식까지 만족하는 값을 생성합니다.</p>
+      </div>
+    </div>
+    <div class="note mt">왜 중요한가? 사람은 "정상 케이스 + 떠오르는 코너 케이스" 정도만 짭니다. 제약 랜덤은 <strong class="hl">사람이 상상 못 한 조합</strong>을 끝없이 던져 숨은 버그를 캐냅니다. 이를 CRV(Constrained-Random Verification)라 부릅니다.</div>
+  </section>
+
+  <!-- 9. 병렬/통신: fork-join, mailbox, semaphore -->
+  <section class="slide">
+    <div class="kicker">검증측 ③ · 병렬과 통신</div>
+    <h2>테스트벤치는 본질적으로 <span class="hl2">멀티스레드</span></h2>
+    <p>자극을 넣는 스레드, 응답을 받는 스레드, 검사하는 스레드가 동시에 돌아야 합니다. SV는 SW의 동시성 도구를 그대로 제공합니다.</p>
+    <table>
+      <tr><th>SV 구문</th><th>하는 일</th><th>개발자가 아는 것</th></tr>
+      <tr><td><code>fork ... join</code></td><td>여러 작업을 병렬 실행, 모두 끝날 때까지 대기</td><td>스레드 spawn + join</td></tr>
+      <tr><td><code>fork ... join_none</code></td><td>병렬로 띄우고 기다리지 않음</td><td>fire-and-forget async</td></tr>
+      <tr><td><code class="hl">mailbox</code></td><td>스레드 간 데이터 전달 큐 (FIFO)</td><td>스레드-세이프 큐 / 채널</td></tr>
+      <tr><td><code class="hl">semaphore</code></td><td>공유 자원 동시 접근 제한</td><td>세마포어 (그대로!)</td></tr>
+    </table>
+    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: Go의 <strong>goroutine + channel</strong>, 또는 Java의 <strong>ExecutorService + BlockingQueue</strong>와 똑같은 그림입니다. 검증 환경에서 컴포넌트들은 mailbox를 통해 트랜잭션을 주고받으며 느슨하게 결합됩니다 — UVM의 데이터 흐름이 바로 이것.</p></div>
+  </section>
+
+  <!-- 10. covergroup + assertion -->
+  <section class="slide">
+    <div class="kicker">검증측 ④ · 측정과 감시</div>
+    <h2>"얼마나 테스트했나"와 "절대 깨지면 안 되는 조건"</h2>
+    <div class="grid2">
+      <div class="card" style="border-color:var(--accent)">
+        <h3><span class="ico">📊</span> covergroup (커버리지)</h3>
+        <p>랜덤으로 마구 던지면 "어디까지 두드렸나"를 알아야 합니다. <code>covergroup</code>으로 관심 값/조합이 실제 발생했는지 <strong>%로 측정</strong>합니다.</p>
+        <pre class="code" style="margin-top:10px"><code><span class="kw">covergroup</span> cg;
+  <span class="cmt">// len의 모든 구간이 나왔나?</span>
+  coverpoint len {
+    <span class="kw">bins</span> small = {[1:4]};
+    <span class="kw">bins</span> big   = {[5:16]};
+  }
+<span class="kw">endgroup</span></code></pre>
+      </div>
+      <div class="card" style="border-color:var(--accent3)">
+        <h3><span class="ico">🚨</span> assertion / SVA</h3>
+        <p><strong>SVA(SystemVerilog Assertion)</strong> = "이 조건은 매 순간 항상 참이어야 한다"를 선언. 깨지면 시뮬레이션이 <strong>즉시 알려줌</strong>.</p>
+        <pre class="code" style="margin-top:10px"><code><span class="cmt">// req 뜨면 2클럭 내 ack</span>
+<span class="kw">assert property</span> (
+  @(<span class="kw">posedge</span> clk)
+  req |-> ##[1:2] ack
+);</code></pre>
+      </div>
+    </div>
+    <div class="note mt"><strong>핵심 구분:</strong> 커버리지는 "충분히 했나?"(완성도), assertion은 "규칙을 어겼나?"(정확성). 개발자 비유로 covergroup은 <strong class="hl">코드 커버리지 리포트</strong>, SVA는 코드 곳곳의 <strong class="hl">runtime assert / invariant</strong>입니다.</div>
+  </section>
+
+  <!-- 11. virtual interface -->
+  <section class="slide">
+    <div class="kicker">검증측 ⑤ · 연결의 다리</div>
+    <h2><code>virtual interface</code> = 클래스 세계 ↔ 신호 세계의 다리</h2>
+    <p>여기서 두 세계가 부딪힙니다. <strong class="hl2">class</strong>는 동적으로 생기는 객체(SW), <strong class="hl">interface/신호</strong>는 정적인 하드웨어 배선. 클래스 안에서 실제 핀(wire)을 흔들려면 둘을 이어줄 핸들이 필요합니다.</p>
+    <div class="diagram mt">
+      <div class="flow">
+        <div class="box" style="border-color:var(--accent2)">검증 class<br><span class="dim" style="font-size:12px">동적 객체(SW)</span></div>
+        <span class="arrow">→</span>
+        <div class="box on" style="border-color:var(--accent)">virtual interface<br><span class="hl" style="font-size:12px">핸들(포인터)</span></div>
+        <span class="arrow">→</span>
+        <div class="box" style="border-color:var(--warn)">실제 interface<br><span class="dim" style="font-size:12px">DUT의 핀(HW)</span></div>
+      </div>
+    </div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: <strong>virtual interface는 사실상 포인터/참조</strong>입니다. 클래스(객체)가 실제 하드웨어 배선 묶음을 가리키는 핸들을 들고 있어서, 객체 메서드로 핀을 읽고 쓸 수 있게 됩니다. 이 다리가 없으면 OOP 테스트벤치와 RTL은 영원히 서로 못 만납니다.</p></div>
+  </section>
+
+  <!-- 12. Q&A -->
+  <section class="slide">
+    <div class="kicker">면접 예상 질문</div>
+    <h2>이렇게 물어보면, 이렇게 답한다</h2>
+    <div class="qa">
+      <div class="q">Verilog와 SystemVerilog의 차이는?</div>
+      <div class="a">SystemVerilog는 Verilog의 상위호환(superset)입니다. 기존 Verilog는 그대로 동작하고, 설계측으로는 logic 타입·always_comb/ff·interface·enum/struct가, 검증측으로는 class 기반 OOP·제약 랜덤·covergroup·assertion 같은 테스트 기능이 추가됐습니다. 한마디로 "Verilog에 객체지향과 검증 프레임워크를 내장한 언어"입니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">logic과 wire/reg의 차이는?</div>
+      <div class="a">Verilog의 wire는 연속 할당으로 구동되는 배선, reg는 always 블록에서 할당되는 변수인데 둘 중 뭘 쓸지 헷갈리는 게 문제였습니다. logic은 두 용도를 모두 커버하는 단일 4-상태 타입이고, "한 곳에서만 구동" 규칙을 도구가 검사해 줍니다. 다만 여러 드라이버가 필요한 진짜 양방향 배선엔 여전히 wire를 씁니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">rand/constraint와 assertion(SVA)이 뭔가요?</div>
+      <div class="a">rand는 클래스 변수를 랜덤화 대상으로 표시하고, constraint는 그 랜덤값이 만족해야 할 규칙입니다. randomize() 호출 시 솔버가 제약을 만족하는 값을 생성하죠 — property-based testing과 같은 발상입니다. assertion(SVA)은 "이 조건은 항상 참이어야 한다"를 시간 관계로 선언해, 위반 시 시뮬레이션이 즉시 잡아내는 runtime invariant입니다.</div>
+    </div>
+  </section>
+
+  <!-- 13. 요약 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>이 챕터, 한 손에 잡기</h2>
+    <div class="grid2">
+      <div>
+        <ul>
+          <li>SV = <strong>Verilog 슈퍼셋</strong> + OOP + 테스트 기능 내장</li>
+          <li>설계측: <strong>logic</strong>(타입 통합), <strong>always_comb/ff</strong>(의도 선언), <strong>interface</strong>(배선을 케이블로)</li>
+          <li>검증측: <strong>class/상속</strong>, <strong class="hl">rand+constraint</strong>(제약 랜덤), <strong>fork-join/mailbox</strong>(병렬), <strong>covergroup</strong>(측정), <strong>SVA</strong>(감시)</li>
+          <li>OOP가 필요한 이유 = <strong>재사용·확장·랜덤 자극</strong></li>
+          <li><strong>virtual interface</strong>가 class와 신호를 잇는 다리</li>
+        </ul>
+      </div>
+      <div class="takeaway">
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"SystemVerilog는 Verilog 슈퍼셋에 <strong class="hl">OOP·제약 랜덤·커버리지·assertion</strong>을 더한 언어로, 재사용 가능하고 자동으로 자극을 생성하는 검증 환경을 코드로 짤 수 있게 해줍니다."</p>
+        <p class="dim" style="margin-bottom:6px">— 이 한 문장이면 1-2는 합격입니다.</p>
+      </div>
+    </div>
+    <div class="note mt">다음 → <strong>Part 2 · UVM</strong>: 지금 배운 class·rand·covergroup·virtual interface를 표준 구조로 엮은 검증 방법론. 여기까지 왔으면 UVM은 "이 부품들의 조립 설명서"일 뿐입니다.</div>
+  </section>
+
+</div>
+<script src="../assets/slides.js"></script>
+</body>
+</html>

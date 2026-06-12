@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>2-2 · C-test vs UVM-test 환경</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-title="Part 2 · 2-2 C-test vs UVM-test 환경">
+<div class="deck">
+
+  <!-- 1. Title -->
+  <section class="slide title-slide">
+    <div class="part-badge">Part 2 · 검증 환경</div>
+    <h1>C-test vs UVM-test<br>칩을 두드리는 두 가지 손</h1>
+    <p class="hook">바깥에서 로봇팔로 버튼을 누를 것인가, 직접 운전석에 앉아 시동을 걸 것인가.
+      같은 칩을 검증하는 두 세계의 결정적 차이를 한 장의 비교표로 정리합니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
+  </section>
+
+  <!-- 2. 왜 배우나 / 한 문장 정의 -->
+  <section class="slide">
+    <div class="kicker">왜 배우나 · 한 문장 정의</div>
+    <h2>같은 칩, 두 개의 검증 무대</h2>
+    <p class="lead">검증에는 <strong class="hl">바깥에서 자극하는 방식(UVM-test)</strong>과 <strong class="hl2">칩 안의 CPU가 직접 코드를 실행하는 방식(C-test)</strong>이 있습니다. 면접에서 "둘의 차이와 언제 무엇을 쓰는지"를 묻습니다.</p>
+    <div class="grid2 mt">
+      <div class="card" style="border-color:var(--accent)">
+        <h3><span class="ico">🦾</span> UVM-test <span class="pill teal">외부 자극</span></h3>
+        <p>테스트벤치(SystemVerilog/UVM)가 칩 <strong>바깥</strong>에서 버스 프로토콜로 신호를 넣고 결과를 검사. <strong>개별 IP/블록</strong>·코너케이스·랜덤에 강함.</p>
+      </div>
+      <div class="card" style="border-color:var(--accent2)">
+        <h3><span class="ico">🚗</span> C-test <span class="pill blue">내부 실행</span></h3>
+        <p>SoC <strong>안의 진짜 CPU 코어</strong>가 베어메탈 C 코드를 실행하며 스스로 시스템을 자극. <strong>SoC 통합</strong>·부팅·실사용 시나리오에 강함.</p>
+      </div>
+    </div>
+    <div class="note mt">핵심은 "자극을 누가 넣느냐"입니다. UVM은 <strong>외부 테스트벤치</strong>가, C-test는 <strong>내부 CPU</strong>가 넣습니다.</div>
+  </section>
+
+  <!-- 3. 개발자 비유 -->
+  <section class="slide">
+    <div class="kicker">개발자 직관으로 번역</div>
+    <h2>모킹된 통합테스트 vs 실제 런타임 E2E</h2>
+    <div class="dev-bridge">
+      <p style="margin:6px 0"><strong class="hl2">UVM-test</strong>는 의존성을 모킹하고 <strong>외부에서 API를 호출해 검증하는 통합테스트</strong>와 같습니다. 대상 블록만 떼어내, 주변은 가짜 드라이버(BFM)로 대신하고 입력을 정밀하게 통제합니다.</p>
+      <p style="margin:6px 0"><strong class="hl2">C-test</strong>는 <strong>실제 서버를 띄우고 진짜 클라이언트로 돌리는 E2E 테스트</strong>와 같습니다. 시스템 전체를 진짜로 부팅시켜, 실제 CPU가 실제 펌웨어를 실행하게 둡니다.</p>
+    </div>
+    <div class="analogy mt">
+      <p style="margin:6px 0">물리적으로 비유하면 — <strong class="hl">UVM</strong>은 <strong>로봇팔로 차 바깥에서 버튼을 눌러보는 것</strong>이고, <strong class="hl2">C-test</strong>는 <strong>사람이 운전석에 앉아 직접 시동 걸고 운전하는 것</strong>입니다. 후자가 더 "현실"에 가깝지만, 특정 버튼만 1만 번 눌러 한계를 시험하긴 어렵습니다.</p>
+    </div>
+    <div class="note mt"><strong>펌웨어 = bare-metal 프로그램.</strong> OS 없이 하드웨어 위에서 곧바로 도는 C 코드. 부팅 직후 CPU가 가장 먼저 실행하는 그것입니다.</div>
+  </section>
+
+  <!-- 4. UVM-test 구조 -->
+  <section class="slide">
+    <div class="kicker">UVM-test · 바깥에서 두드리기</div>
+    <h2>테스트벤치가 버스로 자극을 주입한다</h2>
+    <p>대상(DUT)을 둘러싼 UVM 환경이 <strong>드라이버 → 인터페이스 → 버스 프로토콜</strong> 경로로 신호를 만들어 넣고, 모니터·스코어보드가 결과를 자동 비교합니다. CPU는 필요 없거나, 그냥 박스 취급합니다.</p>
+    <div class="diagram mt">
+      <svg viewBox="0 0 760 270" width="760">
+        <rect x="6" y="6" width="748" height="258" rx="14" fill="none" stroke="#22304a" stroke-dasharray="5 5"/>
+        <text x="20" y="28" fill="#6c7c95" font-size="13">UVM Testbench (SystemVerilog, 칩 바깥)</text>
+        <!-- sequence -->
+        <rect x="34" y="55" width="130" height="60" rx="10" fill="#172236" stroke="#b388ff"/>
+        <text x="99" y="82" fill="#e8eef7" font-size="14" text-anchor="middle" font-weight="bold">Sequence</text>
+        <text x="99" y="101" fill="#9fb0c7" font-size="11" text-anchor="middle">무엇을 보낼지</text>
+        <!-- driver -->
+        <rect x="34" y="135" width="130" height="60" rx="10" fill="#172236" stroke="#38e1c6"/>
+        <text x="99" y="162" fill="#e8eef7" font-size="14" text-anchor="middle" font-weight="bold">Driver</text>
+        <text x="99" y="181" fill="#9fb0c7" font-size="11" text-anchor="middle">핀 신호로 변환</text>
+        <line x1="99" y1="115" x2="99" y2="135" stroke="#b388ff" stroke-width="2"/>
+        <!-- interface -->
+        <rect x="220" y="95" width="90" height="80" rx="10" fill="#1a2740" stroke="#ffce6b"/>
+        <text x="265" y="132" fill="#ffce6b" font-size="12" text-anchor="middle" font-weight="bold">버스</text>
+        <text x="265" y="150" fill="#ffce6b" font-size="11" text-anchor="middle">AXI/APB</text>
+        <line x1="164" y1="165" x2="220" y2="140" stroke="#38e1c6" stroke-width="2"/>
+        <!-- DUT -->
+        <rect x="360" y="70" width="150" height="130" rx="12" fill="#172236" stroke="#5b9cff"/>
+        <text x="435" y="125" fill="#e8eef7" font-size="16" text-anchor="middle" font-weight="bold">DUT</text>
+        <text x="435" y="148" fill="#9fb0c7" font-size="11" text-anchor="middle">검증 대상 IP</text>
+        <line x1="310" y1="135" x2="360" y2="135" stroke="#ffce6b" stroke-width="2"/>
+        <!-- monitor + scoreboard -->
+        <rect x="560" y="70" width="170" height="60" rx="10" fill="#172236" stroke="#5ee6a0"/>
+        <text x="645" y="97" fill="#e8eef7" font-size="14" text-anchor="middle" font-weight="bold">Monitor</text>
+        <text x="645" y="116" fill="#9fb0c7" font-size="11" text-anchor="middle">결과 관찰</text>
+        <rect x="560" y="145" width="170" height="60" rx="10" fill="#172236" stroke="#5ee6a0"/>
+        <text x="645" y="172" fill="#e8eef7" font-size="14" text-anchor="middle" font-weight="bold">Scoreboard</text>
+        <text x="645" y="191" fill="#9fb0c7" font-size="11" text-anchor="middle">기대값과 비교</text>
+        <line x1="510" y1="120" x2="560" y2="100" stroke="#5ee6a0" stroke-width="2"/>
+      </svg>
+    </div>
+    <div class="note mt"><strong class="hl">강점:</strong> 입력을 완전히 통제 → 제약 랜덤(constrained random)·코너케이스 폭격·기능 커버리지 측정이 쉽다. <strong>약점:</strong> 실제 펌웨어가 도는 통합 시나리오를 흉내내긴 번거롭다.</div>
+  </section>
+
+  <!-- 5. C-test 구조 -->
+  <section class="slide">
+    <div class="kicker">C-test · 운전석에 앉기</div>
+    <h2>진짜 CPU가 진짜 코드를 fetch & execute</h2>
+    <p>C-test는 SoC에 박힌 <strong>실제 CPU RTL</strong>이 시뮬레이션 안에서 명령어를 하나씩 가져와(fetch) 실행(execute)하게 합니다. 자극의 출처가 외부 테스트벤치가 아니라 <strong class="hl2">칩 내부의 프로그램</strong>입니다.</p>
+    <div class="diagram mt" style="text-align:left">
+      <div class="flow" style="justify-content:flex-start">
+        <div class="box">① C 소스<br><span class="dim" style="font-size:12px">test.c (펌웨어)</span></div>
+        <span class="arrow">→</span>
+        <div class="box on">② Cross-compile<br><span class="hl" style="font-size:12px">타깃 ISA로</span></div>
+        <span class="arrow">→</span>
+        <div class="box">③ .hex / .bin<br><span class="dim" style="font-size:12px">기계어 이미지</span></div>
+      </div>
+      <div class="flow mt" style="justify-content:flex-start">
+        <div class="box on" style="border-color:var(--accent2)">④ Backdoor load<br><span class="hl2" style="font-size:12px">메모리에 즉시 주입</span></div>
+        <span class="arrow">→</span>
+        <div class="box">⑤ CPU 리셋 해제<br><span class="dim" style="font-size:12px">부팅 시작</span></div>
+        <span class="arrow">→</span>
+        <div class="box on" style="border-color:var(--accent)">⑥ Fetch &amp; Execute<br><span class="hl" style="font-size:12px">CPU가 스스로 구동</span></div>
+      </div>
+    </div>
+    <div class="grid2 mt">
+      <div class="dev-bridge"><p style="margin:6px 0"><strong>Cross-compile</strong>는 x86 PC에서 ARM/RISC-V 같은 <strong>타깃 아키텍처용 바이너리를 빌드</strong>하는 것. 임베디드 개발의 그 크로스컴파일과 똑같습니다.</p></div>
+      <div class="takeaway"><p style="margin:6px 0"><strong class="hl">Backdoor load</strong> = 부팅 과정(플래시 읽기 등)을 시뮬레이션으로 흉내내지 않고, <strong>메모리 모델에 기계어를 곧바로 써넣어</strong> 빠르게 시작점에 도달시키는 기법.</p></div>
+    </div>
+  </section>
+
+  <!-- 6. Backdoor load 자세히 -->
+  <section class="slide">
+    <div class="kicker">Backdoor vs Frontdoor</div>
+    <h2>왜 "뒷문"으로 메모리를 채우나</h2>
+    <table class="compare">
+      <tr><th>방식</th><th>어떻게</th><th>속도 / 현실성</th></tr>
+      <tr><td>Frontdoor load</td><td>실제 버스 트랜잭션으로 한 워드씩 정상 경로로 기록 (실제 부트로더가 플래시에서 읽어오듯)</td><td>느림 · <strong>현실에 가장 가까움</strong></td></tr>
+      <tr><td>Backdoor load</td><td>시뮬레이터가 메모리 배열에 <strong class="hl">직접</strong> 값을 꽂음 (<code>$readmemh</code> 등). 버스를 거치지 않음</td><td><strong class="hl">매우 빠름</strong> · 부팅 단축</td></tr>
+    </table>
+    <pre class="code"><code><span class="cmt">// 컴파일된 펌웨어 이미지를 메모리 모델에 backdoor로 주입</span>
+<span class="kw">initial</span> <span class="fn">$readmemh</span>(<span class="str">"test.hex"</span>, dut.ram.mem);  <span class="cmt">// 버스 안 거치고 곧바로</span>
+
+<span class="cmt">// 그 다음 CPU 리셋만 풀면 → PC가 진입점부터 fetch 시작</span>
+cpu_rst_n = <span class="kw">1</span>;  <span class="cmt">// 이제부터 진짜 코드가 돈다</span></code></pre>
+    <div class="note mt">실무에선 <strong>부팅 시퀀스 자체를 검증할 땐 frontdoor</strong>, 그 외 빠르게 본론으로 가고 싶을 땐 <strong>backdoor</strong>를 씁니다. 면접에선 "둘의 트레이드오프(속도 vs 현실성)"를 말하면 좋습니다.</div>
+  </section>
+
+  <!-- 7. DPI-C / co-simulation -->
+  <section class="slide">
+    <div class="kicker">DPI-C · Co-simulation</div>
+    <h2>SystemVerilog ↔ C, 두 세계를 잇는 다리</h2>
+    <div class="grid2">
+      <div>
+        <p><strong class="hl3">DPI-C</strong>(Direct Programming Interface)는 SystemVerilog에서 <strong>C 함수를 직접 호출</strong>하거나 그 반대를 가능하게 하는 표준 인터페이스입니다. 두 언어가 같은 시뮬레이션 안에서 함수처럼 서로를 부릅니다.</p>
+        <ul>
+          <li><strong>import</strong>: SV가 C 함수를 호출 (예: 복잡한 알고리즘·레퍼런스 모델을 C로)</li>
+          <li><strong>export</strong>: C가 SV 함수를 호출</li>
+          <li>이렇게 RTL 시뮬레이션과 C 모델이 함께 도는 걸 <strong class="hl">co-simulation</strong>이라 부릅니다</li>
+        </ul>
+      </div>
+      <div>
+        <pre class="code"><code><span class="cmt">// SystemVerilog 쪽</span>
+<span class="kw">import</span> <span class="str">"DPI-C"</span> <span class="kw">function</span> <span class="kw">int</span> <span class="fn">ref_model</span>(<span class="kw">int</span> a);
+
+<span class="cmt">// → 시뮬레이션 중 C로 구현된</span>
+<span class="cmt">//   ref_model()을 곧바로 호출</span>
+expected = <span class="fn">ref_model</span>(stimulus);</code></pre>
+        <pre class="code"><code><span class="cmt">/* C 쪽 (ref_model.c) */</span>
+<span class="kw">int</span> <span class="fn">ref_model</span>(<span class="kw">int</span> a){
+  <span class="kw">return</span> golden_compute(a); <span class="cmt">// 정답 모델</span>
+}</code></pre>
+      </div>
+    </div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">개발자에겐 <strong>FFI(Foreign Function Interface)</strong>나 Python의 <code>ctypes</code>로 C 라이브러리를 부르는 것과 같은 그림입니다. "검증 환경(SV)이 C 코드와 함수 단위로 대화한다" — 이게 DPI-C입니다.</p></div>
+  </section>
+
+  <!-- 8. 언제 무엇을 쓰나 (비교표) -->
+  <section class="slide">
+    <div class="kicker">언제 무엇을 쓰나</div>
+    <h2>한 장으로 끝내는 결정 비교표</h2>
+    <table class="compare">
+      <tr><th>관점</th><th>UVM-test 🦾</th><th>C-test 🚗</th></tr>
+      <tr><td>자극 주체</td><td>외부 테스트벤치(드라이버)</td><td><strong class="hl">내부 실제 CPU 코어</strong></td></tr>
+      <tr><td>작성 언어</td><td>SystemVerilog / UVM</td><td>C (베어메탈 펌웨어)</td></tr>
+      <tr><td>주 대상</td><td>개별 <strong>IP / 블록</strong> 단위</td><td><strong>SoC 통합</strong> 전체</td></tr>
+      <tr><td>강점</td><td>코너케이스·제약 랜덤·커버리지</td><td>부팅·실사용 시나리오·블록 상호작용</td></tr>
+      <tr><td>입력 통제력</td><td><strong class="hl">매우 정밀</strong> (핀 단위)</td><td>소프트웨어가 닿는 범위로 제한</td></tr>
+      <tr><td>개발자 비유</td><td>모킹된 통합테스트</td><td>실제 런타임 E2E 테스트</td></tr>
+      <tr><td>한계</td><td>실제 펌웨어 흐름 재현이 번거로움</td><td>특정 코너 핀을 1만 번 두드리기 어려움</td></tr>
+    </table>
+    <div class="takeaway mt"><p style="margin:6px 0">둘은 <strong>경쟁이 아니라 보완</strong>입니다. 블록은 UVM으로 촘촘히, 통합은 C-test로 실제처럼 — 두 손으로 같은 칩을 잡습니다.</p></div>
+  </section>
+
+  <!-- 9. Q&A -->
+  <section class="slide">
+    <div class="kicker">면접 예상 질문</div>
+    <h2>이렇게 물어보면, 이렇게 답한다</h2>
+    <div class="qa">
+      <div class="q">C 기반 테스트가 무엇이고, 언제 UVM 대신 쓰나요?</div>
+      <div class="a">SoC 안의 실제 CPU 코어가 베어메탈 C 펌웨어를 실행하며 스스로 시스템을 자극하는 검증입니다. 부팅·블록 간 통합·실제 사용 시나리오처럼 "소프트웨어가 도는 흐름" 자체를 검증할 때, 외부에서 핀을 두드리는 UVM보다 적합합니다. 반대로 개별 IP의 코너케이스나 제약 랜덤·커버리지가 필요하면 UVM을 씁니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">Backdoor load란 무엇인가요?</div>
+      <div class="a">컴파일된 펌웨어 기계어 이미지(.hex/.bin)를 실제 버스 트랜잭션 없이 시뮬레이터가 메모리 모델에 직접 써넣는 기법입니다. 부팅 과정을 흉내내지 않고 곧장 실행 시작점에 도달하므로 시뮬레이션이 빠릅니다. 트레이드오프는 현실성으로, 부팅 시퀀스 자체를 검증할 땐 frontdoor를 씁니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">DPI-C는 무엇이고 왜 쓰나요?</div>
+      <div class="a">SystemVerilog와 C 함수를 직접 연결하는 표준 인터페이스입니다. SV에서 C 함수를 import해 호출하거나 그 반대로 export합니다. 정답(레퍼런스) 모델이나 복잡한 알고리즘을 C로 구현해 RTL 시뮬레이션과 함께 돌리는 co-simulation에 쓰며, 개발자의 FFI와 같은 개념입니다.</div>
+    </div>
+  </section>
+
+  <!-- 10. 요약 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>이 챕터, 한 손에 잡기</h2>
+    <div class="grid2">
+      <div>
+        <ul>
+          <li><strong>UVM-test</strong> = 외부 테스트벤치가 버스로 자극 → IP/코너케이스/랜덤에 강함 (≈ 모킹 통합테스트)</li>
+          <li><strong>C-test</strong> = 내부 실제 CPU가 베어메탈 C를 실행 → SoC 통합/부팅 시나리오에 강함 (≈ 실제 E2E)</li>
+          <li>C-test 흐름: <strong>cross-compile → backdoor load → CPU fetch&amp;execute</strong></li>
+          <li><strong>Backdoor</strong> = 메모리에 직접 주입(빠름) ↔ frontdoor = 정상 경로(현실적)</li>
+          <li><strong>DPI-C</strong> = SV↔C 함수 연결, C 모델과 함께 도는 게 <strong>co-simulation</strong></li>
+        </ul>
+      </div>
+      <div class="takeaway">
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"블록은 <strong class="hl">UVM</strong>으로 정밀하게, SoC 통합은 <strong class="hl2">실제 CPU가 펌웨어를 돌리는 C-test</strong>로 검증합니다 — 모킹된 통합테스트와 실제 E2E를 함께 쓰는 것과 같습니다."</p>
+        <p class="dim" style="margin-bottom:6px">— 이 한 문장이면 두 환경의 차이를 다 담습니다.</p>
+      </div>
+    </div>
+    <div class="note mt">다음 → <strong>2-3 커버리지와 검증 종료 기준</strong>: "어디까지 두드려봤나"를 숫자로 증명하는 법.</div>
+  </section>
+
+</div>
+<script src="../assets/slides.js"></script>
+</body>
+</html>

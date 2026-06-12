@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>0-2 · 디지털 회로 복습</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-title="Part 0 · 0-2 디지털 회로 복습">
+<div class="deck">
+
+  <!-- 1. Title -->
+  <section class="slide title-slide">
+    <div class="part-badge">Part 0 · 기초 다리</div>
+    <h1>디지털 회로 복습<br>기억하지 못하는 회로 vs 기억하는 회로</h1>
+    <p class="hook">AND·OR 게이트는 안다고 했죠. 그런데 칩은 어떻게 "이전 값을 기억"할까요?
+      이 한 장이면 조합·순차·클럭·플립플롭이 한 그림으로 연결됩니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
+  </section>
+
+  <!-- 2. 왜 배우나 / 한 문장 정의 -->
+  <section class="slide">
+    <div class="kicker">왜 이걸 먼저 보나</div>
+    <h2>모든 칩은 단 두 종류의 회로로 이뤄져 있다</h2>
+    <p class="lead">아무리 복잡한 SoC도 결국 <strong class="hl">조합논리(기억 없음)</strong>와 <strong class="hl2">순차논리(기억 있음)</strong> 두 가지의 조합일 뿐입니다. 이 둘의 차이만 잡으면 RTL·검증 용어의 8할이 풀립니다.</p>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">🧮</span> 조합논리 (Combinational)</h3>
+        <p>입력이 들어오면 <strong>즉시</strong> 출력이 정해진다. 과거를 모른다. 출력은 <strong class="hl">오직 현재 입력</strong>만의 함수.</p>
+        <p class="dim" style="margin-bottom:6px">예: 가산기, 멀티플렉서, 비교기</p>
+      </div>
+      <div class="card" style="border-color:var(--accent2)">
+        <h3><span class="ico">📒</span> 순차논리 (Sequential)</h3>
+        <p>출력이 <strong>현재 입력 + 과거에 저장된 값</strong>으로 정해진다. <strong class="hl2">상태(state)를 기억</strong>한다. 클럭에 맞춰 갱신.</p>
+        <p class="dim" style="margin-bottom:6px">예: 카운터, 레지스터, FSM, CPU</p>
+      </div>
+    </div>
+    <div class="note mt">한 문장: <strong>조합 = 기억 없는 계산기, 순차 = 매 박자마다 기록하는 메모장.</strong> 칩은 이 둘을 번갈아 쌓아 만든 거대한 파이프라인입니다.</div>
+  </section>
+
+  <!-- 3. 개발자 비유 -->
+  <section class="slide">
+    <div class="kicker">개발자 직관으로 번역</div>
+    <h2>이미 매일 쓰는 두 개념입니다</h2>
+    <div class="dev-bridge">
+      <p style="margin:6px 0"><strong>조합논리 = 순수함수(pure function).</strong> 같은 입력을 주면 항상 같은 출력. 내부에 저장된 상태가 없습니다. <code>add(a, b)</code>는 a, b만으로 결과가 정해지죠. 그게 조합회로입니다.</p>
+      <p style="margin:6px 0"><strong>순차논리 = 상태를 가진 변수.</strong> <code>count++</code>는 이전 <code>count</code>값을 기억해야 합니다. 그 "기억하는 변수"가 하드웨어에선 <strong class="hl2">플립플롭/레지스터</strong>입니다.</p>
+    </div>
+    <table class="compare mt">
+      <tr><th>소프트웨어 (당신의 세계)</th><th>하드웨어 (반도체)</th></tr>
+      <tr><td>순수함수 <code>f(x)</code> (상태 없음)</td><td>조합논리 (게이트 묶음)</td></tr>
+      <tr><td>상태를 담는 <strong>변수</strong></td><td>플립플롭 / 레지스터</td></tr>
+      <tr><td><code>x = newValue</code> 대입이 실행되는 <strong>그 순간</strong></td><td><strong class="hl">클럭 엣지(posedge)</strong> — 값이 들어가는 순간</td></tr>
+      <tr><td>이벤트 루프의 <strong>tick</strong></td><td>클럭(clock) — 전체 박자</td></tr>
+    </table>
+  </section>
+
+  <!-- 4. 조합회로 — 게이트로 가산기 -->
+  <section class="slide">
+    <div class="kicker">핵심 ① 조합논리</div>
+    <h2>게이트를 엮으면 "계산"이 된다 — 1비트 가산기</h2>
+    <p>AND·OR·XOR 게이트만으로 덧셈기를 만들 수 있습니다. 입력 두 비트 <code>A</code>, <code>B</code>를 더하면 합(Sum)과 자리올림(Carry)이 나옵니다. <strong class="hl">기억은 전혀 필요 없습니다</strong> — 입력만 정해지면 출력이 즉시 결정됩니다.</p>
+    <div class="diagram mt">
+      <svg viewBox="0 0 720 240" width="720" font-family="var(--mono)">
+        <!-- inputs -->
+        <text x="30" y="70" fill="#e8eef7" font-size="16">A</text>
+        <text x="30" y="150" fill="#e8eef7" font-size="16">B</text>
+        <line x1="45" y1="65" x2="180" y2="65" stroke="#9fb0c7" stroke-width="2"/>
+        <line x1="45" y1="145" x2="180" y2="145" stroke="#9fb0c7" stroke-width="2"/>
+        <!-- XOR gate -> Sum -->
+        <rect x="180" y="40" width="150" height="60" rx="10" fill="#172236" stroke="#38e1c6"/>
+        <text x="255" y="75" fill="#38e1c6" font-size="15" text-anchor="middle" font-weight="bold">XOR</text>
+        <line x1="330" y1="70" x2="470" y2="70" stroke="#38e1c6" stroke-width="2"/>
+        <text x="500" y="75" fill="#e8eef7" font-size="16" font-weight="bold">Sum (합)</text>
+        <!-- AND gate -> Carry -->
+        <rect x="180" y="120" width="150" height="60" rx="10" fill="#172236" stroke="#5b9cff"/>
+        <text x="255" y="155" fill="#5b9cff" font-size="15" text-anchor="middle" font-weight="bold">AND</text>
+        <line x1="330" y1="150" x2="470" y2="150" stroke="#5b9cff" stroke-width="2"/>
+        <text x="500" y="155" fill="#e8eef7" font-size="16" font-weight="bold">Carry (올림)</text>
+        <!-- branch dots -->
+        <circle cx="120" cy="65" r="4" fill="#9fb0c7"/>
+        <circle cx="150" cy="145" r="4" fill="#9fb0c7"/>
+        <line x1="120" y1="65" x2="120" y2="145" stroke="#9fb0c7" stroke-width="2"/>
+        <line x1="120" y1="145" x2="180" y2="160" stroke="#9fb0c7" stroke-width="2"/>
+        <line x1="150" y1="145" x2="150" y2="55" stroke="#9fb0c7" stroke-width="2"/>
+        <line x1="150" y1="55" x2="180" y2="55" stroke="#9fb0c7" stroke-width="2"/>
+        <text x="360" y="225" fill="#6c7c95" font-size="13" text-anchor="middle">입력 A,B만 정해지면 → 출력이 즉시 결정 (기억 없음 = 조합)</text>
+      </svg>
+    </div>
+    <div class="note mt"><strong>진리표:</strong> A=1,B=1 → Sum=0, Carry=1 (즉, 1+1=10₂). 지금 이 회로는 자리올림 입력이 없는 <strong>반가산기(Half Adder)</strong>입니다. 여기에 캐리 입력(Cin)을 더한 <strong>전가산기(Full Adder)</strong>를 여러 개 이으면 32·64비트 덧셈기가 되죠 — ALU의 뼈대입니다.</div>
+  </section>
+
+  <!-- 5. 왜 기억이 필요한가 -->
+  <section class="slide">
+    <div class="kicker">핵심 ② 왜 기억이 필요한가</div>
+    <h2>조합회로만으로는 "카운터"를 못 만든다</h2>
+    <div class="grid2">
+      <div>
+        <p>"버튼을 누른 횟수를 센다"를 생각해 보세요. 다음 값은 <strong>이전 값 + 1</strong>입니다. 그런데 조합회로는 과거를 모릅니다. 그래서 <strong class="hl2">이전 값을 어딘가에 담아둘 그릇</strong>이 필요합니다.</p>
+        <ul>
+          <li>다음 상태 = <strong>f(현재 입력, 현재 상태)</strong></li>
+          <li>"현재 상태"를 담는 그릇 = <strong class="hl2">플립플롭</strong></li>
+          <li>언제 갱신할지 정하는 신호 = <strong class="hl">클럭</strong></li>
+        </ul>
+      </div>
+      <div class="analogy">
+        <p style="margin-top:6px">조합회로가 <strong>계산기</strong>라면, 순차회로는 <strong>메모장</strong>입니다. 계산기는 누를 때마다 답만 보여주고 잊지만, 메모장은 박자마다 한 줄씩 적어 두고 다음 계산에 씁니다.</p>
+        <p class="dim" style="margin-bottom:6px">그 "한 줄 적는 박자"가 바로 클럭입니다.</p>
+      </div>
+    </div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">소프트웨어의 <code>let count = count + 1</code>은 오른쪽(읽기)과 왼쪽(쓰기)이 사실 분리되어 있습니다. 하드웨어도 똑같습니다: <strong>조합논리가 <code>count + 1</code>을 계산</strong>하고, <strong>플립플롭이 클럭 엣지에 그 결과를 저장</strong>합니다.</p></div>
+  </section>
+
+  <!-- 6. 플립플롭 + 레지스터 -->
+  <section class="slide">
+    <div class="kicker">핵심 ③ 기억소자</div>
+    <h2>D 플립플롭 = 1비트 기억소자, 레지스터 = 그 묶음</h2>
+    <div class="grid2">
+      <div>
+        <p><strong class="hl2">D 플립플롭(D-FF)</strong>은 가장 기본적인 1비트 저장소입니다. 규칙은 단 하나:</p>
+        <p class="lead" style="margin:10px 0">"클럭이 <strong class="hl">올라가는 순간</strong>, 입력 D를 붙잡아 출력 Q로 내보내고, 다음 엣지까지 그 값을 유지한다."</p>
+        <ul>
+          <li>D = 입력(저장할 값), Q = 출력(저장된 값)</li>
+          <li>클럭 엣지 사이에는 입력이 흔들려도 <strong>Q는 안 바뀜</strong></li>
+          <li><strong>레지스터</strong> = D-FF를 N개 나란히 = N비트 기억 (예: 32비트 레지스터 = FF 32개)</li>
+        </ul>
+      </div>
+      <div class="diagram">
+        <svg viewBox="0 0 320 230" width="320" font-family="var(--mono)">
+          <!-- FF box -->
+          <rect x="90" y="50" width="140" height="120" rx="12" fill="#172236" stroke="#5b9cff"/>
+          <text x="160" y="40" fill="#9fb0c7" font-size="13" text-anchor="middle">D Flip-Flop</text>
+          <!-- D input -->
+          <line x1="20" y1="85" x2="90" y2="85" stroke="#38e1c6" stroke-width="2"/>
+          <text x="30" y="78" fill="#38e1c6" font-size="14">D</text>
+          <text x="108" y="90" fill="#e8eef7" font-size="14">D</text>
+          <!-- Q output -->
+          <line x1="230" y1="85" x2="300" y2="85" stroke="#5ee6a0" stroke-width="2"/>
+          <text x="212" y="90" fill="#e8eef7" font-size="14" text-anchor="end">Q</text>
+          <text x="285" y="78" fill="#5ee6a0" font-size="14" text-anchor="end">Q</text>
+          <!-- clk input with triangle -->
+          <line x1="20" y1="145" x2="90" y2="145" stroke="#ffce6b" stroke-width="2"/>
+          <text x="22" y="138" fill="#ffce6b" font-size="13">clk</text>
+          <polyline points="95,135 110,145 95,155" fill="none" stroke="#ffce6b" stroke-width="2"/>
+          <text x="125" y="150" fill="#9fb0c7" font-size="11">엣지</text>
+          <!-- caption -->
+          <text x="160" y="205" fill="#6c7c95" font-size="12" text-anchor="middle">posedge clk 에 D를 붙잡아</text>
+          <text x="160" y="222" fill="#6c7c95" font-size="12" text-anchor="middle">Q로 출력, 다음 엣지까지 유지</text>
+        </svg>
+      </div>
+    </div>
+    <pre class="code"><code><span class="cmt">// D 플립플롭: 클럭 상승 엣지마다 d를 q에 저장</span>
+<span class="kw">always</span> @(<span class="kw">posedge</span> clk) <span class="kw">begin</span>
+  q <= d;        <span class="cmt">// "변수에 값이 대입되는 순간" = 클럭 엣지</span>
+<span class="kw">end</span></code></pre>
+  </section>
+
+  <!-- 7. 클럭 -->
+  <section class="slide">
+    <div class="kicker">핵심 ④ 클럭(clock)</div>
+    <h2>클럭 = 칩 전체의 심장 박동 · 오케스트라 지휘자</h2>
+    <p>클럭은 <code>0</code>과 <code>1</code>을 규칙적으로 반복하는 신호입니다. 모든 플립플롭은 <strong class="hl">같은 박자에 동시에</strong> 값을 갱신합니다. 그래서 수십억 개 소자가 어긋나지 않고 한 몸처럼 움직입니다.</p>
+    <div class="diagram mt">
+      <svg viewBox="0 0 720 170" width="720" font-family="var(--mono)">
+        <!-- clock waveform -->
+        <polyline points="20,120 20,50 100,50 100,120 180,120 180,50 260,50 260,120 340,120 340,50 420,50 420,120 500,120 500,50 580,50 580,120 660,120"
+          fill="none" stroke="#ffce6b" stroke-width="3"/>
+        <!-- posedge markers -->
+        <line x1="20" y1="35" x2="20" y2="135" stroke="#38e1c6" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <line x1="180" y1="35" x2="180" y2="135" stroke="#38e1c6" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <line x1="340" y1="35" x2="340" y2="135" stroke="#38e1c6" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <line x1="500" y1="35" x2="500" y2="135" stroke="#38e1c6" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <text x="20" y="28" fill="#38e1c6" font-size="11" text-anchor="middle">posedge</text>
+        <text x="180" y="28" fill="#38e1c6" font-size="11" text-anchor="middle">posedge</text>
+        <text x="340" y="28" fill="#38e1c6" font-size="11" text-anchor="middle">posedge</text>
+        <text x="500" y="28" fill="#38e1c6" font-size="11" text-anchor="middle">posedge</text>
+        <!-- period bracket -->
+        <line x1="20" y1="150" x2="180" y2="150" stroke="#9fb0c7" stroke-width="1.5"/>
+        <text x="100" y="165" fill="#9fb0c7" font-size="12" text-anchor="middle">1 클럭 주기 (1 / 주파수)</text>
+        <text x="690" y="90" fill="#ffce6b" font-size="13" text-anchor="middle">clk</text>
+      </svg>
+    </div>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">📈</span> edge-triggered</h3>
+        <p>대부분의 회로는 클럭이 <strong>0→1로 올라가는 순간</strong>(<code>posedge</code>)에만 동작합니다. "레벨"이 아니라 "엣지" 그 한순간이 트리거입니다.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">⏱️</span> 주파수</h3>
+        <p>1초에 박자가 몇 번? 3GHz = 초당 <strong>30억 번</strong>. 주기가 짧을수록(빠를수록) 한 박자 안에 조합논리가 계산을 끝내야 하는 시간이 빠듯해집니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. 리셋 + setup/hold -->
+  <section class="slide">
+    <div class="kicker">핵심 ⑤ 리셋과 타이밍 규칙</div>
+    <h2>리셋 = 초기화, 그리고 "지킬 타이밍 규칙"이 있다</h2>
+    <div class="grid2">
+      <div>
+        <p><strong class="hl">리셋(reset)</strong>은 플립플롭을 알려진 초기값(보통 0)으로 되돌리는 신호입니다. 전원이 켜진 직후 회로 상태는 쓰레기값이라, 리셋으로 출발점을 맞춰줍니다.</p>
+        <p class="dim">개발자 비유: 객체 <strong>생성자</strong>나 <code>state = initialState</code> 초기화.</p>
+        <table class="compare mt">
+          <tr><th>구분</th><th>의미</th></tr>
+          <tr><td><strong>Sync</strong> reset</td><td>클럭 엣지에 <strong class="hl">맞춰</strong> 리셋 적용 (always 안에서 clk와 함께)</td></tr>
+          <tr><td><strong>Async</strong> reset</td><td>클럭과 <strong class="hl2">무관하게 즉시</strong> 리셋 (엣지 안 기다림)</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3><span class="ico">⚠️</span> setup / hold (맛보기)</h3>
+        <p>플립플롭은 입력 D가 클럭 엣지 <strong>직전(setup)·직후(hold)</strong> 잠깐 동안은 흔들리지 않고 안정돼 있어야 값을 제대로 붙잡습니다.</p>
+        <p>이 규칙을 어기면 출력이 불안정(metastability)해집니다. <strong class="hl">"타이밍 규칙이 존재한다"</strong>는 사실만 지금은 기억하세요.</p>
+        <p class="dim" style="margin-bottom:6px">자세한 분석은 <strong>4-3 (타이밍/STA)</strong>에서 다룹니다.</p>
+      </div>
+    </div>
+    <pre class="code"><code><span class="cmt">// Async reset: rst가 뜨면 clk를 안 기다리고 즉시 0으로</span>
+<span class="kw">always</span> @(<span class="kw">posedge</span> clk <span class="kw">or</span> <span class="kw">posedge</span> rst)
+  <span class="kw">if</span> (rst) q <= <span class="str">0</span>;     <span class="cmt">// 초기화</span>
+  <span class="kw">else</span>     q <= d;</code></pre>
+  </section>
+
+  <!-- 9. FSM 맛보기 -->
+  <section class="slide">
+    <div class="kicker">핵심 ⑥ FSM 맛보기</div>
+    <h2>순차회로의 꽃 — 유한상태기계(FSM)</h2>
+    <p><strong class="hl2">FSM(Finite State Machine)</strong>은 "상태(state)" 사이를 입력에 따라 옮겨 다니는 회로입니다. 신호등, 프로토콜 핸드셰이크, 컨트롤러가 모두 FSM입니다. 핵심 부품은 딱 두 가지뿐입니다.</p>
+    <div class="diagram mt">
+      <svg viewBox="0 0 720 220" width="720" font-family="var(--mono)">
+        <!-- states -->
+        <circle cx="120" cy="110" r="48" fill="#172236" stroke="#38e1c6" stroke-width="2"/>
+        <text x="120" y="115" fill="#e8eef7" font-size="15" text-anchor="middle" font-weight="bold">IDLE</text>
+        <circle cx="360" cy="110" r="48" fill="#172236" stroke="#5b9cff" stroke-width="2"/>
+        <text x="360" y="115" fill="#e8eef7" font-size="15" text-anchor="middle" font-weight="bold">RUN</text>
+        <circle cx="600" cy="110" r="48" fill="#172236" stroke="#b388ff" stroke-width="2"/>
+        <text x="600" y="115" fill="#e8eef7" font-size="14" text-anchor="middle" font-weight="bold">DONE</text>
+        <!-- transitions -->
+        <line x1="168" y1="110" x2="312" y2="110" stroke="#9fb0c7" stroke-width="2" marker-end="url(#ar)"/>
+        <text x="240" y="98" fill="#38e1c6" font-size="12" text-anchor="middle">start=1</text>
+        <line x1="408" y1="110" x2="552" y2="110" stroke="#9fb0c7" stroke-width="2" marker-end="url(#ar)"/>
+        <text x="480" y="98" fill="#5b9cff" font-size="12" text-anchor="middle">done=1</text>
+        <!-- loopback -->
+        <path d="M600,62 C600,10 120,10 120,62" fill="none" stroke="#9fb0c7" stroke-width="2" marker-end="url(#ar)"/>
+        <text x="360" y="25" fill="#b388ff" font-size="12" text-anchor="middle">ack → IDLE</text>
+        <defs>
+          <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#9fb0c7"/>
+          </marker>
+        </defs>
+        <text x="360" y="200" fill="#6c7c95" font-size="12" text-anchor="middle">상태는 레지스터에 저장(순차) · 다음상태 계산은 조합논리</text>
+      </svg>
+    </div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">개발자에겐 <strong>상태머신/<code>switch(state)</code></strong> 패턴과 똑같습니다. 다른 점은 "다음 상태로의 전환"이 코드 한 줄이 아니라 <strong>클럭 엣지마다 레지스터 갱신</strong>으로 일어난다는 것뿐입니다. FSM = 조합논리(다음상태·출력 계산) + 순차논리(상태 저장)의 조합.</p></div>
+  </section>
+
+  <!-- 10. Q&A -->
+  <section class="slide">
+    <div class="kicker">면접 예상 질문</div>
+    <h2>이렇게 물어보면, 이렇게 답한다</h2>
+    <div class="qa">
+      <div class="q">조합논리와 순차논리의 차이는?</div>
+      <div class="a">조합논리는 출력이 오직 현재 입력만으로 결정되어 기억이 없습니다(예: 가산기). 순차논리는 현재 입력에 더해 저장된 상태(과거)에 의존하며, 플립플롭으로 상태를 기억하고 클럭에 맞춰 갱신합니다(예: 카운터, FSM). 한마디로 기억의 유무가 차이입니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">클럭이 왜 필요한가요? 플립플롭은 뭔가요?</div>
+      <div class="a">클럭은 모든 기억소자가 동시에 같은 박자로 값을 갱신하게 해주는 동기화 신호입니다. 이게 없으면 소자마다 갱신 시점이 달라 회로가 어긋납니다. 플립플롭은 1비트 기억소자로, 클럭 상승 엣지에 입력 D를 붙잡아 출력 Q로 유지합니다. 이 플립플롭을 여러 개 묶은 것이 레지스터입니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">Sync reset과 Async reset의 차이는?</div>
+      <div class="a">Sync reset은 클럭 엣지에 맞춰 리셋이 적용되고, Async reset은 클럭과 무관하게 신호가 들어오는 즉시 적용됩니다. Async는 전원 직후처럼 클럭이 안정되기 전에도 초기화할 수 있지만, 리셋 해제 시점이 클럭 엣지와 충돌하지 않도록 하는 처리가 필요합니다.</div>
+    </div>
+  </section>
+
+  <!-- 11. 요약 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>이 챕터, 한 손에 잡기</h2>
+    <div class="grid2">
+      <div>
+        <ul>
+          <li><strong class="hl">조합</strong> = 순수함수(기억X), <strong class="hl2">순차</strong> = 상태 가진 변수(기억O)</li>
+          <li>게이트(AND/OR/XOR)를 엮으면 <strong>가산기</strong> 같은 조합회로</li>
+          <li><strong>D 플립플롭</strong> = 1비트 기억, <strong>레지스터</strong> = FF 묶음</li>
+          <li><strong>클럭</strong> = 전체 박자, <strong>posedge</strong>에 값 갱신(edge-triggered)</li>
+          <li><strong>리셋</strong> = 초기화 (sync는 엣지에 맞춰, async는 즉시)</li>
+          <li><strong>FSM</strong> = 조합(다음상태 계산) + 순차(상태 저장)</li>
+        </ul>
+      </div>
+      <div class="takeaway">
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"조합논리는 입력만으로 출력이 정해지는 순수함수, 순차논리는 플립플롭에 상태를 저장하고 <strong class="hl">클럭 엣지마다 갱신</strong>하는 회로입니다."</p>
+        <p class="dim" style="margin-bottom:6px">— 이 한 문장이 RTL을 읽는 열쇠입니다.</p>
+      </div>
+    </div>
+    <div class="note mt">다음 → <strong>0-3 Verilog/RTL 첫걸음</strong>: 방금 본 플립플롭과 클럭을 실제 코드(<code>always @(posedge clk)</code>)로 써 봅니다.</div>
+  </section>
+
+</div>
+<script src="../assets/slides.js"></script>
+</body>
+</html>

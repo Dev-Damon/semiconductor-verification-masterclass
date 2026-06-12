@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>5-1 · SoC Booting Flow</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-title="Part 5 · 5-1 SoC Booting Flow">
+<div class="deck">
+
+  <!-- 1. Title -->
+  <section class="slide title-slide">
+    <div class="part-badge">Part 5 · 칩을 깨우다</div>
+    <h1>SoC Booting Flow<br>전원을 켜면, 칩은 어떻게 깨어나는가</h1>
+    <p class="hook">전원 버튼 한 번 → 첫 명령어 fetch → OS 진입. 그 사이에 칩이 스스로를 깨우는
+      정교한 순서가 있습니다. 이 순서를 알면 "부팅 검증" 면접 질문이 쉬워집니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
+  </section>
+
+  <!-- 2. 왜 배우나 / 한 문장 정의 -->
+  <section class="slide">
+    <div class="kicker">왜 배우나 · 한 문장 정의</div>
+    <h2>부팅 = 칩이 "스스로를 부팅 가능한 상태로" 끌어올리는 사다리</h2>
+    <p class="lead">전원이 인가된 직후의 SoC는 <strong class="hl">아무것도 모르는 상태</strong>입니다. 클럭도 불안정하고, DRAM도 비어 있고, OS는 어디 있는지도 모릅니다.</p>
+    <p>Booting Flow란 <strong>이 깜깜한 상태에서 OS가 돌 수 있는 상태까지</strong>, 정해진 순서로 한 단계씩 올라가는 과정입니다. 검증 엔지니어는 이 순서가 실리콘에서 정확히 그대로 일어나는지를 시뮬/에뮬에서 미리 증명해야 합니다.</p>
+    <div class="row mt">
+      <span class="tag">POR</span><span class="tag">PLL lock</span><span class="tag">reset vector</span>
+      <span class="tag">BootROM</span><span class="tag">Bootloader (SPL / U-Boot)</span><span class="tag">DRAM init</span>
+      <span class="tag">Secure Boot</span><span class="tag">Chain of Trust</span>
+    </div>
+    <div class="note mt">한 번 잘못 부팅되는 칩은 <strong class="hl">벽돌(brick)</strong>이 됩니다 — 그래서 부팅은 가장 먼저, 가장 철저히 검증하는 시나리오 중 하나입니다.</div>
+  </section>
+
+  <!-- 3. 개발자 비유 -->
+  <section class="slide">
+    <div class="kicker">개발자 직관으로 번역</div>
+    <h2>당신은 이미 부팅 체인을 안다 — BIOS → GRUB → 커널</h2>
+    <div class="grid2">
+      <div class="analogy">
+        <p style="margin-top:6px"><strong>사람이 아침에 깨는 순서</strong>로 생각하면 한 번에 외워집니다.</p>
+        <ul>
+          <li>눈을 뜬다 → <strong class="hl">POR</strong> (전원 인가·리셋)</li>
+          <li>정신을 차린다 → <strong class="hl">클럭/PLL 안정(lock)</strong></li>
+          <li>몸이 자동으로 하는 기본 행동 → <strong class="hl">BootROM</strong></li>
+          <li>씻고 옷 입기 → <strong class="hl">부트로더 · DRAM 초기화</strong></li>
+          <li>집을 나서 출근 → <strong class="hl">OS 진입</strong></li>
+        </ul>
+      </div>
+      <div class="dev-bridge">
+        <p style="margin-top:6px">PC를 켜본 개발자라면 이 체인이 낯익습니다.</p>
+        <table class="compare">
+          <tr><th>PC (당신의 세계)</th><th>SoC</th></tr>
+          <tr><td>BIOS / UEFI (메인보드 ROM)</td><td>BootROM (칩 안 마스크롬)</td></tr>
+          <tr><td>GRUB (1차/2차 부트로더)</td><td>SPL → U-Boot</td></tr>
+          <tr><td>Linux 커널 부팅</td><td>OS / 펌웨어 진입</td></tr>
+        </table>
+        <p style="margin:6px 0">핵심: <strong>작은 코드가 더 큰 코드를 불러오는 릴레이</strong>. 각 단계는 "다음 단계를 메모리에 올리고 점프"할 뿐입니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. 전체 부팅 Flow 다이어그램 (필수) -->
+  <section class="slide">
+    <div class="kicker">전체 흐름 한 눈에</div>
+    <h2>전원 인가 → OS 진입, 부팅 시퀀스 지도</h2>
+    <div class="diagram" style="text-align:left">
+      <div class="flow" style="justify-content:flex-start">
+        <div class="box on">① 전원 인가<br><span class="hl" style="font-size:12px">POR (리셋 유지)</span></div>
+        <span class="arrow">→</span>
+        <div class="box on">② 클럭/PLL<br><span class="hl" style="font-size:12px">lock 대기</span></div>
+        <span class="arrow">→</span>
+        <div class="box on">③ reset 해제<br><span class="dim" style="font-size:12px">CPU 깨어남</span></div>
+        <span class="arrow">→</span>
+        <div class="box on">④ reset vector<br><span class="dim" style="font-size:12px">첫 명령 fetch</span></div>
+      </div>
+      <div class="flow mt" style="justify-content:flex-start">
+        <div class="box">⑤ BootROM<br><span class="dim" style="font-size:12px">1차 부트 · 마스크롬</span></div>
+        <span class="arrow">→</span>
+        <div class="box">⑥ 서명 검증<br><span class="hl3" style="font-size:12px">Secure Boot</span></div>
+        <span class="arrow">→</span>
+        <div class="box">⑦ SPL 로드<br><span class="dim" style="font-size:12px">2차 부트로더</span></div>
+        <span class="arrow">→</span>
+        <div class="box">⑧ DRAM init<br><span class="dim" style="font-size:12px">메모리 켜기</span></div>
+      </div>
+      <div class="flow mt" style="justify-content:flex-start">
+        <div class="box">⑨ U-Boot<br><span class="dim" style="font-size:12px">메인 부트로더</span></div>
+        <span class="arrow">→</span>
+        <div class="box on" style="border-color:var(--accent)">⑩ OS / 펌웨어<br><span class="hl" style="font-size:12px">진입 (출근!)</span></div>
+      </div>
+    </div>
+    <div class="note mt">앞쪽(①~④)은 <strong>하드웨어가 자동으로</strong> 진행하고, ⑤부터는 <strong>코드(부트 소프트웨어)</strong>가 주도합니다. 단계마다 "다음 코드를 어딘가에 올리고 그곳으로 점프"하는 게 본질입니다.</div>
+  </section>
+
+  <!-- 5. POR & 클럭/PLL -->
+  <section class="slide">
+    <div class="kicker">단계 ①②③ · 하드웨어가 칩을 깨운다</div>
+    <h2>POR · PLL lock · reset 해제 — 정신을 차리는 시간</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3><span class="ico">⚡</span> POR (Power-On Reset)</h3>
+        <p>전원 전압이 안정 범위에 들어올 때까지 <strong class="hl">모든 회로를 강제로 리셋 상태에 묶어두는</strong> 신호입니다. 전압이 출렁이는 동안 회로가 엉뚱하게 움직이지 못하게 막는 안전장치.</p>
+        <p class="dim">프로그램 시작 시 모든 변수를 <code>0</code>으로 초기화하는 것과 같은 개념 — 단, 전기적으로.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🔄</span> PLL lock</h3>
+        <p>칩 내부 고속 클럭은 외부의 느린 기준 클럭을 <strong>PLL</strong>(Phase-Locked Loop)로 곱해서 만듭니다. 만든 직후엔 주파수가 흔들리며, 안정되면 <strong class="hl">lock</strong> 신호가 뜹니다.</p>
+        <p class="dim"><strong>lock 전에 reset을 풀면</strong> CPU가 불안정한 클럭으로 동작 → 랜덤하게 죽습니다. 그래서 lock을 기다리는 것이 결정적입니다.</p>
+      </div>
+    </div>
+    <div class="diagram mt">
+      <svg viewBox="0 0 760 150" width="760">
+        <rect x="6" y="6" width="748" height="138" rx="12" fill="none" stroke="#22304a"/>
+        <text x="20" y="28" fill="#6c7c95" font-size="12">전원·클럭·리셋 타이밍 (시간 →)</text>
+        <!-- power -->
+        <text x="20" y="55" fill="#ffce6b" font-size="12">VDD</text>
+        <path d="M60 60 Q90 60 120 42 L740 42" fill="none" stroke="#ffce6b" stroke-width="2"/>
+        <!-- clock lock -->
+        <text x="20" y="90" fill="#5b9cff" font-size="12">PLL</text>
+        <path d="M60 95 L300 95" fill="none" stroke="#5b9cff" stroke-width="2" stroke-dasharray="3 3"/>
+        <path d="M300 95 L300 78 L740 78" fill="none" stroke="#5b9cff" stroke-width="2"/>
+        <text x="300" y="74" fill="#5b9cff" font-size="11" text-anchor="middle">lock!</text>
+        <!-- reset -->
+        <text x="20" y="125" fill="#38e1c6" font-size="12">RESET</text>
+        <path d="M60 112 L360 112 L360 130 L740 130" fill="none" stroke="#38e1c6" stroke-width="2"/>
+        <text x="360" y="108" fill="#38e1c6" font-size="11" text-anchor="middle">해제</text>
+        <line x1="360" y1="35" x2="360" y2="135" stroke="#6c7c95" stroke-width="1" stroke-dasharray="2 3"/>
+        <text x="430" y="22" fill="#9fb0c7" font-size="11">전압 OK + PLL lock 이후에 비로소 reset 해제</text>
+      </svg>
+    </div>
+    <div class="note mt">순서가 핵심: <strong>전압 안정 → PLL lock → reset 해제</strong>. 이 순서가 깨지면 칩은 결코 안정적으로 깨어나지 못합니다.</div>
+  </section>
+
+  <!-- 6. reset vector & BootROM -->
+  <section class="slide">
+    <div class="kicker">단계 ④⑤ · 코드가 시작되는 지점</div>
+    <h2>reset vector에서 첫 명령을 집어, BootROM을 연다</h2>
+    <div class="grid2">
+      <div>
+        <p><strong class="hl">reset vector</strong> = reset이 풀린 CPU가 <strong>가장 먼저 명령어를 읽으러 가는 고정된 주소</strong>입니다. 하드웨어로 박혀 있어 항상 같은 곳을 봅니다.</p>
+        <p>그 주소가 가리키는 곳에 <strong class="hl">BootROM</strong>이 있습니다 — 칩 제조 시 새겨 넣어 <strong>절대 바꿀 수 없는 마스크 ROM</strong>. 여기 담긴 1차 부트 코드가 칩의 "타고난 본능"입니다.</p>
+        <ul>
+          <li>BootROM이 하는 일: 기본 하드웨어 셋업, 부팅 매체(eMMC·UFS·NAND·USB) 선택</li>
+          <li>스토리지에서 <strong>다음 부트로더(SPL)</strong>를 내부 SRAM으로 읽어옴</li>
+          <li>읽어온 코드의 <strong class="hl3">서명을 검증</strong>한 뒤 점프 (Secure Boot)</li>
+        </ul>
+      </div>
+      <div>
+        <pre class="code"><code><span class="cmt">// reset vector = 전원 켤 때마다</span>
+<span class="cmt">// CPU가 무조건 점프하는 고정 주소</span>
+<span class="kw">#define</span> RESET_VECTOR  <span class="str">0x00000000</span>
+
+<span class="cmt">// 그 주소엔 BootROM이 매핑됨 (읽기전용)</span>
+<span class="kw">void</span> <span class="fn">bootrom_main</span>() {
+  <span class="fn">setup_basic_clocks</span>();
+  dev = <span class="fn">select_boot_device</span>();   <span class="cmt">// eMMC? USB?</span>
+  spl = <span class="fn">load_from</span>(dev, SPL_ADDR);
+  <span class="kw">if</span> (!<span class="fn">verify_signature</span>(spl))   <span class="cmt">// 보안!</span>
+    <span class="fn">hang</span>();                       <span class="cmt">// 실패 → 정지</span>
+  <span class="fn">jump_to</span>(spl);                   <span class="cmt">// 2차 부트로 점프</span>
+}</code></pre>
+        <div class="dev-bridge"><p style="margin:6px 0">reset vector는 <strong>프로그램의 <code>main()</code> 진입점 주소를 하드웨어로 고정한 것</strong>이라고 보면 됩니다. 단지 그 진입점이 칩에 영구히 새겨져 있을 뿐.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. Bootloader & DRAM init -->
+  <section class="slide">
+    <div class="kicker">단계 ⑦⑧⑨ · 점점 큰 코드를 불러온다</div>
+    <h2>SPL → DRAM 초기화 → U-Boot, 그리고 OS</h2>
+    <p>왜 부트로더가 여러 단계(SPL → U-Boot)일까요? 답은 <strong class="hl">메모리</strong>입니다. 처음엔 큰 DRAM이 아직 켜지지 않아, 칩 내부의 <strong>작은 SRAM</strong>에 들어갈 만큼 작은 코드(SPL)만 돌릴 수 있습니다.</p>
+    <table class="compare">
+      <tr><th>단계</th><th>어디서 도는가</th><th>핵심 임무</th></tr>
+      <tr><td>BootROM</td><td>마스크 ROM</td><td>SPL을 SRAM에 로드 (변경 불가)</td></tr>
+      <tr><td><span class="hl">SPL</span> (2차)</td><td>내부 SRAM (작음)</td><td><strong class="hl">DRAM 초기화</strong> · U-Boot를 DRAM에 로드</td></tr>
+      <tr><td><span class="hl2">U-Boot</span> (메인)</td><td>DRAM (큼)</td><td>드라이버·환경설정, <strong>OS 커널</strong> 로드 후 진입</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">🧠</span> 왜 DRAM init이 큰 일인가</h3>
+        <p>DRAM은 그냥 켠다고 동작하지 않습니다. 타이밍 파라미터 설정·트레이닝(전기 신호 보정)을 거쳐야 안정적으로 읽고 쓸 수 있습니다. 이게 SPL의 핵심 임무이자 <strong class="hl">부팅 디버깅의 단골 실패 지점</strong>입니다.</p>
+      </div>
+      <div class="dev-bridge">
+        <p style="margin-top:6px">개발자 비유: SPL은 <strong>최소 의존성 부트스트랩</strong>, U-Boot는 <strong>풀 기능 런처</strong>입니다. 컨테이너의 작은 init 프로세스가 본 애플리케이션을 띄우는 것과 같은 릴레이 구조죠.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. Secure Boot / Chain of Trust -->
+  <section class="slide">
+    <div class="kicker">보안 · Secure Boot</div>
+    <h2>Chain of Trust — 신뢰의 사슬을 한 칸씩 잇는다</h2>
+    <p><strong class="hl3">Secure Boot</strong>의 핵심: <strong>각 단계가 다음 단계로 점프하기 전에, 그 코드의 디지털 서명을 검증</strong>합니다. 검증에 실패하면 부팅을 멈춥니다. 변조된 펌웨어가 끼어들 틈을 막는 것이죠.</p>
+    <div class="diagram mt">
+      <svg viewBox="0 0 760 180" width="760">
+        <rect x="6" y="6" width="748" height="168" rx="12" fill="none" stroke="#22304a"/>
+        <text x="20" y="28" fill="#6c7c95" font-size="12">Chain of Trust — 앞 단계가 뒤 단계를 검증 후 실행</text>
+        <!-- root -->
+        <rect x="30" y="55" width="150" height="70" rx="10" fill="#172236" stroke="#b388ff"/>
+        <text x="105" y="85" fill="#e8eef7" font-size="14" text-anchor="middle" font-weight="bold">Root of Trust</text>
+        <text x="105" y="106" fill="#9fb0c7" font-size="11" text-anchor="middle">BootROM + eFuse 키</text>
+        <!-- spl -->
+        <rect x="240" y="55" width="150" height="70" rx="10" fill="#172236" stroke="#38e1c6"/>
+        <text x="315" y="85" fill="#e8eef7" font-size="14" text-anchor="middle" font-weight="bold">SPL</text>
+        <text x="315" y="106" fill="#9fb0c7" font-size="11" text-anchor="middle">서명 검증됨 ✓</text>
+        <!-- uboot -->
+        <rect x="450" y="55" width="150" height="70" rx="10" fill="#172236" stroke="#5b9cff"/>
+        <text x="525" y="85" fill="#e8eef7" font-size="14" text-anchor="middle" font-weight="bold">U-Boot</text>
+        <text x="525" y="106" fill="#9fb0c7" font-size="11" text-anchor="middle">서명 검증됨 ✓</text>
+        <!-- os -->
+        <rect x="660" y="55" width="80" height="70" rx="10" fill="#172236" stroke="#5ee6a0"/>
+        <text x="700" y="88" fill="#e8eef7" font-size="13" text-anchor="middle" font-weight="bold">OS</text>
+        <text x="700" y="106" fill="#9fb0c7" font-size="10" text-anchor="middle">검증됨 ✓</text>
+        <!-- arrows -->
+        <line x1="180" y1="90" x2="240" y2="90" stroke="#38e1c6" stroke-width="2" marker-end="url(#a)"/>
+        <line x1="390" y1="90" x2="450" y2="90" stroke="#5b9cff" stroke-width="2" marker-end="url(#a)"/>
+        <line x1="600" y1="90" x2="660" y2="90" stroke="#5ee6a0" stroke-width="2" marker-end="url(#a)"/>
+        <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="#9fb0c7"/></marker></defs>
+        <text x="210" y="148" fill="#6c7c95" font-size="11" text-anchor="middle">검증→실행</text>
+        <text x="420" y="148" fill="#6c7c95" font-size="11" text-anchor="middle">검증→실행</text>
+        <text x="630" y="148" fill="#6c7c95" font-size="11" text-anchor="middle">검증→실행</text>
+      </svg>
+    </div>
+    <div class="grid2 mt">
+      <div class="analogy"><p style="margin:6px 0"><strong>Root of Trust</strong>는 절대 변조 불가한 <strong>BootROM + 칩에 구운 eFuse 키</strong>입니다. 여기서 출발한 신뢰가 한 칸씩 다음 단계로 전달됩니다 — 한 칸이라도 검증 실패하면 사슬이 끊겨 부팅 중단.</p></div>
+      <div class="dev-bridge"><p style="margin:6px 0">개발자에겐 친숙합니다: <strong>TLS 인증서 체인</strong>이나 <strong>Git 커밋 서명(GPG)</strong>과 같은 구조 — 신뢰의 뿌리(Root CA)에서 시작해 서명으로 다음을 검증하는 사슬.</p></div>
+    </div>
+  </section>
+
+  <!-- 9. 검증 관점 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 일</div>
+    <h2>부팅을 어떻게 검증하나 — 실리콘 전에 미리 돌려본다</h2>
+    <p>칩은 만든 뒤 못 고칩니다. 그래서 <strong class="hl">부팅 시퀀스를 실물 칩이 나오기 전에</strong> 시뮬레이션과 에뮬레이션 위에서 끝까지 돌려봐야 합니다.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3><span class="ico">🧪</span> 무엇을 확인하나</h3>
+        <ul>
+          <li>reset 해제 타이밍 — <strong>PLL lock 이후</strong>에 풀리는가</li>
+          <li>CPU가 정확히 <strong>reset vector</strong>에서 첫 fetch 하는가</li>
+          <li>BootROM → SPL → U-Boot <strong>점프 순서</strong>가 맞는가</li>
+          <li>DRAM init이 성공하고 메모리 read/write가 되는가</li>
+          <li>서명 위·변조 시 <strong class="hl3">부팅이 정상적으로 거부</strong>되는가</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🛠️</span> 어떻게 (C-test)</h3>
+        <p>실제 부트 코드(또는 축약판)를 <strong class="hl">C로 짠 테스트(C-test)</strong>로 만들어, CPU 모델 위에서 실행시킵니다. (Part 2-2의 그 기법!)</p>
+        <ul>
+          <li><strong>RTL 시뮬</strong>: 정확하지만 느림 → 초기 단계만</li>
+          <li><strong>에뮬레이션</strong>: 빠름 → OS 부팅까지 통째로 돌림</li>
+          <li>파형·레지스터 로그로 어느 단계에서 멈췄는지 추적</li>
+        </ul>
+      </div>
+    </div>
+    <div class="takeaway mt"><p style="margin:6px 0">부팅 검증의 목표는 단순합니다: <strong class="hl">"실리콘이 나오기 전에, 칩이 OS까지 깨어나는 걸 한 번이라도 본다."</strong> 이게 안 되면 그 칩은 켜자마자 벽돌입니다.</p></div>
+  </section>
+
+  <!-- 10. 면접 Q&A -->
+  <section class="slide">
+    <div class="kicker">면접 예상 질문</div>
+    <h2>이렇게 물어보면, 이렇게 답한다</h2>
+    <div class="qa">
+      <div class="q">reset vector가 뭔가요?</div>
+      <div class="a">reset이 해제된 CPU가 가장 먼저 명령어를 fetch하는 고정 주소입니다. 하드웨어로 정해져 있어 전원을 켤 때마다 항상 같은 곳에서 실행을 시작하며, 보통 그 주소에 BootROM이 매핑되어 1차 부트 코드가 실행됩니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">BootROM의 역할과 PLL lock이 왜 중요한가요?</div>
+      <div class="a">BootROM은 칩에 새겨진 변경 불가한 마스크 ROM으로, 기본 하드웨어 셋업과 부팅 매체 선택, 다음 부트로더(SPL)를 SRAM에 로드하고 서명을 검증하는 1차 부트 코드입니다. PLL lock은 내부 고속 클럭이 안정됐다는 신호인데, lock 전에 reset을 풀면 CPU가 불안정한 클럭으로 동작해 무작위로 죽기 때문에, reset 해제 전 반드시 lock을 기다려야 합니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">Secure Boot / Chain of Trust를 설명하고, 부팅을 어떻게 검증하나요?</div>
+      <div class="a">각 부트 단계가 다음 단계 코드의 서명을 검증한 뒤에만 실행을 넘기는 구조입니다. 변경 불가한 BootROM과 eFuse 키가 Root of Trust가 되고, 신뢰가 SPL→U-Boot→OS로 사슬처럼 이어지며, 한 단계라도 검증 실패 시 부팅을 멈춥니다. 검증은 실리콘 전에 부트 시퀀스를 C-test로 만들어 RTL 시뮬·에뮬레이션에서 돌려, reset 타이밍·reset vector fetch·DRAM init·서명 거부 동작까지 끝까지 확인합니다.</div>
+    </div>
+  </section>
+
+  <!-- 11. 요약 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>이 챕터, 한 손에 잡기</h2>
+    <div class="grid2">
+      <div>
+        <ul>
+          <li><strong>POR → PLL lock → reset 해제</strong>: 하드웨어가 칩을 깨우는 순서</li>
+          <li>CPU는 <strong class="hl">reset vector</strong>(고정 주소)에서 첫 명령 fetch</li>
+          <li><strong>BootROM</strong>(변경 불가 마스크롬) = 1차 부트, SPL을 로드</li>
+          <li><strong>SPL → DRAM init → U-Boot → OS</strong>: 작은 코드가 큰 코드를 부르는 릴레이</li>
+          <li><strong class="hl3">Secure Boot</strong> = 단계마다 서명 검증, Root of Trust부터 이어진 사슬</li>
+          <li>검증: 부트 시퀀스를 <strong>C-test</strong>로 시뮬/에뮬에서 OS까지 돌려본다</li>
+        </ul>
+      </div>
+      <div class="takeaway">
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"SoC 부팅은 POR·PLL lock 후 CPU가 reset vector에서 깨어나 BootROM→부트로더→OS로 신뢰의 사슬을 이으며 올라가는 과정이고, 저는 그 시퀀스를 실리콘 전에 C-test로 검증합니다."</p>
+        <p class="dim" style="margin-bottom:6px">— PC의 BIOS→GRUB→커널과 같은 체인이라고 말하면 면접관이 바로 끄덕입니다.</p>
+      </div>
+    </div>
+    <div class="note mt">다음 → <strong>5-2 Low Power 검증</strong>: 깨어난 칩을 다시 재우고 깨우는 전력 관리 — 클럭 게이팅·파워 도메인·UPF 이야기로.</div>
+  </section>
+
+</div>
+<script src="../assets/slides.js"></script>
+</body>
+</html>

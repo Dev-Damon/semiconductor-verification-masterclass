@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>5-3 · UPF &amp; Emulation</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-title="Part 5 · 5-3 UPF Power-Aware Sim &amp; Emulation">
+<div class="deck">
+
+  <!-- 1. Title -->
+  <section class="slide title-slide">
+    <div class="part-badge">Part 5 · 저전력 검증</div>
+    <h1>UPF &amp; Emulation<br>전원을 끄는 칩, 어떻게 검증하나</h1>
+    <p class="hook">안 쓰는 블록은 전원을 통째로 꺼버리는 게 현대 칩의 상식입니다.
+      그런데 RTL 코드엔 "전원"이라는 개념이 없습니다. 그래서 <strong>UPF</strong>가 등장하고,
+      너무 느린 시뮬은 <strong>에뮬레이션</strong>이라는 터보엔진으로 가속합니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기</div>
+  </section>
+
+  <!-- 2. 왜 배우나 / 한 문장 정의 -->
+  <section class="slide">
+    <div class="kicker">한 문장 정의</div>
+    <h2>UPF = 설계도엔 안 적힌 <span class="hl">"전원 의도"를 따로 기술</span>하는 파일</h2>
+    <p class="lead"><strong>UPF(Unified Power Format)</strong>는 "어느 블록이 어떤 전원으로 돌고, 언제 꺼지고, 끌 때 무슨 보호장치가 필요한가"라는 <strong class="hl">전원 의도(power intent)</strong>를 RTL과 별도로 적는 표준 포맷입니다.</p>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">🤔</span> 왜 RTL만으론 안 되나</h3>
+        <ul>
+          <li>Verilog/VHDL은 <strong>논리</strong>만 기술 — "이 AND 게이트는 0.8V로 돈다" 같은 <strong class="hl3">전원 정보가 없음</strong></li>
+          <li>저전력 칩은 블록마다 전압이 다르고, 안 쓰는 블록은 전원을 끔</li>
+          <li>이 정보를 RTL에 박으면 코드가 더러워지고 재사용 불가 → <strong>분리</strong>가 답</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🎯</span> UPF가 적는 것</h3>
+        <ul>
+          <li><strong>Power Domain</strong> — 전원을 따로 줄 수 있는 영역</li>
+          <li><strong>Supply Net / Power Switch</strong> — 전원선과 on/off 스위치</li>
+          <li><strong class="hl">Isolation / Level Shifter / Retention</strong> — 경계의 보호장치들</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note mt">UPF는 IEEE 1801 표준입니다. (경쟁 포맷 CPF도 있지만 면접에선 UPF만 알아도 충분합니다.)</div>
+  </section>
+
+  <!-- 3. 개발자 비유 -->
+  <section class="slide">
+    <div class="kicker">개발자 직관으로 번역</div>
+    <h2>UPF는 "전원용 설정 파일", 에뮬은 "스테이징 환경"</h2>
+    <div class="dev-bridge">
+      <p style="margin:6px 0">코드(RTL)는 그대로 두고, <strong>전원 동작은 별도 설정 파일(UPF)</strong>로 빼는 겁니다. 마치 애플리케이션 코드는 안 건드리고 <code>config.yaml</code> / <strong>feature flag</strong> 로 모듈을 켜고 끄는 것과 똑같습니다. UPF의 power switch가 곧 "이 모듈 끄기" 플래그죠.</p>
+      <p style="margin:6px 0">에뮬레이션은 <strong>스테이징 환경</strong>입니다. 단위 테스트(시뮬레이션)는 정확하지만 느려서, 실제 OS를 부팅하고 진짜 소프트웨어를 돌려보는 검증은 <strong class="hl2">전용 가속 하드웨어(스테이징)</strong>에서 합니다.</p>
+    </div>
+    <table class="compare mt">
+      <tr><th>반도체 검증</th><th>당신이 아는 것</th></tr>
+      <tr><td>UPF (전원 의도 분리)</td><td>코드와 분리된 config / feature flag</td></tr>
+      <tr><td>power gating (블록 전원 차단)</td><td>안 쓰는 마이크로서비스 스케일을 0으로</td></tr>
+      <tr><td>simulation (느리지만 정밀)</td><td>로컬 유닛 테스트</td></tr>
+      <tr><td>emulation (실 SW·OS 부팅)</td><td>스테이징에서 E2E 통합 테스트</td></tr>
+    </table>
+  </section>
+
+  <!-- 4. 저전력 3대 기법 -->
+  <section class="slide">
+    <div class="kicker">UPF가 다루는 현실</div>
+    <h2>저전력 칩의 3대 무기</h2>
+    <div class="grid3">
+      <div class="card">
+        <h3><span class="ico">🔌</span> Power Gating</h3>
+        <p>안 쓰는 블록의 <strong class="hl">전원을 통째로 차단</strong>. 누설 전력(leakage)까지 0으로 만듭니다.</p>
+        <div class="analogy" style="margin-top:10px"><p style="margin:4px 0;font-size:14px">집에서 <strong>안 쓰는 방의 전등을 끄는 것</strong>. 그 방은 전기를 1도 안 먹죠.</p></div>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🎚️</span> Multi-Voltage</h3>
+        <p>블록마다 <strong class="hl2">다른 전압</strong>을 공급. CPU는 0.9V, 저속 주변장치는 0.6V처럼 필요한 만큼만.</p>
+        <div class="analogy" style="margin-top:10px"><p style="margin:4px 0;font-size:14px">방마다 <strong>밝기를 다르게</strong>. 거실은 환하게, 복도는 은은하게.</p></div>
+      </div>
+      <div class="card">
+        <h3><span class="ico">💾</span> Retention</h3>
+        <p>전원을 끄기 전에 핵심 <strong class="hl3">상태를 별도 저장</strong>. 다시 켜면 그 자리에서 복구.</p>
+        <div class="analogy" style="margin-top:10px"><p style="margin:4px 0;font-size:14px">앱의 <strong>자동저장</strong>. 껐다 켜도 작업하던 문서가 그대로 떠 있죠.</p></div>
+      </div>
+    </div>
+    <div class="warnbox mt"><p style="margin:4px 0">문제: 전원을 끄거나 전압이 다른 블록끼리 신호를 주고받으면 <strong>전기적 사고</strong>가 납니다. 꺼진 블록의 출력은 <strong class="hl3">알 수 없는 값(X)</strong>이 되고, 전압이 다르면 신호가 깨집니다. 그래서 경계마다 <strong>보호 셀</strong>이 필요합니다 → 다음 슬라이드.</p></div>
+  </section>
+
+  <!-- 5. 핵심 보호 셀 3종 -->
+  <section class="slide">
+    <div class="kicker">UPF의 주인공들</div>
+    <h2>경계를 지키는 세 가지 특수 셀</h2>
+    <div class="grid3">
+      <div class="card" style="border-color:var(--accent3)">
+        <h3><span class="ico">🚧</span> Isolation Cell</h3>
+        <p><strong>꺼진 도메인의 출력을 격리</strong>. 도메인이 OFF면 출력이 X(쓰레기값)가 되는데, 이게 켜진 도메인으로 새어 들어가 오동작시킵니다. isolation cell이 <strong class="hl3">출력을 0 또는 1로 고정(clamp)</strong>해 X 전파를 막습니다.</p>
+      </div>
+      <div class="card" style="border-color:var(--accent2)">
+        <h3><span class="ico">🗣️</span> Level Shifter</h3>
+        <p><strong>전압이 다른 도메인을 연결</strong>. 0.6V 도메인의 신호를 0.9V 도메인이 못 알아듣습니다. level shifter가 신호의 <strong class="hl2">전압 레벨을 변환</strong>해 줍니다.</p>
+      </div>
+      <div class="card" style="border-color:var(--accent)">
+        <h3><span class="ico">💾</span> Retention Register</h3>
+        <p><strong>전원이 꺼져도 값을 유지</strong>하는 특수 플립플롭. 항상 켜져 있는 보조 전원(shadow latch)에 값을 보관했다가, 전원 복귀 시 <strong class="hl">그대로 복원</strong>합니다.</p>
+      </div>
+    </div>
+    <div class="analogy mt">
+      <p style="margin:6px 0"><strong>isolation = 꺼진 방문을 닫아 쓰레기가 안 새게</strong>, <strong>level shifter = 다른 언어를 쓰는 두 방 사이의 통역사</strong>, <strong>retention = 불 끄기 전 자동저장</strong>. 이 셋만 기억하면 UPF의 80%는 끝입니다.</p>
+    </div>
+  </section>
+
+  <!-- 6. 다이어그램: power domain + 보호셀 -->
+  <section class="slide">
+    <div class="kicker">한 그림으로 보는 전원 도메인</div>
+    <h2>도메인 경계에서 무슨 일이 일어나나</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 820 320" width="820">
+        <!-- Domain A (always on) -->
+        <rect x="40" y="60" width="250" height="190" rx="14" fill="#172236" stroke="#38e1c6" stroke-width="2"/>
+        <text x="165" y="88" fill="#38e1c6" font-size="16" text-anchor="middle" font-weight="bold">Domain A · 항상 ON</text>
+        <text x="165" y="110" fill="#9fb0c7" font-size="13" text-anchor="middle">0.9V</text>
+        <rect x="80" y="135" width="170" height="80" rx="10" fill="#121a29" stroke="#22304a"/>
+        <text x="165" y="170" fill="#e8eef7" font-size="14" text-anchor="middle">CPU 로직</text>
+        <text x="165" y="192" fill="#6c7c95" font-size="12" text-anchor="middle">(켜진 도메인)</text>
+
+        <!-- Domain B (gated) -->
+        <rect x="530" y="60" width="250" height="190" rx="14" fill="#172236" stroke="#b388ff" stroke-width="2" stroke-dasharray="6 5"/>
+        <text x="655" y="88" fill="#b388ff" font-size="16" text-anchor="middle" font-weight="bold">Domain B · OFF 가능</text>
+        <text x="655" y="110" fill="#9fb0c7" font-size="13" text-anchor="middle">0.6V · power gated</text>
+        <rect x="570" y="135" width="170" height="80" rx="10" fill="#121a29" stroke="#22304a"/>
+        <text x="655" y="165" fill="#e8eef7" font-size="14" text-anchor="middle">GPU 로직</text>
+        <text x="655" y="187" fill="#ff7a85" font-size="12" text-anchor="middle">꺼지면 출력=X</text>
+        <!-- power switch -->
+        <rect x="700" y="255" width="80" height="34" rx="8" fill="#172236" stroke="#ffce6b"/>
+        <text x="740" y="277" fill="#ffce6b" font-size="12" text-anchor="middle">⏻ switch</text>
+
+        <!-- Iso cell on B output -->
+        <rect x="455" y="150" width="60" height="50" rx="8" fill="#172236" stroke="#b388ff" stroke-width="2"/>
+        <text x="485" y="172" fill="#b388ff" font-size="11" text-anchor="middle" font-weight="bold">ISO</text>
+        <text x="485" y="188" fill="#9fb0c7" font-size="10" text-anchor="middle">격리</text>
+        <!-- Level shifter -->
+        <rect x="375" y="150" width="60" height="50" rx="8" fill="#172236" stroke="#5b9cff" stroke-width="2"/>
+        <text x="405" y="172" fill="#5b9cff" font-size="11" text-anchor="middle" font-weight="bold">LS</text>
+        <text x="405" y="188" fill="#9fb0c7" font-size="10" text-anchor="middle">전압변환</text>
+
+        <!-- signal path B -> ISO -> LS -> A -->
+        <line x1="570" y1="175" x2="517" y2="175" stroke="#9fb0c7" stroke-width="2"/>
+        <polygon points="517,175 525,171 525,179" fill="#9fb0c7"/>
+        <line x1="455" y1="175" x2="437" y2="175" stroke="#9fb0c7" stroke-width="2"/>
+        <polygon points="437,175 445,171 445,179" fill="#9fb0c7"/>
+        <line x1="375" y1="175" x2="252" y2="175" stroke="#9fb0c7" stroke-width="2"/>
+        <polygon points="252,175 260,171 260,179" fill="#9fb0c7"/>
+
+        <!-- retention note -->
+        <rect x="570" y="225" width="120" height="22" rx="6" fill="#121a29" stroke="#38e1c6"/>
+        <text x="630" y="240" fill="#38e1c6" font-size="11" text-anchor="middle">💾 retention reg</text>
+
+        <text x="410" y="40" fill="#e8eef7" font-size="14" text-anchor="middle" font-weight="bold">신호 경로:  GPU 출력 → ISO(격리) → LS(전압변환) → CPU</text>
+        <text x="410" y="300" fill="#6c7c95" font-size="12" text-anchor="middle">ISO는 B가 꺼졌을 때 X를 막고, LS는 0.6V↔0.9V를 변환한다. retention은 B의 상태를 보존한다.</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- 7. Power-Aware Simulation -->
+  <section class="slide">
+    <div class="kicker">UPF를 실제로 검증하는 법</div>
+    <h2>Power-Aware Simulation = <span class="hl">UPF를 반영한 시뮬레이션</span></h2>
+    <p>일반 시뮬레이션은 전원이 <strong>항상 켜져 있다고 가정</strong>합니다. Power-aware sim은 UPF를 함께 읽어, 전원이 실제로 꺼졌다 켜졌다 하는 상황을 모델링합니다.</p>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">🔬</span> 무엇을 추가로 검사하나</h3>
+        <ul>
+          <li>도메인이 꺼지면 그 로직 출력을 <strong class="hl3">X로 처리</strong> — X가 어디까지 번지나 추적</li>
+          <li>isolation cell이 <strong>제때 활성화</strong>돼 X 전파를 막는가</li>
+          <li>retention 값이 전원 복귀 후 <strong class="hl">정확히 복원</strong>되는가</li>
+          <li>level shifter 없이 전압 다른 도메인을 직접 연결한 <strong>실수</strong>가 있는가</li>
+          <li>전원 on/off <strong>시퀀스 순서</strong>(끄기 전 격리·저장 먼저)가 지켜지는가</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🐞</span> 어떤 버그를 잡나 (코너 버그)</h3>
+        <ul>
+          <li>격리를 깜빡해 꺼진 GPU의 <strong>X값이 CPU로 새는</strong> 버그</li>
+          <li>retention 안 걸어서 깨어나니 상태가 <strong>날아간</strong> 버그</li>
+          <li>전원 켜기 전에 사용해서 <strong>잘못된 값</strong>으로 동작</li>
+          <li>격리 신호 타이밍이 어긋나는 <strong class="hl3">레이스</strong> 버그</li>
+        </ul>
+      </div>
+    </div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: feature flag로 모듈을 껐는데 <strong>다른 모듈이 그 응답을 그대로 믿고 쓰다가 null 참조</strong>로 터지는 상황. power-aware sim은 바로 그 "꺼진 모듈을 잘못 참조하는" 버그를 전원 레벨에서 잡아냅니다.</p></div>
+  </section>
+
+  <!-- 8. 왜 X 처리가 핵심인가 (작은 코드 느낌) -->
+  <section class="slide">
+    <div class="kicker">한눈에 보는 X 전파</div>
+    <h2>꺼진 도메인은 <span class="hl3">X</span>를 뿜고, ISO가 그걸 막는다</h2>
+    <div class="grid2">
+      <div>
+        <p>디지털 검증에서 <code>X</code>는 "0인지 1인지 모름"을 뜻합니다. 전원이 꺼진 회로의 출력이 바로 X입니다. X가 정상 로직에 닿으면 <strong class="hl3">결과 전체가 오염</strong>됩니다.</p>
+        <pre class="code"><code><span class="cmt">// 격리 없이 꺼진 GPU 출력을 그대로 사용</span>
+<span class="kw">assign</span> result = cpu_data &amp; gpu_out;
+<span class="cmt">// GPU OFF → gpu_out = X</span>
+<span class="cmt">// result = cpu_data &amp; X = X  ← 오염!</span>
+
+<span class="cmt">// isolation cell이 켜지면 (clamp to 0)</span>
+<span class="cmt">// gpu_out → 0 으로 고정</span>
+<span class="cmt">// result = cpu_data &amp; 0 = 0  ← 안전</span></code></pre>
+        <p class="dim" style="font-size:14px">isolation은 "꺼진 블록의 출력을 0/1로 묶어 X가 못 새게" 하는 게 전부입니다.</p>
+      </div>
+      <div class="diagram">
+        <svg viewBox="0 0 360 300" width="360">
+          <text x="180" y="30" fill="#e8eef7" font-size="14" text-anchor="middle" font-weight="bold">ISO 없음 vs 있음</text>
+          <!-- without -->
+          <rect x="30" y="55" width="130" height="60" rx="10" fill="#172236" stroke="#ff7a85"/>
+          <text x="95" y="80" fill="#ff7a85" font-size="13" text-anchor="middle">GPU (OFF)</text>
+          <text x="95" y="100" fill="#ff7a85" font-size="12" text-anchor="middle">out = X</text>
+          <line x1="160" y1="85" x2="215" y2="85" stroke="#ff7a85" stroke-width="2"/>
+          <polygon points="215,85 207,81 207,89" fill="#ff7a85"/>
+          <rect x="217" y="55" width="115" height="60" rx="10" fill="#172236" stroke="#ff7a85"/>
+          <text x="274" y="80" fill="#e8eef7" font-size="13" text-anchor="middle">CPU 로직</text>
+          <text x="274" y="100" fill="#ff7a85" font-size="12" text-anchor="middle">→ X 오염 💥</text>
+          <!-- with -->
+          <rect x="20" y="180" width="100" height="60" rx="10" fill="#172236" stroke="#b388ff"/>
+          <text x="70" y="205" fill="#b388ff" font-size="13" text-anchor="middle">GPU(OFF)</text>
+          <text x="70" y="225" fill="#9fb0c7" font-size="12" text-anchor="middle">out=X</text>
+          <rect x="135" y="180" width="60" height="60" rx="10" fill="#172236" stroke="#5ee6a0" stroke-width="2"/>
+          <text x="165" y="208" fill="#5ee6a0" font-size="12" text-anchor="middle" font-weight="bold">ISO</text>
+          <text x="165" y="226" fill="#5ee6a0" font-size="11" text-anchor="middle">→0</text>
+          <line x1="120" y1="210" x2="133" y2="210" stroke="#9fb0c7" stroke-width="2"/>
+          <line x1="195" y1="210" x2="248" y2="210" stroke="#5ee6a0" stroke-width="2"/>
+          <polygon points="248,210 240,206 240,214" fill="#5ee6a0"/>
+          <rect x="250" y="180" width="90" height="60" rx="10" fill="#172236" stroke="#5ee6a0"/>
+          <text x="295" y="205" fill="#e8eef7" font-size="12" text-anchor="middle">CPU</text>
+          <text x="295" y="225" fill="#5ee6a0" font-size="11" text-anchor="middle">정상 ✅</text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9. Emulation 등장 -->
+  <section class="slide">
+    <div class="kicker">시뮬은 너무 느리다</div>
+    <h2>Emulation = 시뮬레이션의 <span class="hl">터보엔진</span></h2>
+    <p class="lead">대형 SoC를 소프트웨어 시뮬레이터로 돌리면 <strong>OS 부팅 한 번에 며칠</strong>이 걸립니다. 그래서 설계를 <strong class="hl2">전용 하드웨어에 통째로 올려</strong> 수백만 배 빠르게 돌리는 게 에뮬레이션입니다.</p>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">🐢</span> 왜 시뮬은 느린가</h3>
+        <ul>
+          <li>시뮬레이터는 <strong>CPU가 회로 동작을 흉내</strong>내는 소프트웨어 — 게이트 수억 개를 한 클럭씩 계산</li>
+          <li>속도: 대략 <strong>수십 ~ 수천 Hz</strong> 수준 (실칩은 GHz)</li>
+          <li>실 OS 부팅·드라이버 같은 <strong class="hl3">긴 시나리오는 사실상 불가능</strong></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🚀</span> 에뮬레이터는 어떻게 빠른가</h3>
+        <ul>
+          <li>설계를 <strong>대규모 FPGA/전용칩 배열</strong>에 매핑해 <strong>실제 회로처럼 병렬</strong>로 동작</li>
+          <li>속도: <strong class="hl">MHz 급</strong> — 시뮬 대비 수천~수백만 배</li>
+          <li>그래서 <strong>리눅스/안드로이드 부팅, 실 펌웨어·드라이버</strong>를 실제로 돌려볼 수 있음</li>
+        </ul>
+      </div>
+    </div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: 로컬 유닛 테스트(시뮬)는 정확하지만 전체 시스템을 못 돌립니다. <strong>스테이징 서버(에뮬)에서 실제 OS·앱을 띄워 E2E로 검증</strong>하는 것과 같습니다. 단, 에뮬은 시뮬보다 디버깅 가시성이 떨어지는 트레이드오프가 있습니다.</p></div>
+  </section>
+
+  <!-- 10. 시뮬 vs 에뮬 vs FPGA 비교표 -->
+  <section class="slide">
+    <div class="kicker">셋을 한 표로</div>
+    <h2>Simulation vs Emulation vs FPGA Prototype</h2>
+    <table class="compare">
+      <tr><th>관점</th><th>Simulation</th><th>Emulation</th><th>FPGA Prototype</th></tr>
+      <tr><td>실행 방식</td><td>SW가 회로를 흉내</td><td>전용 HW에 매핑</td><td>실제 FPGA 보드에 매핑</td></tr>
+      <tr><td>속도</td><td><strong class="hl3">가장 느림</strong> (Hz~kHz)</td><td>빠름 (MHz급)</td><td><strong class="hl">가장 빠름</strong> (수십 MHz)</td></tr>
+      <tr><td>디버깅 가시성</td><td><strong class="hl">최고</strong> (모든 신호 추적)</td><td>좋음 (전용 디버그 HW)</td><td>낮음 (제한적)</td></tr>
+      <tr><td>컴파일/셋업</td><td>빠름 (분)</td><td>보통 (시간)</td><td>느림 (장시간)</td></tr>
+      <tr><td>주 용도</td><td>블록 단위 정밀 검증</td><td><strong>SW/펌웨어 통합·OS 부팅</strong></td><td>실속도 데모·SW 선개발</td></tr>
+      <tr><td>대표 제품</td><td>VCS · Questa · Xcelium</td><td>Palladium · ZeBu · Veloce</td><td>HAPS · Protium</td></tr>
+    </table>
+    <div class="note mt">한 줄 정리: <strong class="hl">정밀하면 느리고(시뮬), 빠르면 안 보인다(FPGA)</strong>. 에뮬은 그 사이의 균형점으로, "충분히 빠르면서 디버깅도 되는" 자리에서 SW 통합 검증을 담당합니다.</div>
+  </section>
+
+  <!-- 11. Q&A -->
+  <section class="slide">
+    <div class="kicker">면접 예상 질문</div>
+    <h2>이렇게 물어보면, 이렇게 답한다</h2>
+    <div class="qa">
+      <div class="q">UPF가 왜 필요한가요?</div>
+      <div class="a">RTL은 논리만 기술할 뿐 전원 정보가 없습니다. 저전력 칩은 블록마다 전압이 다르고 안 쓰는 블록은 전원을 끄는데, 이런 전원 의도를 RTL에 박으면 코드가 더러워지고 재사용이 안 됩니다. UPF는 power domain·power switch·isolation·level shifter·retention 같은 전원 의도를 별도 표준 파일로 분리해, 설계는 그대로 두고 전원 동작을 기술·검증하게 해줍니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">isolation cell, level shifter, retention register의 역할은?</div>
+      <div class="a">isolation cell은 꺼진 도메인의 출력을 0/1로 고정해 X값이 켜진 도메인으로 새는 걸 막습니다. level shifter는 전압이 다른 두 도메인 사이에서 신호의 전압 레벨을 변환해 통신을 가능하게 합니다. retention register는 전원이 꺼져도 보조 전원으로 값을 보관했다가 복귀 시 상태를 그대로 복원합니다. 격리·통역·자동저장으로 기억하면 쉽습니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">power-aware simulation은 어떤 버그를 잡나요?</div>
+      <div class="a">전원 on/off에 얽힌 코너 버그입니다. 격리를 빼먹어 꺼진 블록의 X가 정상 로직으로 전파되는 버그, retention을 안 걸어 깨어났더니 상태가 날아간 버그, 전원 켜기 전에 사용하거나 격리/저장 시퀀스 순서가 어긋나는 버그를 잡습니다. 일반 시뮬은 전원이 항상 켜졌다고 가정하므로 이런 버그를 놓칩니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">에뮬레이션은 시뮬레이션과 언제·왜 다르게 쓰나요?</div>
+      <div class="a">대형 SoC를 소프트웨어 시뮬로 돌리면 OS 부팅에 며칠이 걸려 사실상 불가능합니다. 에뮬레이션은 설계를 전용 하드웨어에 매핑해 MHz급으로 가속하므로, 실제 OS 부팅이나 펌웨어·드라이버 같은 긴 SW 시나리오를 돌려볼 수 있습니다. 정밀 디버깅이 필요한 블록 검증은 시뮬, SW 통합과 실 실행 검증은 에뮬을 씁니다. 트레이드오프는 에뮬이 시뮬보다 셋업이 무겁고 신호 가시성이 떨어진다는 점입니다.</div>
+    </div>
+  </section>
+
+  <!-- 12. 요약 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>이 챕터, 한 손에 잡기</h2>
+    <div class="grid2">
+      <div>
+        <ul>
+          <li>저전력 3대 기법: <strong class="hl">power gating</strong>(전원 차단)·<strong class="hl2">multi-voltage</strong>·<strong class="hl3">retention</strong>(상태 보존)</li>
+          <li>RTL엔 전원 정보가 없다 → <strong>UPF</strong>로 전원 의도를 별도 기술</li>
+          <li>보호 셀 3종: <strong>isolation</strong>(X 격리)·<strong>level shifter</strong>(전압 변환)·<strong>retention reg</strong>(상태 보존)</li>
+          <li><strong class="hl">Power-aware sim</strong> = UPF 반영 → X 처리·격리·복원의 코너 버그 검출</li>
+          <li><strong class="hl2">Emulation</strong> = 전용 HW로 가속해 실 OS 부팅·SW 통합 검증</li>
+          <li>시뮬(정밀·느림) · 에뮬(SW 통합) · FPGA(실속도·저가시성)</li>
+        </ul>
+      </div>
+      <div class="takeaway">
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"RTL엔 없는 전원 의도를 <strong class="hl">UPF</strong>로 기술하고, <strong>power-aware 시뮬레이션</strong>으로 격리·복원의 코너 버그를 잡으며, 너무 느린 검증은 <strong class="hl2">에뮬레이션</strong>으로 가속해 실 SW까지 돌려봅니다."</p>
+        <p class="dim" style="margin-bottom:6px">— UPF + power-aware sim + 에뮬, 세 키워드를 한 문장에.</p>
+      </div>
+    </div>
+    <div class="note mt">다음 → <strong>Part 6</strong>: 검증의 마지막 관문, 실리콘이 돌아온 뒤의 <strong>post-silicon validation</strong>과 bring-up. 시뮬·에뮬에서 못 잡은 버그는 실물 칩에서 어떻게 추적할까요.</div>
+  </section>
+
+</div>
+<script src="../assets/slides.js"></script>
+</body>
+</html>

@@ -1,0 +1,172 @@
+/* =========================================================
+   반도체 검증 마스터클래스 — 공용 디자인 시스템 (Dark Tech)
+   모든 챕터 HTML이 이 파일을 공유합니다.
+   ========================================================= */
+
+:root{
+  --bg:#0a0e16;
+  --bg2:#0e131f;
+  --panel:#121a29;
+  --panel2:#172236;
+  --line:#22304a;
+  --ink:#e8eef7;
+  --muted:#9fb0c7;
+  --dim:#6c7c95;
+  --accent:#38e1c6;      /* teal */
+  --accent2:#5b9cff;     /* blue */
+  --accent3:#b388ff;     /* violet */
+  --warn:#ffce6b;        /* amber */
+  --danger:#ff7a85;      /* red */
+  --good:#5ee6a0;        /* green */
+  --code-bg:#0b1220;
+  --radius:16px;
+  --shadow:0 18px 50px rgba(0,0,0,.45);
+  --font:'Pretendard','Segoe UI',-apple-system,system-ui,'Malgun Gothic',sans-serif;
+  --mono:'JetBrains Mono','Cascadia Code','D2Coding',Consolas,monospace;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:var(--font);
+  color:var(--ink);
+  background:
+    radial-gradient(1200px 700px at 80% -10%, rgba(91,156,255,.10), transparent 60%),
+    radial-gradient(900px 600px at -10% 110%, rgba(179,136,255,.10), transparent 60%),
+    var(--bg);
+  overflow:hidden;
+}
+
+/* ---------- Deck / Slide framework ---------- */
+.deck{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+.slide{
+  position:absolute;inset:0;
+  display:none;
+  flex-direction:column;justify-content:center;
+  padding:6vh 8vw;
+  opacity:0;transform:translateY(14px);
+  transition:opacity .35s ease, transform .35s ease;
+  overflow:auto;
+}
+.slide.active{display:flex;opacity:1;transform:none}
+.slide > *{max-width:1100px;width:100%;margin-inline:auto}
+
+/* progress + chrome */
+.progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0;z-index:50;transition:width .3s ease}
+.hud{position:fixed;bottom:18px;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:0 26px;z-index:40;pointer-events:none;font-size:13px;color:var(--dim)}
+.hud .title{pointer-events:none;letter-spacing:.02em}
+.nav{display:flex;gap:8px;pointer-events:auto}
+.nav button{
+  background:var(--panel);border:1px solid var(--line);color:var(--ink);
+  width:38px;height:38px;border-radius:10px;cursor:pointer;font-size:16px;
+  transition:.15s;display:grid;place-items:center;
+}
+.nav button:hover{background:var(--panel2);border-color:var(--accent)}
+.counter{font-variant-numeric:tabular-nums;background:var(--panel);border:1px solid var(--line);padding:7px 12px;border-radius:10px;color:var(--muted);pointer-events:auto}
+.home-link{position:fixed;top:14px;left:18px;z-index:40;color:var(--dim);text-decoration:none;font-size:13px;border:1px solid var(--line);background:var(--panel);padding:7px 12px;border-radius:10px;transition:.15s}
+.home-link:hover{color:var(--ink);border-color:var(--accent)}
+
+/* ---------- Typography ---------- */
+.kicker{display:inline-flex;align-items:center;gap:9px;font-size:14px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:18px}
+.kicker::before{content:"";width:26px;height:2px;background:var(--accent);border-radius:2px}
+h1{font-size:clamp(30px,5vw,56px);line-height:1.1;margin:0 0 18px;font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(24px,3.4vw,38px);line-height:1.15;margin:0 0 22px;font-weight:800;letter-spacing:-.01em}
+h3{font-size:20px;margin:0 0 10px;font-weight:700;color:var(--ink)}
+p{font-size:clamp(16px,1.5vw,19px);line-height:1.7;color:var(--muted);margin:0 0 14px}
+.lead{font-size:clamp(19px,2vw,24px);color:var(--ink);line-height:1.6}
+.dim{color:var(--dim)}
+strong{color:var(--ink);font-weight:700}
+.hl{color:var(--accent)}
+.hl2{color:var(--accent2)}
+.hl3{color:var(--accent3)}
+ul,ol{margin:0 0 14px;padding-left:1.2em}
+li{font-size:clamp(15px,1.5vw,18px);line-height:1.7;color:var(--muted);margin-bottom:8px}
+li::marker{color:var(--accent)}
+
+/* ---------- Layout helpers ---------- */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.row{display:flex;gap:18px;flex-wrap:wrap}
+.center{text-align:center}
+.mt{margin-top:22px}
+
+/* ---------- Cards / callouts ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px}
+.card h3{display:flex;align-items:center;gap:10px}
+.card .ico{font-size:22px}
+
+.analogy{border:1px solid rgba(56,225,198,.35);background:linear-gradient(180deg,rgba(56,225,198,.10),rgba(56,225,198,.03));border-radius:var(--radius);padding:20px 22px;position:relative}
+.analogy::before{content:"💡 비유";position:absolute;top:-12px;left:18px;background:var(--bg2);border:1px solid rgba(56,225,198,.35);color:var(--accent);font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px}
+
+.dev-bridge{border:1px solid rgba(91,156,255,.35);background:linear-gradient(180deg,rgba(91,156,255,.10),rgba(91,156,255,.03));border-radius:var(--radius);padding:20px 22px;position:relative}
+.dev-bridge::before{content:"👨‍💻 개발자라면";position:absolute;top:-12px;left:18px;background:var(--bg2);border:1px solid rgba(91,156,255,.35);color:var(--accent2);font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px}
+
+.takeaway{border:1px solid rgba(255,206,107,.4);background:linear-gradient(180deg,rgba(255,206,107,.10),rgba(255,206,107,.03));border-radius:var(--radius);padding:20px 22px;position:relative}
+.takeaway::before{content:"🎯 면접 한 줄";position:absolute;top:-12px;left:18px;background:var(--bg2);border:1px solid rgba(255,206,107,.4);color:var(--warn);font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px}
+
+.warnbox{border:1px solid rgba(255,122,133,.4);background:linear-gradient(180deg,rgba(255,122,133,.10),rgba(255,122,133,.03));border-radius:var(--radius);padding:18px 20px}
+.note{border-left:3px solid var(--line);padding:6px 0 6px 16px;color:var(--dim);font-size:15px}
+
+/* interview Q&A */
+.qa{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:14px}
+.qa .q{color:var(--ink);font-weight:700;font-size:17px;margin-bottom:8px}
+.qa .q::before{content:"Q";display:inline-grid;place-items:center;width:24px;height:24px;background:var(--accent2);color:#04122e;border-radius:7px;font-size:13px;margin-right:9px;font-weight:800}
+.qa .a{color:var(--muted);font-size:16px;line-height:1.65}
+.qa .a::before{content:"A";display:inline-grid;place-items:center;width:24px;height:24px;background:var(--accent);color:#022b25;border-radius:7px;font-size:13px;margin-right:9px;font-weight:800}
+
+/* ---------- Tags / pills ---------- */
+.tag{display:inline-block;background:var(--panel2);border:1px solid var(--line);color:var(--muted);font-size:13px;padding:4px 11px;border-radius:20px;margin:0 6px 6px 0}
+.pill{display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:700;letter-spacing:.02em}
+.pill.teal{background:rgba(56,225,198,.15);color:var(--accent)}
+.pill.blue{background:rgba(91,156,255,.15);color:var(--accent2)}
+.pill.violet{background:rgba(179,136,255,.15);color:var(--accent3)}
+
+/* ---------- Tables / compare ---------- */
+table{width:100%;border-collapse:collapse;font-size:15px;margin:6px 0 14px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line)}
+th{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+td{color:var(--muted)}
+tr:hover td{background:rgba(255,255,255,.02)}
+.compare td:first-child{color:var(--ink);font-weight:600}
+
+/* key-value */
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;font-size:16px}
+.kv dt{color:var(--accent);font-weight:700}
+.kv dd{margin:0;color:var(--muted)}
+
+/* ---------- Code ---------- */
+pre.code{background:var(--code-bg);border:1px solid var(--line);border-radius:12px;padding:16px 18px;overflow:auto;font-family:var(--mono);font-size:14px;line-height:1.6;color:#cfe0f5;margin:6px 0 14px}
+code{font-family:var(--mono);background:var(--panel2);color:var(--accent);padding:2px 6px;border-radius:5px;font-size:.9em}
+pre.code code{background:none;color:inherit;padding:0}
+.cmt{color:#6c7c95}
+.kw{color:var(--accent3)}
+.str{color:var(--good)}
+.fn{color:var(--accent2)}
+
+/* ---------- Diagram helpers ---------- */
+.diagram{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);padding:24px;text-align:center}
+.flow{display:flex;align-items:center;justify-content:center;gap:0;flex-wrap:wrap}
+.flow .box{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 18px;font-weight:700;color:var(--ink);font-size:15px;min-width:90px}
+.flow .arrow{color:var(--accent);font-size:24px;margin:0 10px}
+.flow .box.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+svg{max-width:100%;height:auto}
+
+/* ---------- Title slide ---------- */
+.title-slide{text-align:center}
+.title-slide .part-badge{display:inline-block;border:1px solid var(--line);background:var(--panel);color:var(--accent);font-weight:700;letter-spacing:.1em;font-size:13px;padding:7px 16px;border-radius:30px;margin-bottom:26px;text-transform:uppercase}
+.title-slide h1{font-size:clamp(34px,6vw,68px)}
+.title-slide .hook{font-size:clamp(17px,2vw,22px);color:var(--muted);max-width:760px;margin:14px auto 0}
+.title-slide .hint{margin-top:40px;color:var(--dim);font-size:14px}
+.title-slide .hint kbd{background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:2px 8px;font-family:var(--mono);font-size:12px;color:var(--ink)}
+
+/* scrollbars */
+.slide::-webkit-scrollbar,pre.code::-webkit-scrollbar{width:8px;height:8px}
+.slide::-webkit-scrollbar-thumb,pre.code::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+
+/* responsive */
+@media(max-width:760px){
+  .slide{padding:7vh 6vw}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .flow{flex-direction:column}.flow .arrow{transform:rotate(90deg)}
+}

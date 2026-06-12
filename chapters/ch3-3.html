@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3-3 · Cache Coherency</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-title="Part 3 · 3-3 Cache Coherency">
+<div class="deck">
+
+  <!-- 1. Title -->
+  <section class="slide title-slide">
+    <div class="part-badge">Part 3 · 버스와 시스템</div>
+    <h1>Cache Coherency<br>여러 코어가 같은 값을 보게 만드는 법</h1>
+    <p class="hook">캐시는 빠른 사본입니다. 그런데 코어마다 사본을 따로 들고 있다면? 누가 고친 걸 누가 못 본다면?
+      멀티코어의 가장 미묘한 약속, 캐시 일관성을 한 장의 지도로 펼칩니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
+  </section>
+
+  <!-- 2. 왜 배우나 / 한 문장 정의 -->
+  <section class="slide">
+    <div class="kicker">한 문장 정의</div>
+    <h2>"모든 코어가 같은 주소에 대해 <span class="hl">같은 최신 값</span>을 보게 보장하는 것"</h2>
+    <p class="lead">캐시(cache)는 느린 메인 메모리의 일부를 코어 곁에 둔 <strong>빠른 사본</strong>입니다. 사본이 코어마다 따로 존재하는 순간, "누가 고친 값을 다른 사본이 못 보는" 불일치(stale) 위험이 생깁니다.</p>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">⚡</span> 캐시가 있는 이유</h3>
+        <p>메인 메모리(DRAM)는 코어 입장에서 <strong class="hl">수십~수백 사이클</strong>이나 느립니다. 자주 쓰는 데이터는 코어 옆 작은 고속 SRAM(=캐시)에 사본으로 둬서 가속합니다.</p>
+      </div>
+      <div class="card" style="border-color:var(--accent)">
+        <h3><span class="ico">🧩</span> 그래서 생기는 문제</h3>
+        <p>코어가 4개면 같은 주소의 사본도 4개일 수 있습니다. 한 코어가 그 값을 고치면, 나머지 사본은 <strong class="hl">옛값(stale)</strong>이 됩니다. 이걸 자동으로 정리하는 게 coherency입니다.</p>
+      </div>
+    </div>
+    <div class="note mt">검증 관점에서 왜 중요한가 → 멀티코어 SoC에서 coherency는 <strong>가장 버그가 잘 숨는 영역</strong>입니다. 타이밍·순서에 따라 어쩌다 한 번 틀리는(corner case) 버그라, 검증 엔지니어가 집중 공략하는 단골 주제입니다.</div>
+  </section>
+
+  <!-- 3. 핵심 비유 + 개발자 비유 -->
+  <section class="slide">
+    <div class="kicker">직관부터 잡기</div>
+    <h2>구글 독스 vs 각자 복사본</h2>
+    <div class="grid2">
+      <div class="analogy">
+        <p style="margin-top:6px"><strong>공유 구글 독스(coherent)</strong>: 누군가 한 글자 고치면 모두의 화면에 즉시 최신으로 반영됩니다. 모두가 항상 <strong class="hl">같은 한 진실</strong>을 봅니다.</p>
+        <p class="dim" style="margin-bottom:6px">↔ <strong>각자 파일을 다운로드해 따로 수정(incoherent)</strong>: 내 사본만 고쳤으니 옆 사람은 옛 버전을 봅니다. 합칠 때 충돌·불일치가 터집니다.</p>
+      </div>
+      <div class="dev-bridge">
+        <p style="margin:6px 0">개발자 세계에 이미 같은 문제가 있습니다:</p>
+        <ul>
+          <li><strong>멀티스레드 메모리 가시성</strong>: 한 스레드가 쓴 값을 다른 스레드가 못 보는 문제 → <code>volatile</code> / memory barrier로 강제 동기화</li>
+          <li><strong>분산 캐시 무효화</strong>: Redis에 캐시해둔 값, 원본이 바뀌면 <strong>invalidate</strong>(무효화) 메시지를 쏴서 옛 사본을 버리게 함</li>
+          <li><strong>DB 일관성</strong>: 여러 복제본이 같은 데이터를 보게 맞추는 일</li>
+        </ul>
+        <p class="dim" style="margin:6px 0">Cache coherency = 이걸 <strong>하드웨어가 자동으로</strong> 해주는 것.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. stale 문제 다이어그램 -->
+  <section class="slide">
+    <div class="kicker">문제의 그림</div>
+    <h2>코어1이 쓰면, 코어2는 옛값을 본다</h2>
+    <p>주소 <code>X</code>의 원래 값은 <code>5</code>. 두 코어가 각자 캐시에 <code>5</code>를 사본으로 들고 있습니다. 코어1이 <code>X=10</code>으로 바꾸면, <strong class="hl">조정 장치가 없으면</strong> 코어2는 여전히 <code>5</code>를 읽습니다.</p>
+    <div class="diagram mt">
+      <svg viewBox="0 0 760 280" font-family="var(--mono)">
+        <!-- Core1 -->
+        <rect x="30" y="30" width="200" height="120" rx="12" fill="#172236" stroke="#38e1c6"/>
+        <text x="130" y="58" fill="#e8eef7" font-size="16" text-anchor="middle" font-weight="bold">Core 1</text>
+        <rect x="55" y="78" width="150" height="50" rx="8" fill="#0b1220" stroke="#22304a"/>
+        <text x="130" y="98" fill="#9fb0c7" font-size="12" text-anchor="middle">cache: X =</text>
+        <text x="130" y="118" fill="#ff7a85" font-size="16" text-anchor="middle" font-weight="bold">10 (방금 씀)</text>
+        <!-- Core2 -->
+        <rect x="530" y="30" width="200" height="120" rx="12" fill="#172236" stroke="#5b9cff"/>
+        <text x="630" y="58" fill="#e8eef7" font-size="16" text-anchor="middle" font-weight="bold">Core 2</text>
+        <rect x="555" y="78" width="150" height="50" rx="8" fill="#0b1220" stroke="#22304a"/>
+        <text x="630" y="98" fill="#9fb0c7" font-size="12" text-anchor="middle">cache: X =</text>
+        <text x="630" y="118" fill="#ffce6b" font-size="16" text-anchor="middle" font-weight="bold">5 (옛값!)</text>
+        <!-- Memory -->
+        <rect x="280" y="195" width="200" height="60" rx="10" fill="#172236" stroke="#b388ff"/>
+        <text x="380" y="222" fill="#e8eef7" font-size="14" text-anchor="middle" font-weight="bold">Main Memory</text>
+        <text x="380" y="242" fill="#9fb0c7" font-size="12" text-anchor="middle">X = 5</text>
+        <!-- lines -->
+        <line x1="130" y1="150" x2="320" y2="195" stroke="#38e1c6" stroke-width="2"/>
+        <line x1="630" y1="150" x2="440" y2="195" stroke="#5b9cff" stroke-width="2"/>
+        <text x="380" y="100" fill="#ff7a85" font-size="15" text-anchor="middle" font-weight="bold">⚠ 불일치(stale)</text>
+        <text x="380" y="125" fill="#6c7c95" font-size="12" text-anchor="middle">같은 X인데 값이 다르다</text>
+        <text x="380" y="145" fill="#6c7c95" font-size="12" text-anchor="middle">→ coherency 프로토콜이 해결</text>
+      </svg>
+    </div>
+    <div class="warnbox mt"><p style="margin:6px 0">이게 그냥 "느려서"가 아니라 <strong>틀린 결과</strong>를 만든다는 게 핵심입니다. 락(lock) 변수, 큐 포인터 같은 공유 데이터가 stale이면 시스템이 통째로 오작동합니다.</p></div>
+  </section>
+
+  <!-- 5. 해결 원칙 + write-back -->
+  <section class="slide">
+    <div class="kicker">해결의 원칙</div>
+    <h2>"내가 고치기 전에 남의 사본을 정리한다"</h2>
+    <p>coherency 프로토콜의 규칙은 의외로 단순합니다. 두 가지 불변식만 지키면 됩니다.</p>
+    <dl class="kv mt">
+      <dt>Write Propagation</dt><dd>한 코어의 쓰기는 결국 다른 코어들에게 <strong>전파</strong>되어야 한다 (남이 그 변화를 알게 됨)</dd>
+      <dt>Write Serialization</dt><dd>같은 주소에 대한 쓰기들은 <strong>모든 코어가 같은 순서</strong>로 본다 (순서가 뒤집히지 않음)</dd>
+    </dl>
+    <div class="grid2 mt">
+      <div class="card">
+        <h3><span class="ico">🗑️</span> 방법 A · Write-Invalidate</h3>
+        <p>내가 쓰기 전에 "다른 사본 다 버려!(invalidate)" 신호를 보냄. 그 뒤부턴 나만 최신본을 가짐. <strong class="hl">대부분의 실제 칩이 채택</strong>(MESI가 이 방식).</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">📢</span> 방법 B · Write-Update</h3>
+        <p>내가 쓴 새 값을 다른 사본들에게 <strong>바로 갱신</strong>해 뿌림. 트래픽이 많아 잘 안 씀.</p>
+      </div>
+    </div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">Write-Invalidate = Redis 캐시 무효화와 똑같은 발상입니다. "값이 바뀌었으니 너희 사본은 <strong>버려라</strong>, 다음에 필요하면 새로 받아가라."</p></div>
+  </section>
+
+  <!-- 6. MESI 상태 다이어그램 (필수) -->
+  <section class="slide">
+    <div class="kicker">MESI 프로토콜 · 네 가지 상태</div>
+    <h2>모든 캐시 라인은 4개 상태 중 하나</h2>
+    <p>각 캐시 라인(블록)에 <strong>상태 비트</strong>를 붙여 추적합니다. <strong class="hl3">M·E·S·I</strong> 네 글자가 곧 그 상태입니다.</p>
+    <div class="diagram mt">
+      <svg viewBox="0 0 760 300" font-family="var(--mono)">
+        <!-- M -->
+        <rect x="30" y="30" width="200" height="105" rx="12" fill="#172236" stroke="#ff7a85"/>
+        <text x="130" y="60" fill="#ff7a85" font-size="22" text-anchor="middle" font-weight="bold">M</text>
+        <text x="130" y="84" fill="#e8eef7" font-size="13" text-anchor="middle">Modified</text>
+        <text x="130" y="104" fill="#9fb0c7" font-size="11" text-anchor="middle">나만 가짐 + 고침</text>
+        <text x="130" y="121" fill="#6c7c95" font-size="10" text-anchor="middle">메모리보다 새 값(dirty)</text>
+        <!-- E -->
+        <rect x="260" y="30" width="200" height="105" rx="12" fill="#172236" stroke="#38e1c6"/>
+        <text x="360" y="60" fill="#38e1c6" font-size="22" text-anchor="middle" font-weight="bold">E</text>
+        <text x="360" y="84" fill="#e8eef7" font-size="13" text-anchor="middle">Exclusive</text>
+        <text x="360" y="104" fill="#9fb0c7" font-size="11" text-anchor="middle">나만 가짐 + 안 고침</text>
+        <text x="360" y="121" fill="#6c7c95" font-size="10" text-anchor="middle">메모리와 동일(clean)</text>
+        <!-- S -->
+        <rect x="490" y="30" width="200" height="105" rx="12" fill="#172236" stroke="#5b9cff"/>
+        <text x="590" y="60" fill="#5b9cff" font-size="22" text-anchor="middle" font-weight="bold">S</text>
+        <text x="590" y="84" fill="#e8eef7" font-size="13" text-anchor="middle">Shared</text>
+        <text x="590" y="104" fill="#9fb0c7" font-size="11" text-anchor="middle">여러 코어가 같이 가짐</text>
+        <text x="590" y="121" fill="#6c7c95" font-size="10" text-anchor="middle">읽기 전용, clean</text>
+        <!-- I -->
+        <rect x="260" y="170" width="200" height="105" rx="12" fill="#172236" stroke="#6c7c95"/>
+        <text x="360" y="200" fill="#9fb0c7" font-size="22" text-anchor="middle" font-weight="bold">I</text>
+        <text x="360" y="224" fill="#e8eef7" font-size="13" text-anchor="middle">Invalid</text>
+        <text x="360" y="244" fill="#9fb0c7" font-size="11" text-anchor="middle">사본 무효 (없는 것과 같음)</text>
+        <text x="360" y="261" fill="#6c7c95" font-size="10" text-anchor="middle">쓰려면 여기서 다시 받아옴</text>
+        <!-- transitions -->
+        <line x1="360" y1="135" x2="360" y2="170" stroke="#22304a" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <text x="450" y="158" fill="#6c7c95" font-size="11">남이 쓰면 → I 로 전이</text>
+        <text x="130" y="200" fill="#6c7c95" font-size="11">E에서 내가 쓰면 → M</text>
+        <line x1="230" y1="82" x2="260" y2="82" stroke="#22304a" stroke-width="1.5"/>
+      </svg>
+    </div>
+    <div class="note mt"><strong class="hl">기억법</strong>: M=나만+고침(dirty), E=나만+안고침(clean), S=같이 읽는중, I=버려진 사본. "나만 갖고 있나(M/E)" vs "같이 갖나(S)" vs "버렸나(I)"로 묶으면 외우기 쉽습니다.</div>
+  </section>
+
+  <!-- 7. MESI 전이 시나리오 표 -->
+  <section class="slide">
+    <div class="kicker">MESI · 상태가 움직이는 순간</div>
+    <h2>읽고·쓰고·남이 건드릴 때 어떻게 바뀌나</h2>
+    <table class="compare">
+      <tr><th>상황</th><th>내 캐시 라인 변화</th><th>왜</th></tr>
+      <tr><td>내가 처음 읽음 (남도 안 가짐)</td><td>I → <span class="pill teal">E</span></td><td>나 혼자 깨끗하게 가짐</td></tr>
+      <tr><td>내가 읽음 (이미 남도 가짐)</td><td>I → <span class="pill blue">S</span></td><td>같이 공유</td></tr>
+      <tr><td>내가 씀 (E 상태에서)</td><td>E → <span class="pill violet">M</span></td><td>나만 가졌으니 조용히 고침</td></tr>
+      <tr><td>내가 씀 (S 상태에서)</td><td>남 사본 invalidate 후 S → <span class="pill violet">M</span></td><td>고치기 전 남의 사본 정리</td></tr>
+      <tr><td><strong>남이</strong> 그 주소를 씀</td><td>내 라인 → <span class="pill" style="background:rgba(108,124,149,.2);color:var(--muted)">I</span></td><td>내 사본은 이제 옛값, 버림</td></tr>
+      <tr><td>남이 그 주소를 읽는데 내가 M이면</td><td>M → S (최신값을 남에게 넘김)</td><td>dirty 데이터를 먼저 공급</td></tr>
+    </table>
+    <div class="dev-bridge mt"><p style="margin:6px 0">상태머신(state machine)으로 보면 친숙하죠? 각 캐시 라인이 작은 FSM이고, "내 코어의 read/write"와 "버스에서 들려온 남의 read/write"가 입력 이벤트입니다. 그 이벤트에 따라 M·E·S·I 사이를 전이합니다.</p></div>
+  </section>
+
+  <!-- 8. snooping vs directory -->
+  <section class="slide">
+    <div class="kicker">누가 감시하나 · Snoop vs Directory</div>
+    <h2>"남이 뭘 건드렸는지"를 알아내는 두 방식</h2>
+    <p>상태를 바꾸려면 "다른 코어가 이 주소에 무슨 짓을 했는가"를 알아야 합니다. 이를 알아내는 방법이 두 가지입니다.</p>
+    <div class="grid2 mt">
+      <div class="card" style="border-color:var(--accent)">
+        <h3><span class="ico">👂</span> Snooping (스누핑)</h3>
+        <p>모든 캐시가 <strong>공유 버스를 엿듣습니다(snoop)</strong>. 누가 어떤 주소를 읽고/쓰는지 방송되면, 각 캐시가 "어, 그거 나도 가진 주소인데?" 하고 스스로 상태를 바꿉니다.</p>
+        <ul>
+          <li>단순·빠름, 소수 코어에 적합</li>
+          <li>코어가 많아지면 버스가 <strong class="hl">방송 트래픽으로 포화</strong> → 확장성 한계</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="ico">📒</span> Directory 기반</h3>
+        <p>중앙 <strong>디렉터리(명부)</strong>가 "어떤 주소를 어떤 코어가 갖고 있나"를 기록. 쓰기가 생기면 <strong class="hl3">해당 코어에게만 콕 집어</strong> invalidate를 보냅니다.</p>
+        <ul>
+          <li>방송 대신 1:1 메시지 → <strong class="hl">대규모 멀티코어에 확장성 좋음</strong></li>
+          <li>디렉터리 저장·조회 오버헤드가 있음</li>
+        </ul>
+      </div>
+    </div>
+    <div class="analogy mt"><p style="margin:6px 0">Snooping = 단톡방에 전체 공지를 뿌리는 것(작은 방엔 OK, 수천 명이면 도배). Directory = 주소록을 보고 <strong>관련된 사람에게만 DM</strong> 보내는 것.</p></div>
+  </section>
+
+  <!-- 9. AMBA ACE / CHI -->
+  <section class="slide">
+    <div class="kicker">실제 SoC에서 · AMBA의 coherent 확장</div>
+    <h2>버스 프로토콜이 coherency를 책임진다</h2>
+    <p>Part 3에서 본 <strong>AMBA</strong>(AXI 등)는 원래 coherency를 다루지 않았습니다. 멀티코어 시대에 ARM이 coherency를 버스 차원에서 처리하도록 확장한 프로토콜이 <strong class="hl">ACE</strong>와 <strong class="hl2">CHI</strong>입니다.</p>
+    <table>
+      <tr><th>프로토콜</th><th>정체</th><th>특징</th></tr>
+      <tr><td><span class="pill teal">AXI</span></td><td>기본 고성능 버스 (non-coherent)</td><td>읽기/쓰기 전송만, 일관성 개념 없음</td></tr>
+      <tr><td><span class="pill blue">ACE</span></td><td><strong>AXI Coherency Extensions</strong></td><td>AXI에 snoop 채널·캐시 상태 신호 추가 → 캐시 일관성 지원</td></tr>
+      <tr><td><span class="pill violet">CHI</span></td><td><strong>Coherent Hub Interface</strong></td><td>중앙 허브 기반, 다수 코어 확장에 유리한 차세대 coherent 인터커넥트</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="dev-bridge"><p style="margin:6px 0">"버스가 coherency를 지원한다"는 건, HTTP에 <strong>캐시 무효화 규약을 표준으로 박아넣은</strong> 셈입니다. 각 IP가 알아서 처리하는 대신, 프로토콜 레벨에서 snoop 요청·응답을 주고받습니다.</p></div>
+      <div class="takeaway"><p style="margin:6px 0">검증 관점: ACE/CHI 검증은 "온갖 코어가 동시에 같은 주소를 read/write할 때 MESI 상태가 규약대로 전이하는가"를 두드리는 일. <strong class="hl">corner case가 폭발</strong>하는 고난도 영역입니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 10. False Sharing -->
+  <section class="slide">
+    <div class="kicker">실무 함정 한 가지 · False Sharing</div>
+    <h2>"서로 다른 변수인데도" 성능이 무너지는 이유</h2>
+    <p>coherency는 <strong>캐시 라인 단위</strong>(보통 64바이트)로 동작합니다. 서로 무관한 두 변수가 <strong class="hl">우연히 같은 64바이트 라인</strong>에 들어가면, 한쪽만 고쳐도 라인 전체가 invalidate됩니다.</p>
+    <div class="diagram mt">
+      <svg viewBox="0 0 720 150" font-family="var(--mono)">
+        <rect x="20" y="40" width="680" height="60" rx="8" fill="#172236" stroke="#22304a"/>
+        <text x="20" y="30" fill="#6c7c95" font-size="12">하나의 캐시 라인 (64 byte)</text>
+        <rect x="30" y="50" width="100" height="40" rx="5" fill="#0b1220" stroke="#38e1c6"/>
+        <text x="80" y="75" fill="#38e1c6" font-size="13" text-anchor="middle">var A</text>
+        <rect x="140" y="50" width="100" height="40" rx="5" fill="#0b1220" stroke="#5b9cff"/>
+        <text x="190" y="75" fill="#5b9cff" font-size="13" text-anchor="middle">var B</text>
+        <text x="430" y="65" fill="#9fb0c7" font-size="12">Core1은 A만, Core2는 B만 고쳐도...</text>
+        <text x="430" y="88" fill="#ff7a85" font-size="13" font-weight="bold">→ 라인 통째 invalidate, 서로 핑퐁 ⚠</text>
+      </svg>
+    </div>
+    <p class="mt">두 코어가 각자 자기 변수만 바쁘게 고쳐도, 같은 라인이라 서로 끊임없이 무효화시켜 <strong class="hl">캐시 핑퐁(ping-pong)</strong>이 발생합니다. 논리적으로는 맞지만 성능이 급락합니다.</p>
+    <div class="dev-bridge"><p style="margin:6px 0">자바 동시성에서 핫한 카운터에 <code>@Contended</code>(패딩)를 붙이거나, 구조체에 패딩을 넣어 변수를 다른 라인으로 떨어뜨리는 기법이 바로 false sharing 회피입니다. 멀티스레드 성능 튜닝 해보셨다면 만난 적 있을 겁니다.</p></div>
+  </section>
+
+  <!-- 11. Q&A -->
+  <section class="slide">
+    <div class="kicker">면접 예상 질문</div>
+    <h2>이렇게 물어보면, 이렇게 답한다</h2>
+    <div class="qa">
+      <div class="q">Cache coherency가 왜 필요한가요?</div>
+      <div class="a">멀티코어에서 각 코어가 같은 메모리 주소를 자기 캐시에 사본으로 둘 수 있는데, 한 코어가 그 값을 고치면 다른 코어 사본은 옛값(stale)이 됩니다. coherency는 모든 코어가 같은 주소에 대해 일관된 최신 값을 보도록, 쓰기를 전파하고 쓰기 순서를 직렬화해 보장합니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">MESI의 네 상태를 설명해 보세요.</div>
+      <div class="a">Modified는 나만 갖고 내가 고쳐서 메모리보다 새 값(dirty), Exclusive는 나만 갖고 아직 안 고친 깨끗한 값, Shared는 여러 코어가 같이 가진 읽기 전용 값, Invalid는 무효라 다시 받아와야 하는 상태입니다. 남이 같은 주소를 쓰면 내 라인은 Invalid로 전이합니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">snoop이 뭔가요? directory 방식과의 차이는?</div>
+      <div class="a">snoop은 각 캐시가 공유 버스를 엿들으며 다른 코어의 read/write를 감지해 스스로 상태를 갱신하는 방식입니다. 단순하지만 방송 트래픽 때문에 코어가 많아지면 확장성이 떨어집니다. directory 방식은 중앙 명부가 어느 코어가 어떤 라인을 가졌는지 기록해 관련 코어에만 1:1로 무효화를 보내, 대규모 멀티코어에 더 잘 확장됩니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">ACE/CHI가 뭔가요? false sharing은요?</div>
+      <div class="a">ACE는 AXI Coherency Extensions로, AMBA AXI에 snoop 채널과 캐시 상태 신호를 더해 버스 차원에서 캐시 일관성을 지원합니다. CHI는 허브 기반의 차세대 coherent 인터커넥트로 다수 코어 확장에 유리합니다. false sharing은 서로 무관한 두 변수가 같은 캐시 라인에 들어가, 각자 다른 코어가 고쳐도 라인 전체가 무효화되며 캐시 핑퐁으로 성능이 급락하는 현상입니다.</div>
+    </div>
+  </section>
+
+  <!-- 12. 요약 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>이 챕터, 한 손에 잡기</h2>
+    <div class="grid2">
+      <div>
+        <ul>
+          <li>캐시 = 느린 메모리의 <strong>빠른 사본</strong> → 코어마다 사본이 따로면 <strong class="hl">stale 위험</strong></li>
+          <li>coherency = 모든 코어가 같은 주소에 <strong>같은 최신값</strong>을 보게 보장 (write propagation + serialization)</li>
+          <li><strong>MESI</strong> = 라인 상태 4개: Modified·Exclusive·Shared·Invalid, 작은 FSM</li>
+          <li>감시 방식: <strong>snooping</strong>(버스 엿듣기, 소수코어) vs <strong>directory</strong>(명부, 대규모 확장)</li>
+          <li>AMBA의 coherent 확장 = <strong>ACE</strong>(AXI 확장) / <strong>CHI</strong>(허브 기반)</li>
+          <li><strong>false sharing</strong> = 같은 라인에 낀 무관한 변수가 서로 무효화 → 성능 핑퐁</li>
+        </ul>
+      </div>
+      <div class="takeaway">
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"멀티코어에서 각 코어의 캐시 사본이 어긋나지 않도록, <strong class="hl">MESI 상태와 snoop/directory</strong>로 일관성을 보장하는 게 cache coherency이고, SoC에선 <strong class="hl">ACE/CHI</strong> 같은 coherent 버스가 이를 책임집니다."</p>
+        <p class="dim" style="margin-bottom:6px">— 가시성·무효화·상태머신, 개발자가 이미 아는 세 개념의 하드웨어판.</p>
+      </div>
+    </div>
+    <div class="note mt">다음 → <strong>3-4 Interconnect / NoC</strong>: 코어가 수십 개로 늘면 버스 한 줄로는 부족합니다. 칩 위에 작은 "네트워크"를 까는 이야기.</div>
+  </section>
+
+</div>
+<script src="../assets/slides.js"></script>
+</body>
+</html>
