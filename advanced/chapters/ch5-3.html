@@ -106,9 +106,9 @@
         <h3 style="color:var(--accent2)">Level shifter 방향</h3>
         <table class="sig" style="margin:6px 0">
           <tr><th>방향</th><th>의미</th></tr>
-          <tr><td>LH</td><td>Low→High: 낮은 V 도메인 → 높은 V 도메인</td></tr>
-          <tr><td>HL</td><td>High→Low: 높은 V 도메인 → 낮은 V 도메인</td></tr>
-          <tr><td>both</td><td>양방향 모두 삽입 허용</td></tr>
+          <tr><td>LH (=<code>-rule low_to_high</code>)</td><td>Low→High: 낮은 V 도메인 → 높은 V 도메인</td></tr>
+          <tr><td>HL (=<code>-rule high_to_low</code>)</td><td>High→Low: 높은 V 도메인 → 낮은 V 도메인</td></tr>
+          <tr><td>both (=<code>-rule both</code>)</td><td>양방향 모두 삽입 허용</td></tr>
         </table>
         <p class="dim" style="margin:4px 0">전압이 <strong>다른</strong> 두 도메인이 직접 연결되면 신호 레벨이 안 맞아 오동작/관통전류. shifter가 스윙을 맞춰줌.</p>
       </div>
@@ -333,7 +333,8 @@
     <pre class="code sm mt"><code><span class="cmt">// UPF 검증의 두 축: PA-static + PA-dynamic(SVA로 시퀀스 단언)</span>
 <span class="cmt">// 예: isolation enable이 전원 OFF보다 먼저 떠야 한다 (X누출 방지)</span>
 iso_before_off: <span class="kw">assert property</span> (@(<span class="kw">posedge</span> aon_clk)
-   $rose(pmu.cpu_sleep) <span class="kw">|-></span> pmu.iso_en[*1:$] <span class="kw">throughout</span> (vdd_cpu == 1'b0)[->1]);</code></pre>
+   $rose(pmu.cpu_sleep) <span class="kw">|-></span> pmu.iso_en <span class="kw">throughout</span> (vdd_cpu == 1'b0)[->1]);
+<span class="cmt">// throughout 좌변은 매 클록 평가되는 불리언, 우변만 시퀀스</span></code></pre>
     <div class="codecap">SVA: sleep 요청이 뜨면, VDD_CPU가 0이 되는 시점까지 iso_en이 유지돼야 한다(꺼지기 전 isolation 보장). formal/sim 양쪽에서 활용.</div>
   </section>
 
@@ -341,7 +342,7 @@ iso_before_off: <span class="kw">assert property</span> (@(<span class="kw">pose
   <section class="slide">
     <div class="kicker">면접 심화 질문</div>
     <h2>여기까지 답하면 "실무자"로 보인다</h2>
-    <div class="qa"><div class="q">UPF의 isolation·level shifter·retention 명령과 핵심 인자는?</div><div class="a"><strong>isolation</strong>은 <code>set_isolation</code>(+<code>set_isolation_control</code>)으로, <code>-clamp_value</code>(0/1/latch)와 제어신호·sense·location을 지정합니다. <strong>level shifter</strong>는 <code>set_level_shifter</code>로 방향(LH=저→고, HL=고→저)을 줍니다. <strong>retention</strong>은 <code>set_retention</code>으로 <code>-save_signal</code>/<code>-restore_signal</code>을 정하고 <code>map_retention_cell</code>로 실제 셀에 매핑하며, 백업 전원은 always-on이어야 합니다(SRPG).</div></div>
+    <div class="qa"><div class="q">UPF의 isolation·level shifter·retention 명령과 핵심 인자는?</div><div class="a"><strong>isolation</strong>은 <code>set_isolation</code>(+<code>set_isolation_control</code>)으로, <code>-clamp_value</code>(0/1/latch)와 제어신호·sense·location을 지정합니다. <strong>level shifter</strong>는 <code>set_level_shifter</code>로 방향을 <code>-rule</code> 토큰(LH=<code>low_to_high</code>, HL=<code>high_to_low</code>, <code>both</code>)으로 주며 <code>-applies_to</code>(inputs/outputs/both)와 <code>-location</code>을 지정합니다. 예: <code>set_level_shifter ls -domain PD_CPU -applies_to inputs -rule low_to_high -location self</code>. <strong>retention</strong>은 <code>set_retention</code>으로 <code>-save_signal</code>/<code>-restore_signal</code>을 정하고 <code>map_retention_cell</code>로 실제 셀에 매핑하며, 백업 전원은 always-on이어야 합니다(SRPG).</div></div>
     <div class="qa"><div class="q">power-aware 시뮬의 simstate CORRUPT는 무슨 뜻인가요?</div><div class="a">도메인 전원이 꺼지면 그 안의 플롭·래치·조합 출력을 시뮬레이터가 <strong>X(unknown)로 강제</strong>하는 상태가 CORRUPT입니다. 단 retention으로 지정한 플롭과 isolation으로 보호한 출력은 예외입니다. 그래서 retention/isolation을 안 적으면 복귀 시 X가 그대로 전파됩니다. NORMAL은 정상 평가, CORRUPT_ON_ACTIVITY는 전압 부족 상태에서 토글하면 오염되는 변형입니다.</div></div>
     <div class="qa"><div class="q">PA 정전검사가 잡는 것, 그리고 에뮬레이션 vs FPGA 프로토타입의 차이는?</div><div class="a"><strong>PA-static</strong>은 누락 isolation(off→on 경로), 누락/오방향 level shifter, isolation·retention 제어가 always-on이 아닌 경우 등 <strong>구조적 실수</strong>를 시뮬 전에 잡습니다. <strong>에뮬</strong>(Palladium/ZeBu/Veloce)은 MHz급으로 부팅·장시간 SW를 돌리며 디버그 가시성이 좋고, <strong>FPGA proto</strong>(HAPS/S2C)는 더 빠르지만(수십~수백 MHz) 내부 가시성과 반영 속도가 약해 SW 조기 개발·시연에 쓰고 버그 사냥은 에뮬이 유리합니다. 둘은 SCE-MI/DPI로 테스트벤치와 연결합니다.</div></div>
   </section>

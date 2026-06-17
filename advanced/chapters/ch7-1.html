@@ -29,7 +29,7 @@
       <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
         <ul><li>LFS <strong>포인터 파일</strong> 구조와 <code>.gitattributes</code> 문법</li><li><code>submodule</code> vs <strong>repo/west</strong> manifest의 차이</li><li><strong>annotated/signed</strong> tag, manifest <strong>lock</strong>으로 재현성</li><li>Perforce/DesignSync를 <strong>왜</strong> HW가 택하나</li></ul></div>
     </div>
-    <div class="deepnote mt"><p style="margin:6px 0">기준 도구: <strong>Git LFS</strong>(Large File Storage), <strong>git-submodule</strong>, Google <strong>repo</strong>(Android), Zephyr <strong>west</strong>, <strong>Perforce Helix Core(P4)</strong>, Synopsys <strong>DesignSync</strong>. 면접에서 "Git 좀 안다"와 "양산 RTL 저장소를 운영해봤다"를 가르는 건 이 디테일입니다.</p></div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준 도구: <strong>Git LFS</strong>(Large File Storage), <strong>git-submodule</strong>, Google <strong>repo</strong>(Android), Zephyr <strong>west</strong>, <strong>Perforce Helix Core(P4)</strong>, Dassault ENOVIA <strong>DesignSync</strong>. 면접에서 "Git 좀 안다"와 "양산 RTL 저장소를 운영해봤다"를 가르는 건 이 디테일입니다.</p></div>
   </section>
 
   <!-- 3 -->
@@ -56,7 +56,7 @@
 version https://git-lfs.github.com/spec/v1
 oid sha256:4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393
 size 134217728</code></pre>
-    <div class="codecap">실제 134 MB 파형은 LFS 스토어에 있고, Git이 추적하는 건 이 <strong>~130바이트</strong> 텍스트뿐. <code>git diff</code>도 이 세 줄에 대해서만 돕니다(해시가 바뀌면 내용이 바뀐 것).</div>
+    <div class="codecap">실제 134 MB(=128 MiB, 2²⁷ 바이트) 파형은 LFS 스토어에 있고, Git이 추적하는 건 이 <strong>약 134바이트</strong> 텍스트뿐(라인 길이는 oid 자릿수에 따라 변하며 LFS 스펙상 항상 1 KB 이내). <code>git diff</code>도 이 세 줄에 대해서만 돕니다(해시가 바뀌면 내용이 바뀐 것).</div>
     <div class="spec mt"><p style="margin:6px 0"><strong>동작 순서:</strong> <code>checkout/pull</code> 시 LFS smudge 필터가 포인터를 읽어 → 해당 <code>oid</code>의 실제 파일을 LFS 서버에서 받아 작업트리에 채웁니다. <code>commit/push</code> 시 clean 필터가 반대로 바이너리를 떼어내 포인터로 치환합니다. 둘 다 Git의 <strong>clean/smudge filter</strong> 메커니즘 위에 얹혀 있습니다.</p></div>
   </section>
 
@@ -233,7 +233,7 @@ repo manifest -r -o tapeout-a0-lock.xml   <span class="cmt"># -r = revision을 �
       <div class="card"><h3><span class="ico">🛂</span> 세밀 권한</h3><p>경로·파일 단위 ACL. 외부 IP를 라이선스 범위 내 인원만 접근 — <strong>레포 단위 Git으론 어려움</strong>.</p></div>
     </div>
     <div class="grid2 mt">
-      <div class="spec"><p style="margin:6px 0"><strong>P4(Helix Core)</strong>: 중앙 depot, changelist 단위 atomic 커밋, exclusive lock(<code>+l</code> filetype). <strong>DesignSync(Synopsys)</strong>·<strong>ClearCase(IBM)</strong>: EDA 친화, 파일락·세밀 권한·대용량 특화로 반도체에서 오래 쓰임.</p></div>
+      <div class="spec"><p style="margin:6px 0"><strong>P4(Helix Core)</strong>: 중앙 depot, changelist 단위 atomic 커밋, exclusive lock(<code>+l</code> filetype). <strong>DesignSync(Dassault Systèmes ENOVIA, 구 Synchronicity)</strong>·<strong>ClearCase(IBM)</strong>: EDA 친화, 파일락·세밀 권한·대용량 특화로 반도체에서 오래 쓰임. DesignSync는 Synopsys/Cadence 커스텀 디자인 환경과 연동되지만 개발·소유사는 Dassault다. 같은 EDA-DM 카테고리에 Keysight(구 ClioSoft) SOS, Perforce(구 Methodics) IPLM도 있다.</p></div>
       <div class="pitfall"><p style="margin:6px 0">"HW도 그냥 Git 쓰지 왜?" ❌ — 파형/암호화 IP/GDS는 <strong>diff·merge가 불가</strong>하고 <strong>락이 필수</strong>이며 <strong>부분 동기</strong>가 필요합니다. Git의 분산·전체복제 모델과 정면 충돌. 그래서 <strong>RTL은 Git, 거대 자산은 P4/DesignSync</strong> 혼용이 흔합니다.</p></div>
     </div>
   </section>

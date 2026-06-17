@@ -161,7 +161,7 @@
       <tr><th>포맷</th><th>정체</th><th>형식</th><th>성능 / 용도</th></tr>
       <tr><td>VCD</td><td>Value Change Dump (IEEE 1364 표준)</td><td>텍스트</td><td><strong class="hl">크고 느림</strong>. 호환성 최고, 큰 설계엔 부적합</td></tr>
       <tr><td>FSDB</td><td>Fast Signal DB (Synopsys/Verdi)</td><td>압축 바이너리</td><td><strong class="hl2">작고 빠름</strong>. 사실상 업계 표준</td></tr>
-      <tr><td>VPD</td><td>VCS Performance Dump (Synopsys)</td><td>바이너리</td><td>VCS 네이티브(DVE/Verdi). <code>$vcdpluson</code>으로 덤프</td></tr>
+      <tr><td>VPD</td><td>VCD Plus (Synopsys VCS)</td><td>압축 바이너리</td><td>VCS 네이티브(DVE/Verdi). <code>$vcdplusfile("x.vpd")</code>로 파일 지정 후 <code>$vcdpluson(0, scope)</code>로 덤프 (컴파일 시 <code>+vcs+vcdpluson</code>도 가능)</td></tr>
       <tr><td>SHM</td><td>Cadence Simulation History Mgr</td><td>바이너리 DB</td><td>SimVision 네이티브</td></tr>
     </table>
     <div class="grid2 mt">
@@ -179,11 +179,11 @@
 <span class="fn">vcs</span> ... <span class="kw">-cm line+cond+fsm+tgl+branch</span> -cm_dir cov.vdb
 <span class="fn">./simv</span> -cm line+cond+fsm+tgl+branch +UVM_TESTNAME=t1
 <span class="cmt"># 여러 테스트 결과 합치고 HTML 리포트</span>
-<span class="fn">urg</span> -dir test1.vdb test2.vdb -report cov_report
+<span class="fn">urg</span> -dir test1.vdb -dir test2.vdb -report cov_report
 
 <span class="cmt"># Xcelium: -coverage 로 켜고 imc로 merge/리포트</span>
 <span class="fn">xrun</span> ... <span class="kw">-coverage all</span> -covworkdir cov
-<span class="fn">imc</span> -execcmd <span class="str">"merge cov/*/ -out merged; report -summary"</span></code></pre>
+<span class="fn">imc</span> -execcmd <span class="str">"merge cov/*/ -out merged; load -run cov_work/scope/merged/; report_metrics -out rpt -summary"</span></code></pre>
     <p class="codecap">VCS 커버리지 = <code>-cm</code>, 리포트 도구 = <strong>urg</strong>(Unified Report Generator). Xcelium = <code>-coverage</code>, 도구 = <strong>imc</strong>(Integrated Metrics Center). SV의 <code>covergroup</code>(기능 커버리지)는 별도 옵션 없이도 수집되지만, 코드 커버리지는 위 플래그로 켜야 합니다.</p>
     <div class="pitfall"><p style="margin:6px 0">서로 다른 elaborate(다른 코드 버전)에서 나온 DB를 merge하면 <strong class="hl">불일치/경고</strong>가 납니다. merge는 <strong>같은 빌드</strong>의 결과끼리만 깔끔합니다. 또 커버리지 계측을 켜면 시뮬레이션이 느려지므로 회귀 정책에 따라 on/off를 나눕니다.</p></div>
   </section>

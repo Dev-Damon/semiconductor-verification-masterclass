@@ -64,7 +64,7 @@
 
 <span class="cmt"># 2) Elaborate : top을 잡아 디자인 조립 → simv 실행이미지 생성</span>
 <span class="fn">vcs</span>    -full64 -debug_access+all top_tb \
-       -P novas.tab pli.a            <span class="cmt"># (VPI/PLI 링크 예시)</span> \
+       -P novas.tab pli.a            <span class="cmt"># (PLI 링크 예시: Verdi/FSDB novas.tab+pli.a)</span> \
        -l vcs_elab.log
 
 <span class="cmt"># 3) Simulate : 만들어진 실행이미지 실행</span>
@@ -222,7 +222,7 @@ fifo #(.DEPTH(8),  .W(8))  u_small (.clk, ...);  <span class="cmt">// g_small �
           <text x="680" y="84">Postponed</text>
         </g>
         <g fill="#9fb0c7" text-anchor="middle" font-size="9.5">
-          <text x="56"  y="102">#1 샘플</text>
+          <text x="56"  y="102">$sampled(#1step)</text>
           <text x="158" y="102">blocking,#0큐</text>
           <text x="260" y="102">#0 지연</text>
           <text x="362" y="102">&lt;= 갱신</text>
@@ -245,11 +245,11 @@ fifo #(.DEPTH(8),  .W(8))  u_small (.clk, ...);  <span class="cmt">// g_small �
     <table class="sig">
       <tr><th>영역</th><th>여기서 일어나는 일</th><th>관련 구문</th></tr>
       <tr><td>Preponed</td><td>샘플링(값을 "이전" 시점으로 캡처)</td><td><code>@(...)</code>, SVA 샘플, <code>$sampled</code></td></tr>
-      <tr><td>Active</td><td>blocking 대입, RHS 평가, <code>#0</code></td><td><code>=</code>, <code>$display</code></td></tr>
+      <tr><td>Active</td><td>blocking 대입, RHS 평가</td><td><code>=</code>, <code>$display</code></td></tr>
       <tr><td>Inactive</td><td><code>#0</code> 지연 이벤트 처리</td><td><code>#0</code></td></tr>
       <tr><td>NBA</td><td>non-blocking 대입의 <strong>실제 갱신</strong></td><td><code>&lt;=</code></td></tr>
       <tr><td>Observed</td><td>concurrent assertion property 평가</td><td><code>assert property</code></td></tr>
-      <tr><td>Reactive</td><td>program block / 클래스 기반 TB 실행</td><td><code>program</code>, UVM 드라이버</td></tr>
+      <tr><td>Reactive</td><td>program block / SVA action block(pass·fail 코드)</td><td><code>program</code>, SVA pass/fail action block</td></tr>
       <tr><td>Postponed</td><td>안정된 최종값 읽기(쓰기 금지)</td><td><code>$strobe</code>, <code>$monitor</code></td></tr>
     </table>
     <div class="pitfall mt"><p style="margin:6px 0"><strong>클래식 레이스:</strong> 클럭 엣지에서 RTL은 <code>&lt;=</code>(NBA 영역에서 갱신)로 쓰는데, TB가 <code>=</code>(Active 영역)로 같은 신호를 읽으면 <strong class="hl">갱신 전 옛값</strong>을 보게 됩니다. 그래서 TB 샘플링은 <code>program</code>/Reactive나 <code>$sampled</code>(Preponed)에 맞춰 설계합니다 — UVM이 <code>clocking block</code>을 쓰는 이유.</p></div>

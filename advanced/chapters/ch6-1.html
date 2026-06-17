@@ -142,7 +142,7 @@
     <h2>Capture · Shift · Exit1 · Pause · Exit2 · Update</h2>
     <table class="sig">
       <tr><th>상태</th><th>TMS=0 다음</th><th>TMS=1 다음</th><th>그 상태가 하는 일</th></tr>
-      <tr><td>Capture-DR/IR</td><td>Shift</td><td>Exit1</td><td>레지스터에 <strong>병렬 로드</strong>(IR은 보통 …01 고정 패턴 캡처)</td></tr>
+      <tr><td>Capture-DR/IR</td><td>Shift</td><td>Exit1</td><td>레지스터에 <strong>병렬 로드</strong>(IR은 하위 2비트를 반드시 "01"로 캡처 — LSB=1 필수, 정렬 무결성 검증용. 상위 비트는 구현정의, 고정값 권고)</td></tr>
       <tr><td>Shift-DR/IR</td><td>Shift(루프)</td><td>Exit1</td><td>TDI→레지스터→TDO로 <strong class="hl">1비트/클럭 직렬 시프트</strong></td></tr>
       <tr><td>Exit1-DR/IR</td><td>Pause</td><td>Update</td><td>시프트 종료 분기점</td></tr>
       <tr><td>Pause-DR/IR</td><td>Pause(루프)</td><td>Exit2</td><td>시프트 <strong>일시정지</strong>(버퍼 채울 시간 확보)</td></tr>
@@ -329,7 +329,7 @@ Network = SIB_temp(0) · SIB_mbist(1 → [BIST_ctrl 8b]) · SIB_efuse(0)</code><
         <text x="360" y="170" fill="#9fb0c7" text-anchor="middle" font-size="10">AP가 온칩 버스의 <tspan fill="#ff7ac0">마스터</tspan>로서 R/W 트랜잭션 발행 → CPU 없이도 메모리 접근</text>
       </svg>
     </div>
-    <div class="note mt">경로: <strong>디버거 → (JTAG/SWD) → DP → (DPACC/APACC 레지스터) → AP(MEM-AP) → APB/AHB → 시스템 버스</strong>. JTAG에선 TAP 명령으로 DPACC/APACC DR을 선택해 35비트(예) 패킷을 시프트하면, DP가 이를 디코드해 AP 레지스터에 R/W합니다.</div>
+    <div class="note mt">경로: <strong>디버거 → (JTAG/SWD) → DP → (DPACC/APACC 레지스터) → AP(MEM-AP) → APB/AHB → 시스템 버스</strong>. JTAG에선 TAP 명령으로 DPACC/APACC DR을 선택해 정확히 35비트(RnW 1 + 주소 A[3:2] 2 + DATA 32) 패킷을 시프트하면, DP가 이를 디코드해 AP 레지스터에 R/W합니다. 응답인 3비트 ACK는 다음 DR 스캔에서 캡처됩니다(posted).</div>
   </section>
 
   <!-- 13 -->
@@ -395,7 +395,7 @@ IR=APACC; DR← DRW    = 0xDEAD_BEEF            <span class="cmt">// → 여기�
     </div>
     <pre class="code sm mt"><code><span class="cmt">// 어떤 상태에서든 TMS=1을 5번이면 Test-Logic-Reset 진입</span>
 ap_tlr: <span class="kw">assert property</span> (@(<span class="kw">posedge</span> tck)
-   (tms [*5]) |=> (tap_state == TEST_LOGIC_RESET) );
+   (tms [*5]) |-> (tap_state == TEST_LOGIC_RESET) );  <span class="cmt">// 5번째 상승엣지 시점에 이미 TLR</span>
 <span class="cmt">// BYPASS 선택 시 DR 체인 기여 길이는 정확히 1비트여야 한다</span>
 ap_byp: <span class="kw">assert property</span> (@(<span class="kw">posedge</span> tck)
    (ir == BYPASS) |-> (dr_len == 1) );</code></pre>

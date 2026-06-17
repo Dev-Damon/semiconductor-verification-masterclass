@@ -134,7 +134,7 @@
   <span class="kw">endtask</span>
 <span class="kw">endclass</span></code></pre>
     <div class="codecap">// get_next_item ↔ item_done 가 1:1. 사이에 응답을 채우면 item_done(rsp)로 돌려줄 수도 있음.</div>
-    <div class="spec"><p style="margin:6px 0">대안: <code>get(req)</code>(blocking get, 내부적으로 get_next_item+item_done 묶음) / 파이프라인엔 <code>get_next_item</code>+<code>item_done</code> 분리가 표준. driver는 절대 <code>req</code>를 스스로 <code>randomize</code>하지 않습니다 — 자극 생성은 <strong>sequence의 책임</strong>.</p></div>
+    <div class="spec"><p style="margin:6px 0">대안 <code>get(req)</code>: 요청+완료를 한 번에 처리하는 blocking 방식으로, 이때는 <code>item_done()</code>을 호출하지 않고 응답이 필요하면 <code>put()</code> 또는 <code>uvm_driver::rsp_port.write()</code>로 돌려줍니다. <code>get</code>/<code>put</code> 과 <code>get_next_item</code>/<code>item_done</code> 은 서로 다른 두 통신 패턴이며(전자가 후자를 감싼 것이 아님), 파이프라인/응답 분리가 필요하면 <code>get_next_item</code>+<code>item_done</code> 쌍을 씁니다. (<code>peek()</code>은 item을 소비하지 않고 들여다보며, <code>get</code> 또는 <code>item_done</code> 호출 전까지 같은 item을 반환.) driver는 절대 <code>req</code>를 스스로 <code>randomize</code>하지 않습니다 — 자극 생성은 <strong>sequence의 책임</strong>.</p></div>
   </section>
 
   <!-- 6 -->
@@ -190,7 +190,7 @@
           <li>자극 시작 전 <code>phase.raise_objection(this)</code> → 카운터 +1</li>
           <li>자극이 끝나면 <code>phase.drop_objection(this)</code> → 카운터 −1</li>
           <li>모든 컴포넌트의 objection이 <strong>0</strong>이 되면 phase가 끝나고 다음 phase로</li>
-          <li><code>set_drain_time</code>으로 drop 후 여유 시간을 줄 수 있음</li>
+          <li><code>phase.get_objection().set_drain_time(this, 10ns)</code>으로 drop 후 여유 시간을 줄 수 있음 (레거시: <code>phase.phase_done.set_drain_time(this, t)</code>). 전역 함수가 아니라 해당 phase의 objection 객체에 거는 메서드이며, 보통 top/test 레벨에서만 사용.</li>
         </ul>
       </div>
       <div>
@@ -228,7 +228,7 @@
   `uvm_fatal(<span class="str">"NOVIF"</span>, <span class="str">"vif not set for"</span>)        <span class="cmt">// get 실패 시 즉시 중단</span></code></pre>
     <div class="codecap">// set(context, instance_name, field, value) / get(this, "", field, var) · 타입 #(virtual my_if)가 정확히 일치해야 함</div>
     <div class="grid2 mt">
-      <div class="spec"><p style="margin:6px 0">scope 매칭은 <strong>full hierarchical path + 와일드카드(*)</strong>로 동작. 더 구체적인 path가 우선합니다.</p></div>
+      <div class="spec"><p style="margin:6px 0">scope 매칭은 <strong>full hierarchical path + 와일드카드(*)</strong>로 동작합니다. precedence 규칙 — build_phase 동안에는 계층적으로 더 높은 곳(예: test)에서 한 set이 우선하고 같은 레벨이면 나중 set(last-wins)이 우선합니다. build 이후 런타임 set은 모두 default precedence라 last-wins입니다.</p></div>
       <div class="pitfall"><p style="margin:6px 0"><strong>vif를 config_db로 안 넘기면</strong> driver/monitor의 vif가 <code>null</code> → 핀 접근 시 <strong>null handle</strong> 런타임 에러. set/get의 <strong>타입과 키 문자열</strong>이 한 글자라도 다르면 get이 조용히 실패합니다.</p></div>
     </div>
   </section>

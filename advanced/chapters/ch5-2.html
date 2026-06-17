@@ -109,7 +109,7 @@
           <tr><td><strong class="hl">schedutil</strong></td><td>스케줄러 이용률(PELT) 기반, 현대 기본</td></tr>
         </table>
       </div>
-      <div class="dev-bridge"><p style="margin:6px 0"><code>ondemand</code>는 유저공간 타이머로 폴링하던 옛 방식, <code>schedutil</code>은 <strong>스케줄러가 직접</strong> "이 태스크의 util이 이만큼이니 이 주파수" 하고 알려줘 반응이 빠르고 정확합니다. 최근 커널 기본값.</p></div>
+      <div class="dev-bridge"><p style="margin:6px 0"><code>ondemand</code>/<code>conservative</code>는 <strong>커널 내</strong> governor가 주기적 타이머(workqueue/deferrable timer)로 부하를 '폴링'해 사후 반응하던 방식 — 샘플링 주기만큼 지연이 있습니다. <code>schedutil</code>은 <strong>스케줄러가 PELT util을 직접 넘겨줘</strong>(이벤트 구동) 폴링 지연 없이 즉시·정확하게 OPP를 정합니다. 최근 커널 기본값. (참고: '유저공간에서 주파수를 직접 설정'하는 것은 별개의 <code>userspace</code> governor — <code>scaling_setspeed</code>에 써넣는 방식 — 이며 ondemand와 다릅니다.)</p></div>
     </div>
     <div class="codecap" style="margin-top:14px">$ cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor → schedutil</div>
   </section>
@@ -122,7 +122,7 @@
     <table class="sig">
       <tr><th>버스</th><th>풀네임</th><th>특징</th></tr>
       <tr><td>I2C</td><td>2-wire serial</td><td>범용·저속, 일반 PMIC 레지스터 접근</td></tr>
-      <tr><td>PMBus</td><td>Power Management Bus</td><td>I2C 기반 표준, 전압/전류/온도 텔레메트리 포함</td></tr>
+      <tr><td>PMBus</td><td>Power Management Bus</td><td>SMBus(=I2C 파생) 기반 표준, 전압/전류/온도/전력 텔레메트리·페이지·결함관리 명령 정의</td></tr>
       <tr><td>SPMI</td><td>System Power Management Interface</td><td>MIPI 표준, 모바일 SoC↔PMIC 저지연 2-wire</td></tr>
     </table>
     <pre class="code sm mt"><code><span class="cmt">// 의사코드: OPP3(1000mV)로 전압 상향 명령</span>
@@ -215,8 +215,11 @@
 <span class="cmt">// 1) 현재 클럭을 '끄는' 신호를 그 클럭의 하강엣지에 래치</span>
 <span class="cmt">// 2) 양쪽 모두 off 확인(겹침 방지)</span>
 <span class="cmt">// 3) 새 클럭 enable을 새 클럭 도메인에 동기화 후 ON</span>
-<span class="kw">always_ff</span> @(<span class="kw">negedge</span> clk0) en0 &lt;= sel_0 & ~en1;
-<span class="kw">always_ff</span> @(<span class="kw">negedge</span> clk1) en1 &lt;= sel_1 & ~en0;
+<span class="cmt">// 도메인당 2단: posedge 동기화 플롭 → negedge 게이팅 플롭</span>
+<span class="kw">always_ff</span> @(<span class="kw">posedge</span> clk0) q0 &lt;= sel_0 & ~en1;   <span class="cmt">// 1단: 교차도메인 ~en1 동기화(메타 해소)</span>
+<span class="kw">always_ff</span> @(<span class="kw">negedge</span> clk0) en0 &lt;= q0;           <span class="cmt">// 2단: 클럭 low 구간에서 게이팅</span>
+<span class="kw">always_ff</span> @(<span class="kw">posedge</span> clk1) q1 &lt;= sel_1 & ~en0;
+<span class="kw">always_ff</span> @(<span class="kw">negedge</span> clk1) en1 &lt;= q1;
 <span class="kw">assign</span> clk_out = (clk0 & en0) | (clk1 & en1);</code></pre>
         <div class="codecap">negedge 래치 + 상호배제(en0·en1 동시 1 금지)로 펄스 폭이 깨지지 않게 보장</div>
       </div>

@@ -200,14 +200,20 @@ arm-none-eabi-objdump -d test.elf &gt; test.dis   <span class="cmt"># 디스어�
 }
 
 <span class="cmt">// ── SV 쪽 : C 함수를 import 하면 일반 함수처럼 호출 가능</span>
-<span class="kw">import</span> <span class="str">"DPI-C"</span> <span class="kw">function</span> <span class="kw">int</span> ref_crc32(<span class="kw">input</span> byte data[], <span class="kw">input</span> <span class="kw">int</span> len);
+<span class="kw">import</span> <span class="str">"DPI-C"</span> <span class="kw">function</span> <span class="kw">int</span> ref_crc32(<span class="kw">input</span> byte data[1024], <span class="kw">input</span> <span class="kw">int</span> len);
 
 <span class="kw">initial</span> <span class="kw">begin</span>
   <span class="kw">int</span> exp = ref_crc32(packet, packet.size());  <span class="cmt">// C가 골든 레퍼런스</span>
   <span class="kw">if</span> (dut_crc !== exp) $error(<span class="str">"CRC mismatch"</span>);
 <span class="kw">end</span></code></pre>
     <div class="codecap">import = "SV → C로 들어간다". C가 검증의 골든 모델/체커/스코어보드 역할.</div>
-    <div class="spec"><p style="margin:6px 0">SV↔C 타입 매핑: SV <code>int</code>↔C <code>int</code>, <code>byte</code>↔<code>char</code>, <code>bit</code>(2-state)↔비트벡터, <code>logic</code>(4-state)는 <code>svLogicVecVal</code>로. 배열·open array는 <code>svdpi.h</code>의 <code>svOpenArrayHandle</code> API로 접근.</p></div>
+    <div class="spec"><p style="margin:6px 0">SV↔C 타입 매핑: SV <code>int</code>↔C <code>int</code>, <code>byte</code>↔<code>char</code>, <code>bit</code>(2-state)↔비트벡터, <code>logic</code>(4-state)는 <code>svLogicVecVal</code>로. 배열·open array는 <code>svdpi.h</code>의 <code>svOpenArrayHandle</code> API로 접근.</p>
+    <p style="margin:6px 0"><strong>배열 인자 핵심:</strong> 위 예처럼 <strong>크기가 박힌 unpacked 배열</strong>(<code>byte data[1024]</code>)은 실제 원소 포인터로 매핑돼 C가 <code>const unsigned char *</code>로 바로 받을 수 있습니다(IEEE 1800 Annex H). 반면 <strong>크기 없는 <code>byte data[]</code> = open array</strong> → 항상 <code>svOpenArrayHandle</code>(<code>void*</code> handle)로 전달되며 <strong>평범한 포인터가 아닙니다</strong>. 동적/open array를 정말 쓰려면 C가 handle을 받아 svdpi API로 읽어야 함:</p>
+    <pre class="code sm"><code><span class="kw">int</span> <span class="fn">ref_crc32</span>(<span class="kw">const</span> svOpenArrayHandle h, <span class="kw">int</span> len) {
+  <span class="kw">for</span> (<span class="kw">int</span> i = svLow(h,1); i &lt;= svHigh(h,1); i++) {
+    <span class="kw">unsigned char</span> b = *(<span class="kw">unsigned char</span> *)svGetArrElemPtr1(h, i);  <span class="cmt">/* ... */</span>
+  }
+}</code></pre></div>
   </section>
 
   <!-- 10 -->
@@ -225,7 +231,7 @@ arm-none-eabi-objdump -d test.elf &gt; test.dis   <span class="cmt"># 디스어�
 <span class="cmt">// import + context: C 안에서 export된 SV를 부르려면 필수</span>
 <span class="kw">import</span> <span class="str">"DPI-C"</span> <span class="kw">context</span> <span class="kw">task</span> c_run();</code></pre>
         <pre class="code sm"><code><span class="cmt">// C 쪽: import한 c_run 안에서 export된 sv_drive 호출</span>
-<span class="kw">extern</span> <span class="kw">void</span> <span class="fn">sv_drive</span>(<span class="kw">int</span> v);   <span class="cmt">// export된 SV</span>
+<span class="kw">extern</span> <span class="kw">int</span> <span class="fn">sv_drive</span>(<span class="kw">int</span> v);   <span class="cmt">// export된 SV (DPI task는 C에서 int 반환: 0=정상 복귀, 1=disable로 복귀)</span>
 <span class="kw">void</span> <span class="fn">c_run</span>(<span class="kw">void</span>) {
     <span class="kw">for</span> (<span class="kw">int</span> i=0;i&lt;4;i++) <span class="fn">sv_drive</span>(i*16);
 }</code></pre>
@@ -294,7 +300,8 @@ arm-none-eabi-objdump -d test.elf &gt; test.dis   <span class="cmt"># 디스어�
       <div class="card"><h3><span class="ico">🎯</span> 무엇을(커버리지)</h3>
         <ul><li>부팅·리셋·인터럽트·예외 경로</li><li>드라이버 시퀀스·IP 간 데이터 흐름(DMA→메모리→IP)</li><li>frontdoor 부트 경로(backdoor와 별도)</li><li>endianness·정렬·캐시 클린/인밸리데이트 코너</li></ul></div>
     </div>
-    <div class="pitfall mt"><p style="margin:6px 0"><strong>endianness 함정:</strong> C가 <code>uint32_t</code>로 쓴 워드와 TB가 <code>$readmemh</code>로 본 바이트 순서가 다르면 같은 데이터를 다르게 해석합니다. Arm은 보통 little-endian — TB 체크/HEX 변환 시 바이트 순서를 반드시 맞춰야 함.</p></div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>endianness 함정:</strong> C가 <code>uint32_t</code>로 쓴 워드와 TB가 <code>$readmemh</code>로 본 바이트 순서가 다르면 같은 데이터를 다르게 해석합니다. Arm은 보통 little-endian — TB 체크/HEX 변환 시 바이트 순서를 반드시 맞춰야 함.</p>
+    <p style="margin:6px 0"><strong>근본 원인:</strong> <code>objcopy -O verilog</code>는 기본이 <code>--verilog-data-width=1</code>(주소당 1바이트 레코드)이고, verilog BFD 타깃은 endianness를 추적하지 못합니다(<code>BFD_ENDIAN_UNKNOWN</code> → 사실상 big-endian 출력, binutils #25202). 따라서 TB 메모리가 워드 폭(예: <code>[31:0]</code>)이면 기본 폭의 바이트 단위 hex는 잘못 로드됩니다. 해결: ① <code>--verilog-data-width=4</code>로 워드 단위 출력(이때 <code>@</code>주소는 워드 단위로 증가) ② 또는 SV mem을 바이트-어드레서블로 두고 RTL에서 워드 조립. little-endian 타깃(Arm/RISC-V)에서 바이트 스왑되는 고전 버그가 바로 여기서 납니다.</p></div>
   </section>
 
   <!-- 14 -->

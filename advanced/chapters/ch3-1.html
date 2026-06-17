@@ -52,12 +52,13 @@
     <div class="kicker">전체 신호 · 방향 · 도입 버전</div>
     <h2>APB 신호 전수표 — 방향과 폭까지</h2>
     <p>버스는 <strong>전선 묶음 + 약속</strong>입니다. "M→S"는 마스터(보통 브리지)가 구동, "S→M"은 슬레이브가 구동. 폭 <code>n</code>은 데이터 버스 바이트 수(예: 32비트면 n=4).</p>
+    <div class="deepnote"><p style="margin:6px 0">용어 노트: 최신 AMBA APB(ARM <strong>IHI 0024 D/E</strong>)는 <strong class="hl">master/slave를 Requester(=APB 브리지)·Completer(=주변장치)</strong>로 개정했으며, 의미와 신호 방향은 동일합니다. 스펙 원문: <em>"...APB bridges can also be referred to as a Requester... APB peripherals can also be referred to as a Completer. This specification will use Requester and Completer."</em></p></div>
     <table class="sig">
       <tr><th>신호</th><th>방향</th><th>폭</th><th>의미</th><th>도입</th></tr>
       <tr><td>PCLK</td><td>—</td><td>1</td><td>버스 클럭. 모든 신호는 PCLK 상승엣지 기준.</td><td>APB2</td></tr>
       <tr><td>PRESETn</td><td>—</td><td>1</td><td>리셋, <strong class="hl">active-low</strong>(0일 때 리셋).</td><td>APB2</td></tr>
       <tr><td>PADDR</td><td>M→S</td><td>≤32</td><td>주소(바이트 주소).</td><td>APB2</td></tr>
-      <tr><td>PSEL</td><td>M→S</td><td>1</td><td>이 슬레이브 선택. 디코더가 주소로 생성.</td><td>APB2</td></tr>
+      <tr><td>PSELx</td><td>M→S(Requester→Completer)</td><td>1</td><td>해당 Completer 선택. Requester(브리지)가 주소 디코딩으로 Completer마다 1개씩(PSEL0..n) 생성.</td><td>APB2</td></tr>
       <tr><td>PENABLE</td><td>M→S</td><td>1</td><td>ACCESS 페이즈 표시(2번째 클럭부터 1).</td><td>APB2</td></tr>
       <tr><td>PWRITE</td><td>M→S</td><td>1</td><td>1=쓰기, 0=읽기.</td><td>APB2</td></tr>
       <tr><td>PWDATA</td><td>M→S</td><td>8/16/32</td><td>쓰기 데이터(PWRITE=1일 때 유효).</td><td>APB2</td></tr>
@@ -204,7 +205,7 @@ PSTRB   = <span class="str">4'b0011</span>;  <span class="cmt">// [0],[1]=1</spa
 
   <span class="kw">always</span> @(*) PRDATA = rd_en ? regfile[PADDR[5:2]] : <span class="str">32'h0</span>;
 <span class="kw">endmodule</span></code></pre>
-    <div class="codecap">// access = PSEL &amp; PENABLE 가 ACCESS 페이즈 판별식. wait state가 필요하면 PREADY를 카운터로 몇 클럭 0으로 유지하면 됩니다.</div>
+    <div class="codecap">// access = PSEL &amp; PENABLE 가 ACCESS 페이즈 판별식. wait state가 필요하면 PREADY를 카운터로 몇 클럭 0으로 유지하면 됩니다. 멀티슬레이브로 확장 시 브리지가 PSEL0..n(PSELx)로 분기하고, 각 슬레이브는 자기 PSEL 한 가닥만 받는다.</div>
     <div class="pitfall"><p style="margin:6px 0">함정: 쓰기 인에이블을 <code>access &amp; PWRITE</code>로만 만들면 <strong class="hl">wait state 동안 같은 데이터를 여러 번 기록</strong>합니다. 반드시 <code>&amp; PREADY</code>를 곱해 "완료되는 클럭에 한 번만" 써야 합니다.</p></div>
   </section>
 

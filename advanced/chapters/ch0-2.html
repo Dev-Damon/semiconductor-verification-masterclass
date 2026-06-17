@@ -84,6 +84,7 @@
       </div>
     </div>
     <div class="pitfall mt"><p style="margin:6px 0"><strong>흔한 오답:</strong> "hold 위반은 클럭을 늦추면 풀린다" ❌. hold는 같은 엣지 기준 min-delay 문제라 주기와 무관합니다. 또 setup slack = <code>Tclk − (Tcq+Tcomb+Tsu+Tskew)</code>가 양수여야 timing closure. <strong>음수 slack = 위반</strong>.</p></div>
+    <div class="deepnote mt"><p style="margin:6px 0"><strong>Tskew는 부호 있는 양</strong>(= capture clk 도착 − launch clk 도착)입니다. 위 <code>+Tskew</code>는 capture clk가 먼저 와 마진을 깎는 <strong>worst-case를 보수적으로</strong> 잡은 것. 반대로 capture clk가 늦게 오는 <strong class="hl">positive(useful) skew</strong>는 setup 마진을 늘려 주파수를 더 올릴 수 있습니다 — 다만 같은 부호가 hold는 악화시킵니다(위 hold 식의 <code>+Tskew</code>도 같은 보수적 관점). 그래서 STA 툴은 의도적으로 스큐를 조정하는 <strong>clock skew scheduling / useful skew</strong>를 씁니다.</p></div>
   </section>
 
   <!-- 5 -->

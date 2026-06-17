@@ -43,7 +43,7 @@
     </table>
     <div class="grid2 mt">
       <div class="spec"><p style="margin:6px 0"><code>logic</code>은 단일 드라이버용 <strong>data type</strong>이고, 다중 드라이버(버스)면 <code>wire</code>(net) + resolution이 필요합니다. <code>reg</code>는 SV에서 <code>logic</code>과 사실상 동의어(오해 유발 이름이라 SV는 <code>logic</code> 권장).</p></div>
-      <div class="pitfall"><p style="margin:6px 0"><strong>흔한 오답:</strong> "bit는 1비트, logic은 여러 비트" ❌. 둘 다 폭은 <code>[31:0]</code>처럼 선언으로 정함. 차이는 <strong>비트당 표현할 수 있는 값(2 vs 4-state)</strong>입니다.</p></div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>흔한 오답:</strong> "bit는 1비트, logic은 여러 비트" ❌. <code>bit</code>·<code>logic</code>은 폭을 <code>[31:0]</code>처럼 선언으로 정함. 차이는 <strong>비트당 표현할 수 있는 값(2 vs 4-state)</strong>입니다. 단, 가변폭으로 선언하는 건 bit·logic(vector)뿐이고, <code>int</code>/<code>byte</code>/<code>shortint</code>/<code>longint</code>는 폭이 고정된 2-state 정수 atom(int = 32비트 고정)입니다. <code>int [31:0] x</code>처럼 쓰면 32비트 int가 아니라 int 32개의 packed 배열이 됩니다.</p></div>
     </div>
   </section>
 
@@ -170,7 +170,7 @@ cg_axi cg = <span class="kw">new</span>();
   @(vif.cb);                  <span class="cmt">// 다음 clocking 이벤트까지 대기</span>
   <span class="kw">wait</span>(vif.cb.ready);          <span class="cmt">// #1step로 샘플된 안정값</span>
 <span class="kw">endtask</span></code></pre>
-    <div class="spec"><p style="margin:6px 0"><strong>race가 제거되는 이유:</strong> <code>input #1step</code>은 클럭 엣지 <strong>바로 직전(Preponed region)</strong>의 안정된 값을 샘플 → DUT가 같은 엣지에 바꾸는 값과 경합하지 않습니다. <code>output #1</code>은 엣지보다 <strong>늦게</strong> 드라이브 → DUT 입력 셋업과 충돌 없음. 즉 <strong>샘플=엣지 전, 드라이브=엣지 후</strong>로 분리됩니다.</p></div>
+    <div class="spec"><p style="margin:6px 0"><strong>race가 제거되는 이유:</strong> <code>input #1step</code>은 LRM상 직전 time step의 Postponed region(= 현재 슬롯 Preponed와 값이 동일)에서 샘플 → 클럭 엣지 바로 직전의 안정된 값을 잡습니다 → DUT가 같은 엣지에 바꾸는 값과 경합하지 않습니다. <code>output #1</code>은 엣지보다 <strong>늦게</strong> 드라이브 → DUT 입력 셋업과 충돌 없음. 즉 <strong>샘플=엣지 전, 드라이브=엣지 후</strong>로 분리됩니다. (concurrent assertion의 Preponed 샘플과 region 명칭은 다르지만, <strong>둘 다 엣지 직전 안정값을 보는 race-free 원리는 같습니다</strong>.)</p></div>
   </section>
 
   <!-- 9 -->
@@ -189,7 +189,7 @@ cg_axi cg = <span class="kw">new</span>();
       <div>
         <p>Verilog 이벤트 큐에서 같은 시각의 <strong>Active region</strong> 안 실행 순서는 비결정적입니다. TB의 샘플과 DUT의 갱신이 같은 엣지에 얽히면 <strong class="hl">읽는 값이 시뮬레이터/최적화에 따라 달라집니다.</strong></p>
         <ul>
-          <li><code>#1step</code> 샘플 = <strong>Preponed</strong>(엣지 직전 안정값)</li>
+          <li><code>#1step</code> 샘플 = <strong>직전 step의 Postponed</strong>(= 현재 Preponed와 동일 값, 엣지 직전 안정값)</li>
           <li>드라이브 = <strong>NBA/Reactive</strong> 이후 적용</li>
           <li>그래서 결과가 <strong>재현 가능(deterministic)</strong></li>
         </ul>
@@ -339,7 +339,7 @@ exp = ref_model(x, y);</code></pre>
   <section class="slide">
     <div class="kicker">면접 심화 질문</div>
     <h2>여기까지 답하면 "실무자"로 보인다</h2>
-    <div class="qa"><div class="q">clocking block의 목적과 race를 어떻게 없애나요?</div><div class="a">샘플과 드라이브 타이밍을 클럭 엣지에서 분리해 race를 제거합니다. <code>input #1step</code>은 엣지 직전(Preponed)의 안정값을 샘플하고, <code>output #1</code>은 엣지보다 늦게 드라이브해 DUT 갱신과 경합하지 않습니다. 그래서 결과가 재현 가능해집니다.</div></div>
+    <div class="qa"><div class="q">clocking block의 목적과 race를 어떻게 없애나요?</div><div class="a">샘플과 드라이브 타이밍을 클럭 엣지에서 분리해 race를 제거합니다. <code>input #1step</code>은 엣지 직전 안정값을 샘플(LRM: 직전 step Postponed = 현재 Preponed)하고, <code>output #1</code>은 엣지보다 늦게 드라이브해 DUT 갱신과 경합하지 않습니다. 그래서 결과가 재현 가능해집니다.</div></div>
     <div class="qa"><div class="q">virtual interface는 왜 필요한가요?</div><div class="a">interface는 컴파일 시 고정되는 static이고 class 기반 TB는 <code>new()</code>로 생성되는 dynamic이라, 클래스가 정적 인터페이스를 직접 못 가집니다. virtual interface는 그 인터페이스를 가리키는 핸들이라 class와 신호를 잇고, 한 드라이버를 여러 인스턴스에 재사용하게 해줍니다.</div></div>
     <div class="qa"><div class="q">constraint의 <code>-&gt;</code>와 <code>solve before</code> 차이, randc 주의점은?</div><div class="a"><code>-&gt;</code>는 "A이면 B"의 단방향 implication으로 해집합을 좁힙니다. <code>solve A before B</code>는 해집합은 그대로 두고 A를 먼저 균등 선택해 <strong>분포만</strong> 바꿉니다. randc는 폭의 모든 값(<code>2^N</code>)을 순열로 소진하므로 좁은 필드에만 쓰고, 넓은 필드엔 솔버 폭증 때문에 피합니다.</div></div>
   </section>

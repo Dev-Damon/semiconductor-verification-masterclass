@@ -51,11 +51,11 @@
       <tr><th>단계</th><th>이름 / 역할</th><th>실행 위치</th><th>특징</th></tr>
       <tr><td>BL1</td><td>AP Trusted ROM (BootROM)</td><td><strong class="hl">EL3</strong>, on-chip ROM</td><td>변경 불가, RoT 시작점, BL2 로드·검증</td></tr>
       <tr><td>BL2</td><td>Trusted Boot Firmware</td><td>EL1-S (또는 EL3)</td><td>나머지 이미지 로드·검증, DDR 초기화</td></tr>
-      <tr><td>BL31</td><td>EL3 Runtime / Secure Monitor</td><td><strong class="hl">EL3</strong>, DRAM 상주</td><td>SMC 처리, PSCI(전원관리), 런타임 상주</td></tr>
+      <tr><td>BL31</td><td>EL3 Runtime / Secure Monitor</td><td><strong class="hl">EL3</strong>, trusted SRAM 상주</td><td>SMC 처리, PSCI(전원관리), 런타임 상주</td></tr>
       <tr><td>BL32</td><td>Secure-EL1 Payload (OP-TEE 등)</td><td>S-EL1</td><td><strong>선택</strong> — TEE OS (없을 수도)</td></tr>
       <tr><td>BL33</td><td>Non-trusted FW (U-Boot/UEFI)</td><td>EL2 또는 EL1 (NS)</td><td>커널 로드·부팅, 일반세계 진입</td></tr>
     </table>
-    <div class="note mt">*BL2 EL은 플랫폼·빌드 옵션(<code>BL2_AT_EL3</code>)에 따라 다름. BL31은 부팅 후에도 <strong>메모리에 상주</strong>하는 유일한 BL — 런타임 SMC 서비스를 계속 제공합니다.</div>
+    <div class="note mt">*기본은 BL1이 BL2를 Secure-EL1에서 띄움. 비-TF-A BootROM을 쓰는 플랫폼은 빌드 플래그 <code>RESET_TO_BL2=1</code>로 BL2를 reset vector·EL3에서 직접 실행(이때 내부 implicit 플래그 <code>BL2_RUNS_AT_EL3</code>가 1; 4-world 구성은 RESET_TO_BL2=0이어도 1일 수 있음). BL31은 부팅 후에도 EL3에 상시 상주하는 런타임 secure monitor — 런타임 SMC/PSCI를 계속 제공합니다(BL32 TEE가 있으면 그것도 S-EL1에 상주).</div>
   </section>
 
   <!-- 4 -->
@@ -96,7 +96,7 @@
 }                             <span class="cmt">// → BL1(BootROM) 첫 명령 실행</span></code></pre>
         <div class="codecap">RVBAR는 read-only(또는 pin/eFuse strap으로 고정). 멀티코어는 보통 primary 코어만 부팅하고 나머지는 WFI/WFE로 park.</div>
       </div>
-      <div class="deepnote"><p style="margin:6px 0"><strong>x86 비교:</strong> x86은 reset 시 <code>0xFFFFFFF0</code>(reset vector)에서 시작하고 16바이트 뒤에 BIOS로 점프. ARM은 그게 <code>RVBAR_ELx</code> 레지스터 값으로 <strong>유연하게 지정</strong>된다는 점이 다릅니다. 개발자 직관: "엔트리포인트 주소를 하드코딩한 레지스터"입니다.</p></div>
+      <div class="deepnote"><p style="margin:6px 0"><strong>x86 비교:</strong> x86은 reset 시 <code>0xFFFFFFF0</code>(주소공간 top에서 16바이트 아래)에서 시작하며, 이 좁은 자리엔 BIOS/펌웨어 본체로 향하는 far-jump 명령 하나(예: <code>ljmp $0xf000,$0xe05b</code>)가 들어있다. ARM은 그게 <code>RVBAR_ELx</code> 레지스터 값으로 <strong>유연하게 지정</strong>된다는 점이 다릅니다. 개발자 직관: "엔트리포인트 주소를 하드코딩한 레지스터"입니다.</p></div>
     </div>
   </section>
 
@@ -271,7 +271,7 @@ ver = cert.version;
   <section class="slide">
     <div class="kicker">면접 심화 질문</div>
     <h2>여기까지 답하면 "bring-up 해봤다"로 보인다</h2>
-    <div class="qa"><div class="q">TF-A의 BL 단계와 각 EL을 말해보세요.</div><div class="a">BL1은 AP Trusted ROM(BootROM)으로 EL3에서 시작해 RoT 앵커가 됩니다. BL2는 Trusted Boot Firmware로 나머지 이미지를 로드·검증하고 DDR을 올립니다. BL31은 EL3 런타임 secure monitor로 부팅 후에도 DRAM에 상주하며 SMC·PSCI를 처리합니다. BL32는 선택적 S-EL1 TEE(OP-TEE 등), BL33은 non-secure 펌웨어(U-Boot/UEFI)로 EL2/EL1에서 커널을 부팅합니다.</div></div>
+    <div class="qa"><div class="q">TF-A의 BL 단계와 각 EL을 말해보세요.</div><div class="a">BL1은 AP Trusted ROM(BootROM)으로 EL3에서 시작해 RoT 앵커가 됩니다. BL2는 Trusted Boot Firmware로 나머지 이미지를 로드·검증하고 DDR을 올립니다. BL31은 EL3 런타임 secure monitor로 부팅 후에도 trusted SRAM에 상주하며 SMC·PSCI를 처리합니다. BL32는 선택적 S-EL1 TEE(OP-TEE 등), BL33은 non-secure 펌웨어(U-Boot/UEFI)로 EL2/EL1에서 커널을 부팅합니다.</div></div>
     <div class="qa"><div class="q">RVBAR가 뭐고 reset 시 어떻게 쓰이나요?</div><div class="a">RVBAR_ELx(Reset Vector Base Address Register)는 코어가 reset에서 풀린 직후 PC를 세팅할 주소를 담은 레지스터입니다. 구현된 최고 EL에 맞춰 RVBAR_EL3 등이 있고, 보통 on-chip BootROM(BL1)을 가리켜 거기서 첫 명령을 fetch합니다. read-only이며 strap/eFuse로 고정됩니다.</div></div>
     <div class="qa"><div class="q">secure boot 체인과 anti-rollback을 설명해 주세요.</div><div class="a">불변 앵커(BootROM + eFuse의 RoT 키해시)에서 시작해, 각 단계가 다음 이미지의 서명을 SHA-256+RSA/ECDSA로 검증한 뒤에만 점프하는 chain of trust입니다. 통과 못 하면 부팅을 중단합니다. anti-rollback은 OTP의 monotonic 카운터로 정상 서명된 구버전(취약 펌웨어)을 거부하는 메커니즘입니다.</div></div>
     <div class="qa"><div class="q">warm boot와 cold boot의 핵심 차이는?</div><div class="a">cold는 전원 인가/POR로 RVBAR→BL1부터 전체 bring-up과 full DDR PHY 트레이닝을 합니다. warm은 전원이 유지된 채 리셋·resume으로, DDR을 self-refresh로 보존했다면 트레이닝을 생략/단축하고 플랫폼이 정한 warm reset entrypoint로 빠르게 복귀합니다. PSCI/BL31이 이를 관리합니다.</div></div>
@@ -283,7 +283,7 @@ ver = cert.version;
     <h2>SoC 부팅 정밀 — 한 손에</h2>
     <div class="grid2">
       <div><ul>
-        <li>체인: <code>reset→BL1(EL3,ROM)→BL2→BL31(EL3 monitor,상주)→BL33(U-Boot)→kernel(EL1)</code></li>
+        <li>체인: <code>reset→BL1(EL3,ROM)→BL2→BL31(EL3 monitor, trusted SRAM 상주)→BL33(U-Boot)→kernel(EL1)</code></li>
         <li>EL은 EL3→EL2→EL1로 권한이 내려감, 전환은 <code>ERET</code></li>
         <li><code>RVBAR_ELx</code> = reset vector, 보통 BootROM</li>
         <li>bring-up: 전원→<strong>PLL lock 폴링</strong>→클럭→DDR init→<strong>PHY 트레이닝</strong></li>
