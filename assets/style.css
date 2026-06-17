@@ -50,7 +50,7 @@ body{
   overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
 }
 .slide.active{display:flex;opacity:1;transform:none}
-.slide > *{max-width:1100px;width:100%;margin-inline:auto}
+.deck .slide > *{max-width:1100px;width:100%;margin-left:auto;margin-right:auto}
 
 /* progress + chrome */
 .progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0;z-index:50;transition:width .3s ease}
