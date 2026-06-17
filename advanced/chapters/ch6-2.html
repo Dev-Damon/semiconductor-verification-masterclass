@@ -226,28 +226,28 @@
       <tr><td>CF</td><td>Coupling</td><td>한 셀 쓰기가 <strong>다른 셀</strong>을 뒤집음(idempotent/inversion/state)</td></tr>
       <tr><td>AF</td><td>Address decoder</td><td>주소 → 엉뚱한 셀 접근/중복</td></tr>
     </table>
-    <div class="spec mt"><p style="margin:6px 0">March 표기: <code>{ ⇕(w0); ⇑(r0,w1,r1); ⇑(r1,w0,r0); ⇓(r0,w1,r1); ⇓(r1,w0,r0); ⇕(r0) }</code> 같은 <strong>March C-</strong>. <code>⇑</code>=주소 증가, <code>⇓</code>=감소, <code>⇕</code>=방향무관, <code>w/r</code>=write/read. March C-는 <strong class="hl">총 10N</strong> 연산(N=셀 수)으로 SAF·TF·AF·CF를 커버.</p></div>
+    <div class="spec mt"><p style="margin:6px 0">March 표기: <code>{ ⇕(w0); ⇑(r0,w1); ⇑(r1,w0); ⇓(r0,w1); ⇓(r1,w0); ⇕(r0) }</code> 인 <strong>March C-</strong>. <code>⇑</code>=주소 증가, <code>⇓</code>=감소, <code>⇕</code>=방향무관, <code>w/r</code>=write/read. March C-는 <strong class="hl">총 10N</strong> 연산(N=셀 수, 1+2+2+2+2+1)으로 SAF·TF·AF·CF를 커버.</p></div>
   </section>
 
   <!-- 11 -->
   <section class="slide">
     <div class="kicker">MBIST ② — 코드로</div>
     <h2>March C- 컨트롤러 골격(개념 RTL)</h2>
-    <pre class="code"><code><span class="cmt">// March C- : { ⇕w0; ⇑(r0,w1,r1); ⇑(r1,w0,r0);</span>
-<span class="cmt">//             ⇓(r0,w1,r1); ⇓(r1,w0,r0); ⇕r0 }  → 10N operations</span>
+    <pre class="code"><code><span class="cmt">// March C- : { ⇕w0; ⇑(r0,w1); ⇑(r1,w0);</span>
+<span class="cmt">//             ⇓(r0,w1); ⇓(r1,w0); ⇕r0 }  → 10N operations</span>
 <span class="kw">always</span> @(<span class="kw">posedge</span> clk) <span class="kw">case</span> (march_state)
   M0: <span class="kw">begin</span> mem[a] = <span class="str">0</span>;        <span class="cmt">// ⇕ w0  (전체 0으로 초기화)</span>
       <span class="kw">if</span>(a==LAST) {march_state=M1; a=<span class="str">0</span>;} <span class="kw">else</span> a=a+1; <span class="kw">end</span>
-  M1: <span class="kw">begin</span> exp = <span class="str">0</span>;              <span class="cmt">// ⇑ (r0, w1, r1)  주소 증가</span>
-      <span class="fn">check</span>(mem[a], exp);  mem[a]=<span class="str">1</span>;  exp=<span class="str">1</span>; <span class="fn">check</span>(mem[a],exp);
+  M1: <span class="kw">begin</span> exp = <span class="str">0</span>;              <span class="cmt">// ⇑ (r0, w1)  주소 증가</span>
+      <span class="fn">check</span>(mem[a], exp);  mem[a]=<span class="str">1</span>;
       <span class="kw">if</span>(a==LAST) {march_state=M2; a=<span class="str">0</span>;} <span class="kw">else</span> a=a+1; <span class="kw">end</span>
-  M2: <span class="cmt">// ⇑ (r1, w0, r0) ...   M3/M4 는 주소 감소(⇓)로 동일 패턴</span>
+  M2: <span class="cmt">// ⇑ (r1, w0) ...   M3/M4 는 주소 감소(⇓)로 동일 패턴</span>
   M5: <span class="kw">begin</span> exp=<span class="str">0</span>; <span class="fn">check</span>(mem[a],exp); <span class="cmt">// ⇕ r0 (최종 검증)</span>
       <span class="kw">if</span>(a==LAST) march_state=DONE; <span class="kw">else</span> a=a+1; <span class="kw">end</span>
 <span class="kw">endcase</span>
 <span class="cmt">// check(): 읽은 값≠exp 면 fail_flag<=1, fail_addr 캡쳐 → BIRA로</span></code></pre>
     <div class="codecap">실제 MBIST는 합성된 FSM + 데이터/어드레스 제너레이터 + 비교기. 위는 알고리즘 흐름만 보인 의사-RTL.</div>
-    <div class="pitfall"><p style="margin:6px 0"><strong>주의:</strong> March에서 <strong class="hl">w 다음 바로 r</strong>(같은 셀)은 SAF/TF용, <strong>증가/감소 양방향</strong> 순회는 CF(coupling)·AF(address)용. 방향을 한쪽만 돌면 CF를 놓칩니다. 그래서 "10N"의 <strong>up/down 둘 다</strong>가 의미 있는 것.</p></div>
+    <div class="pitfall"><p style="margin:6px 0"><strong>주의:</strong> March에서 <strong class="hl">각 셀에 쓰고 이후(다음 순회에서) 읽어 확인하는 read/write 쌍</strong>은 SAF/TF용, <strong>증가/감소 양방향</strong> 순회는 CF(coupling)·AF(address)용. 방향을 한쪽만 돌면 CF를 놓칩니다. 그래서 "10N"의 <strong>up/down 둘 다</strong>가 의미 있는 것.</p></div>
   </section>
 
   <!-- 12 -->

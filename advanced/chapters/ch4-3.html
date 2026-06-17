@@ -82,7 +82,7 @@
       <tr><td>TYP</td><td>nominal</td><td>중간</td><td>참고용</td></tr>
       <tr><td>MAX (slow)</td><td>slow-process, 저전압, 고온</td><td>가장 김</td><td><strong class="hl">setup</strong>(데이터가 너무 늦게 옴)</td></tr>
     </table>
-    <div class="pitfall mt"><p style="margin:6px 0"><strong>흔한 오해:</strong> "max 코너만 돌리면 된다" ❌. <strong>hold 위반은 min(fast) 코너</strong>에서 드러나고, 게다가 hold는 전압을 낮춰도 잘 안 풀려 <strong>전압 무관(VT-invariant)</strong>에 가깝습니다. setup은 MAX, hold는 MIN으로 <strong>둘 다</strong> 봐야 합니다.</p></div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>흔한 오해:</strong> "max 코너만 돌리면 된다" ❌. <strong>hold 위반은 min(fast) 코너</strong>에서 드러나고, 게다가 hold는 launch·capture 경로가 함께 변해 전압을 낮춰도 잘 안 풀리는, <strong>전압 변화에 비교적 둔감</strong>한 위반입니다. setup은 MAX, hold는 MIN으로 <strong>둘 다</strong> 봐야 합니다.</p></div>
   </section>
 
   <!-- 6 -->
