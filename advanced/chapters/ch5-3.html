@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 5-3 · UPF 문법·에뮬레이션 정밀</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 5 · 5-3 UPF·에뮬레이션 정밀">
+<div class="track-switch"><a href="../../chapters/ch5-3.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">UPF 명령과 에뮬레이션, 문법 레벨까지</h1>
+    <p class="hook">개념판에서 "전력의도를 코드로 적는다"를 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">create_power_domain · set_isolation · set_retention의 정확한 인자, clamp 값, LH/HL shifter, simstate CORRUPT, 그리고 sim/emu/FPGA/formal 매트릭스</strong>까지 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"UPF로 의도를 적는다"에서 "어떤 명령·어떤 인코딩"으로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li>전력 도메인·isolation·retention의 <em>역할</em>을 잡음</li><li>"꺼지는 블록 출력은 묶어줘야 한다"는 직관</li><li>power-aware 시뮬과 정전검사의 존재</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li><strong>실제 UPF 명령</strong>: <code>create_power_domain</code>, <code>set_isolation</code>, <code>set_retention</code>, <code>create_power_switch</code>, <code>add_power_state</code></li><li>isolation <strong>clamp 0/1/latch</strong>, level shifter <strong>LH/HL</strong></li><li><strong>simstate</strong> NORMAL/CORRUPT의 X 주입 의미</li><li>PA 정전검사가 잡는 <strong>누락 isolation/shifter</strong></li><li>에뮬(Palladium/ZeBu/Veloce) vs FPGA proto(HAPS/S2C)</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준: <strong>UPF = IEEE 1801</strong>(Unified Power Format, Tcl 기반 DSL). 명령 이름은 1801 표준 그대로입니다. 면접에서 "UPF 안다"와 "UPF 짜봤다"를 가르는 건 <strong>명령 인자와 clamp/shifter 인코딩을 정확히 말하느냐</strong>입니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">UPF의 뼈대</div>
+    <h2>전력 인프라를 세우는 명령들</h2>
+    <p>UPF는 RTL을 건드리지 않고 <strong class="hl">별도 파일(Tcl)</strong>로 전력 구조를 기술합니다. 도메인 → 공급 → 스위치 → 보호셀 순서로 쌓습니다.</p>
+    <table class="sig">
+      <tr><th>명령</th><th>무엇을 정의</th></tr>
+      <tr><td>create_power_domain</td><td>전력 도메인(같은 공급으로 켜지고 꺼지는 RTL 묶음)</td></tr>
+      <tr><td>create_supply_port</td><td>설계 경계의 공급 포트(외부에서 들어오는 전압)</td></tr>
+      <tr><td>create_supply_net</td><td>도메인 내부 공급 배선(VDD/VSS 네트)</td></tr>
+      <tr><td>connect_supply_net</td><td>net을 port/도메인의 primary supply에 연결</td></tr>
+      <tr><td>create_power_switch</td><td>전력 스위치(MTCMOS 헤더/풋, ack 신호 포함)</td></tr>
+      <tr><td>set_isolation / set_isolation_control</td><td>도메인 경계 isolation 셀 + 그 제어신호·위치</td></tr>
+      <tr><td>set_level_shifter</td><td>전압 다른 도메인 간 level shifter</td></tr>
+      <tr><td>set_retention / map_retention_cell</td><td>retention flop 전략 + 실제 셀 매핑</td></tr>
+      <tr><td>add_power_state / PST</td><td>supply/도메인 상태와 합법 조합표(power state table)</td></tr>
+    </table>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>흔한 오답:</strong> "UPF는 RTL 안에 pragma로 쓴다" ❌ → UPF는 <strong class="hl2">RTL과 분리된 사이드카 파일</strong>. 같은 RTL에 <strong>UPF만 바꿔</strong> 다른 전력 구조를 입힐 수 있다는 게 핵심입니다.</p></div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">실제 코드 ①</div>
+    <h2>도메인 · isolation · retention을 진짜로 적으면</h2>
+    <pre class="code"><code><span class="cmt"># ===== UPF (IEEE 1801) : CPU 코어 도메인 정의 =====</span>
+<span class="fn">create_power_domain</span> PD_CPU <span class="kw">-elements</span> {u_cpu}
+<span class="fn">create_power_domain</span> PD_TOP <span class="kw">-include_scope</span>          <span class="cmt"># always-on 최상위</span>
+
+<span class="cmt"># ----- 공급 net/port 및 연결 -----</span>
+<span class="fn">create_supply_port</span> VDD_SW ; <span class="fn">create_supply_net</span> VDD_CPU <span class="kw">-domain</span> PD_CPU
+<span class="fn">connect_supply_net</span> VDD_CPU <span class="kw">-ports</span> VDD_SW
+
+<span class="cmt"># ----- 전력 스위치(MTCMOS 헤더) : ack로 켜짐 확인 -----</span>
+<span class="fn">create_power_switch</span> sw_cpu <span class="kw">-domain</span> PD_CPU \
+   <span class="kw">-output_supply_port</span> {vout VDD_CPU} <span class="kw">-input_supply_port</span> {vin VDD_SW} \
+   <span class="kw">-control_port</span> {sleep pmu.cpu_sleep} <span class="kw">-ack_port</span> {ack pmu.cpu_ack} \
+   <span class="kw">-on_state</span>  {ON  vin {!sleep}} <span class="kw">-off_state</span> {OFF {sleep}}
+
+<span class="cmt"># ----- ISOLATION : 꺼진 도메인 출력을 0으로 clamp -----</span>
+<span class="fn">set_isolation</span> iso_cpu <span class="kw">-domain</span> PD_CPU \
+   <span class="kw">-isolation_power_net</span> VDD_AON <span class="kw">-isolation_ground_net</span> VSS \
+   <span class="kw">-clamp_value</span> 0 <span class="kw">-applies_to</span> outputs
+<span class="fn">set_isolation_control</span> iso_cpu <span class="kw">-domain</span> PD_CPU \
+   <span class="kw">-isolation_signal</span> pmu.iso_en <span class="kw">-isolation_sense</span> high <span class="kw">-location</span> parent
+
+<span class="cmt"># ----- RETENTION : 상태 유지 플롭(SRPG) + save/restore -----</span>
+<span class="fn">set_retention</span> ret_cpu <span class="kw">-domain</span> PD_CPU \
+   <span class="kw">-retention_power_net</span> VDD_AON <span class="kw">-retention_ground_net</span> VSS \
+   <span class="kw">-save_signal</span>  {pmu.save  high} \
+   <span class="kw">-restore_signal</span> {pmu.restore low}
+<span class="fn">map_retention_cell</span> ret_cpu <span class="kw">-domain</span> PD_CPU <span class="kw">-lib_cell_type</span> RSDFF_LH</code></pre>
+    <div class="codecap">도메인 → 스위치(ack) → isolation(clamp 0) → retention(save/restore) 순. retention 전원은 <strong>always-on(VDD_AON)</strong>이어야 도메인이 꺼져도 상태가 남는다.</div>
+    <div class="spec"><p style="margin:6px 0"><code>-clamp_value 0</code> = 꺼진 동안 출력을 <strong>0으로 고정</strong>. retention의 save/restore는 <strong>전원이 끊기기 직전 save, 복귀 직후 restore</strong> — 순서가 핵심이라 다음 슬라이드에서 파형으로 봅니다.</p></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">경계를 지키는 두 셀</div>
+    <h2>Isolation clamp 값 · Level shifter LH/HL</h2>
+    <div class="grid2">
+      <div class="spec">
+        <h3 style="color:var(--accent2)">Isolation clamp</h3>
+        <table class="sig" style="margin:6px 0">
+          <tr><th>clamp</th><th>의미</th></tr>
+          <tr><td>0</td><td>꺼진 동안 출력을 logic 0으로 고정</td></tr>
+          <tr><td>1</td><td>logic 1로 고정(active-low 핸드셰이크 보호)</td></tr>
+          <tr><td>latch</td><td>꺼지기 직전 값을 래치로 유지</td></tr>
+        </table>
+        <p class="dim" style="margin:4px 0">목적: 도메인이 꺼지면 출력이 <strong>부정(floating/X)</strong>이 되는데, 켜진 쪽 로직이 이 X를 받으면 오염. isolation이 <strong>알려진 값</strong>으로 묶어줌.</p>
+      </div>
+      <div class="spec">
+        <h3 style="color:var(--accent2)">Level shifter 방향</h3>
+        <table class="sig" style="margin:6px 0">
+          <tr><th>방향</th><th>의미</th></tr>
+          <tr><td>LH</td><td>Low→High: 낮은 V 도메인 → 높은 V 도메인</td></tr>
+          <tr><td>HL</td><td>High→Low: 높은 V 도메인 → 낮은 V 도메인</td></tr>
+          <tr><td>both</td><td>양방향 모두 삽입 허용</td></tr>
+        </table>
+        <p class="dim" style="margin:4px 0">전압이 <strong>다른</strong> 두 도메인이 직접 연결되면 신호 레벨이 안 맞아 오동작/관통전류. shifter가 스윙을 맞춰줌.</p>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>혼동 주의:</strong> isolation과 level shifter는 <strong class="hl2">목적이 다르다</strong>. isolation은 "꺼짐 vs 켜짐" 경계(전원 유무), level shifter는 "전압 차이" 경계. 한 경계가 <strong>둘 다 필요</strong>한 경우(꺼지기도 하고 전압도 다름) — ELS(Enable Level Shifter, isolation+shifter 통합셀)를 씁니다.</p></div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">전력 도메인 경계 한눈에</div>
+    <h2>Power domain · Isolation · Level shifter 구조</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 760 300" font-family="var(--mono)">
+        <!-- always-on 도메인 (왼쪽 위) -->
+        <rect x="20" y="30" width="200" height="100" rx="10" fill="rgba(94,230,160,.07)" stroke="#5ee6a0" stroke-width="1.6"/>
+        <text x="120" y="52" fill="#5ee6a0" font-size="13" text-anchor="middle">PD_AON  (always-on)</text>
+        <text x="120" y="74" fill="#9fb0c7" font-size="11" text-anchor="middle">VDD = 0.9V</text>
+        <rect x="60" y="86" width="120" height="30" rx="6" fill="#172236" stroke="#22304a"/>
+        <text x="120" y="106" fill="#e8eef7" font-size="11" text-anchor="middle">PMU / 컨트롤</text>
+
+        <!-- switchable 도메인 (오른쪽) -->
+        <rect x="430" y="30" width="300" height="240" rx="10" fill="rgba(179,136,255,.07)" stroke="#b388ff" stroke-width="1.6"/>
+        <text x="580" y="52" fill="#b388ff" font-size="13" text-anchor="middle">PD_CPU  (switchable)</text>
+        <text x="580" y="74" fill="#9fb0c7" font-size="11" text-anchor="middle">VDD_CPU = 0.7V · 꺼짐 가능</text>
+        <rect x="490" y="92" width="180" height="34" rx="6" fill="#172236" stroke="#22304a"/>
+        <text x="580" y="114" fill="#e8eef7" font-size="11" text-anchor="middle">CPU 로직</text>
+        <!-- retention flop -->
+        <rect x="490" y="150" width="180" height="40" rx="6" fill="rgba(255,206,107,.10)" stroke="#ffce6b"/>
+        <text x="580" y="167" fill="#ffce6b" font-size="11" text-anchor="middle">Retention FF (SRPG)</text>
+        <text x="580" y="183" fill="#9fb0c7" font-size="9.5" text-anchor="middle">always-on 백업 전원으로 상태 유지</text>
+        <!-- power switch -->
+        <rect x="490" y="214" width="180" height="34" rx="6" fill="rgba(255,122,192,.10)" stroke="#ff7ac0"/>
+        <text x="580" y="235" fill="#ff7ac0" font-size="11" text-anchor="middle">Power Switch (sleep/ack)</text>
+
+        <!-- isolation cell on boundary (CPU 출력 -> AON) -->
+        <rect x="300" y="92" width="90" height="34" rx="6" fill="rgba(255,122,133,.12)" stroke="#ff7a85" stroke-width="1.6"/>
+        <text x="345" y="108" fill="#ff7a85" font-size="11" text-anchor="middle">ISO</text>
+        <text x="345" y="121" fill="#9fb0c7" font-size="9" text-anchor="middle">clamp 0</text>
+        <line x1="490" y1="109" x2="390" y2="109" stroke="#22304a" stroke-width="1.4"/>
+        <polyline points="300,109 224,109" fill="none" stroke="#22304a" stroke-width="1.4"/>
+        <polygon points="224,105 216,109 224,113" fill="#22304a"/>
+
+        <!-- level shifter on boundary (AON 0.9 -> CPU 0.7) -->
+        <rect x="300" y="150" width="90" height="34" rx="6" fill="rgba(56,225,198,.12)" stroke="#38e1c6" stroke-width="1.6"/>
+        <text x="345" y="166" fill="#38e1c6" font-size="11" text-anchor="middle">L-SHIFT</text>
+        <text x="345" y="179" fill="#9fb0c7" font-size="9" text-anchor="middle">HL 0.9→0.7</text>
+        <polyline points="180,167 300,167" fill="none" stroke="#22304a" stroke-width="1.4"/>
+        <polyline points="390,167 490,167" fill="none" stroke="#22304a" stroke-width="1.4"/>
+        <polygon points="490,163 498,167 490,171" fill="#22304a"/>
+
+        <text x="345" y="220" fill="#9fb0c7" font-size="10.5" text-anchor="middle">경계 셀 두 종류:</text>
+        <text x="345" y="238" fill="#ff7a85" font-size="10" text-anchor="middle">ISO = 전원 유무 경계</text>
+        <text x="345" y="254" fill="#38e1c6" font-size="10" text-anchor="middle">L-SHIFT = 전압 경계</text>
+      </svg>
+    </div>
+    <div class="note mt"><strong>읽는 법:</strong> CPU 출력이 always-on으로 나갈 땐 <strong class="hl">ISO(clamp 0)</strong>로 꺼짐 시 X를 막고, AON→CPU로 들어가는 신호는 0.9V→0.7V <strong class="hl3">level shifter(HL)</strong>로 레벨을 맞춥니다. retention FF는 백업 전원으로 도메인이 꺼져도 상태를 보존.</div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">retention의 타이밍</div>
+    <h2>Save → Power-off → Restore 파형</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 240" font-family="var(--mono)">
+        <line x1="150" y1="14" x2="150" y2="225" stroke="#22304a" stroke-dasharray="3 3"/>
+        <line x1="540" y1="14" x2="540" y2="225" stroke="#22304a" stroke-dasharray="3 3"/>
+
+        <!-- save -->
+        <text x="6" y="44" fill="#5ee6a0" font-size="12">SAVE</text>
+        <polyline fill="none" stroke="#5ee6a0" stroke-width="2.2" points="95,50 130,50 130,32 165,32 165,50 700,50"/>
+        <text x="148" y="26" fill="#5ee6a0" font-size="9.5" text-anchor="middle">상태 백업</text>
+
+        <!-- iso_en -->
+        <text x="6" y="92" fill="#ff7a85" font-size="12">ISO_EN</text>
+        <polyline fill="none" stroke="#ff7a85" stroke-width="2.2" points="95,98 178,98 178,80 540,80 540,98 700,98"/>
+        <text x="360" y="74" fill="#ff7a85" font-size="9.5" text-anchor="middle">출력 clamp 유지(꺼짐 구간 내내)</text>
+
+        <!-- power switch / VDD_CPU -->
+        <text x="6" y="142" fill="#b388ff" font-size="12">VDD_CPU</text>
+        <polyline fill="none" stroke="#b388ff" stroke-width="2.4" points="95,118 200,118 215,150 215,150 500,150 515,118 700,118"/>
+        <text x="357" y="168" fill="#9fb0c7" font-size="10" text-anchor="middle">도메인 OFF (전원 0)</text>
+
+        <!-- restore -->
+        <text x="6" y="200" fill="#ffce6b" font-size="12">RESTORE</text>
+        <polyline fill="none" stroke="#ffce6b" stroke-width="2.2" points="95,206 525,206 525,188 560,188 560,206 700,206"/>
+        <text x="543" y="182" fill="#ffce6b" font-size="9.5" text-anchor="middle">상태 복원</text>
+
+        <text x="120" y="224" fill="#9fb0c7" font-size="9.5" text-anchor="middle">SAVE↑</text>
+        <text x="540" y="224" fill="#9fb0c7" font-size="9.5" text-anchor="middle">RESTORE↑</text>
+      </svg>
+    </div>
+    <div class="spec"><p style="margin:6px 0">순서가 곧 정확성: <strong class="hl">① SAVE(상태 래치) → ② ISO_EN(출력 clamp) → ③ 전원 OFF</strong> … 복귀 시 <strong class="hl">④ 전원 ON → ⑤ RESTORE(상태 복원) → ⑥ ISO_EN 해제</strong>. retention은 <strong>always-on 백업 전원(VDD_AON)</strong>으로 동작하므로 메인 VDD_CPU가 0이어도 상태가 살아있습니다(SRPG=State-Retention Power Gating).</p></div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>치명적 실수:</strong> save를 isolation보다 늦게 걸거나, restore를 전원이 안정되기 전에 걸면 <strong class="hl2">복원값이 쓰레기</strong>가 됩니다. 또 retention 셀을 RTL/검증에서 <strong>모델링하지 않으면</strong> 시뮬은 그냥 0/X로 부팅해 버그를 못 잡습니다(아래 pitfall 슬라이드 참고).</p></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">power-aware 시뮬의 핵심</div>
+    <h2>simstate — 전원이 꺼지면 로직은 어떻게 되나</h2>
+    <p>power-aware 시뮬레이터는 각 supply의 상태에 따라 그 도메인 로직을 <strong class="hl">simstate</strong>로 분류합니다. 이게 "꺼짐"을 시뮬에서 표현하는 방식입니다.</p>
+    <table class="sig">
+      <tr><th>simstate</th><th>의미</th><th>로직 동작</th></tr>
+      <tr><td>NORMAL</td><td>전압·전류 정상</td><td>정상 평가(0/1)</td></tr>
+      <tr><td>CORRUPT</td><td>전원 off/불충분</td><td>레지스터·출력을 <strong class="hl2">X로 강제</strong></td></tr>
+      <tr><td>CORRUPT_ON_<br>ACTIVITY</td><td>전압 부족 + 토글 시</td><td>토글하면 X로 오염</td></tr>
+    </table>
+    <div class="spec mt"><p style="margin:6px 0"><strong>CORRUPT의 의미:</strong> 도메인이 꺼지면 그 안의 모든 플롭/래치/조합 출력이 <strong class="hl">X(unknown)</strong>로 바뀝니다. 단, <strong>retention 셀로 지정된 플롭</strong>과 <strong>isolation으로 보호된 출력</strong>은 예외 — 그래서 retention/isolation을 안 적으면 켤 때 X가 그대로 쏟아집니다.</p></div>
+    <div class="note mt"><strong>개발자 직관:</strong> <code>free()</code>한 메모리를 다시 읽으면 쓰레기가 나오는 것과 같습니다. CORRUPT = "이 영역은 전원이 없으니 값을 신뢰하지 마라"는 X 표식. retention = 명시적으로 백업해 둔 변수, isolation = 경계에서 안전한 기본값으로 막은 출력입니다.</div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">합법 조합표</div>
+    <h2>Power State Table (PST) · add_power_state</h2>
+    <p>각 supply가 가질 수 있는 상태를 정의(<code>add_power_state</code>)하고, 시스템이 동시에 가질 수 있는 <strong class="hl">합법 조합</strong>만 PST로 못박습니다. 정의되지 않은 조합으로 가면 위반.</p>
+    <pre class="code sm"><code><span class="cmt"># supply set 상태 정의</span>
+<span class="fn">add_power_state</span> PD_TOP.primary <span class="kw">-state</span> {AON_ON  <span class="kw">-supply_expr</span> {power == FULL_ON}}
+<span class="fn">add_power_state</span> PD_CPU.primary <span class="kw">-state</span> {CPU_ON  <span class="kw">-supply_expr</span> {power == FULL_ON}} \
+                                <span class="kw">-state</span> {CPU_OFF <span class="kw">-supply_expr</span> {power == OFF}}
+
+<span class="cmt"># 시스템 합법 조합 (PST 역할) — add_power_state -state로 명시</span>
+<span class="fn">add_power_state</span> PD_TOP <span class="kw">-domain</span> \
+   <span class="kw">-state</span> {RUN     -logic_expr {AON_ON && CPU_ON }} \
+   <span class="kw">-state</span> {CPU_SLP -logic_expr {AON_ON && CPU_OFF}}
+<span class="cmt"># RUN / CPU_SLP 두 조합만 합법. "AON_OFF && CPU_ON" 같은 건 정의 안 됨 → 위반</span></code></pre>
+    <div class="codecap">레거시 UPF 1.0의 <code>add_port_state</code>/<code>create_pst</code>/<code>add_pst_state</code> 대신, 1801-2013 이후엔 <code>add_power_state</code>로 supply·도메인 상태와 합법 조합을 함께 기술합니다.</div>
+    <div class="spec"><p style="margin:6px 0">PST는 <strong class="hl2">검증과 정전검사의 기준표</strong>입니다. 합법 조합만 시뮬레이션하고, 도구는 "이 조합에서 켜진 쪽이 꺼진 쪽 신호를 받는데 isolation이 없다" 같은 위반을 PST 기준으로 점검합니다.</p></div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">정적으로 잡아내기</div>
+    <h2>PA 정전검사 (Power-Aware Static Check)</h2>
+    <p>시뮬을 돌리기 전에 <strong class="hl">UPF + 넷리스트를 정적으로</strong> 훑어 전력 구조 실수를 잡습니다. 동적 시뮬보다 빠르고 빠짐없이 커버.</p>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🔎</span> PA-static이 잡는 것</h3>
+        <ul>
+          <li><strong>누락 isolation</strong>: off 도메인 → on 도메인 경로에 ISO 없음</li>
+          <li><strong>누락 level shifter</strong>: 전압 다른 도메인 직결</li>
+          <li>잘못된 방향(HL 자리에 LH), clamp 값 불일치</li>
+          <li>isolation/retention <strong>제어신호가 always-on이 아님</strong></li>
+          <li>retention 전원이 도메인과 함께 꺼짐(상태 못 지킴)</li>
+        </ul>
+      </div>
+      <div class="card"><h3><span class="ico">⚡</span> PA-dynamic(시뮬)이 잡는 것</h3>
+        <ul>
+          <li>save/restore·iso <strong>순서(시퀀스)</strong> 오류</li>
+          <li>CORRUPT된 X가 실제로 <strong>전파</strong>되는지</li>
+          <li>전력 전환 중 <strong>기능 깨짐</strong>(부팅·트래픽)</li>
+          <li>PST에 없는 <strong>불법 조합</strong> 진입</li>
+        </ul>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>실무 순서:</strong> PA-static을 먼저 깨끗하게(누락 셀 0) 만든 뒤 PA-dynamic으로 시퀀스를 검증합니다. static을 건너뛰고 시뮬만 돌리면, isolation 누락은 <strong class="hl2">특정 전환 시점에만 X가 새어</strong> 회귀에서 간헐적으로만 보여 디버그가 지옥이 됩니다.</p></div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">★ 자주 깨지는 곳 ★</div>
+    <h2>전력 검증 3대 함정</h2>
+    <div class="grid3">
+      <div class="pitfall"><p style="margin:6px 0"><strong>① isolation 누락 → X 누출</strong><br>off 도메인 출력에 ISO를 안 걸면 simstate CORRUPT의 <strong class="hl2">X가 on 도메인으로 전파</strong> → 멀쩡한 블록이 X로 오염. 정전검사가 1순위로 잡아야 할 항목.</p></div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>② retention 미모델</strong><br>retention flop을 UPF/셀에 안 적으면 도메인 복귀 시 모든 상태가 <strong>X 또는 reset 값</strong>. "복귀 후 깨짐"인데 RTL은 맞아 보여 <strong class="hl2">버그를 못 잡는 위양성 통과</strong>가 됨.</p></div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>③ 에뮬 가시성 낮음</strong><br>에뮬은 빠르지만 내부 신호 <strong>full waveform 덤프가 비싸고 느림</strong>. "여기서 깨졌다"를 안 뒤 그 구간만 다시 캡처/시뮬로 좁혀야. 무작정 trigger 전체 덤프는 비현실적.</p></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0"><strong>한 줄 정리:</strong> ①②는 <strong>UPF를 정확히 적었는가</strong>의 문제(static+dynamic으로 방어), ③은 <strong>어디서 검증하는가</strong>의 문제. 그래서 sim/emu/FPGA/formal을 <strong>역할별로 나눠 쓰는 매트릭스</strong>가 필요합니다 → 다음 슬라이드.</p></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">속도가 필요할 때</div>
+    <h2>에뮬레이션 — Palladium · ZeBu · Veloce</h2>
+    <p>RTL 시뮬은 정확하지만 <strong>수 Hz~수십 kHz</strong>로 느려 OS 부팅·장시간 SW는 불가능. <strong class="hl">에뮬레이터</strong>는 설계를 전용 HW에 매핑해 <strong>MHz급</strong>으로 돌립니다.</p>
+    <table class="sig">
+      <tr><th>플랫폼</th><th>벤더</th><th>방식</th></tr>
+      <tr><td>Palladium</td><td>Cadence</td><td>커스텀 프로세서 기반 에뮬레이션</td></tr>
+      <tr><td>ZeBu</td><td>Synopsys</td><td>FPGA 기반 에뮬레이션</td></tr>
+      <tr><td>Veloce</td><td>Siemens EDA</td><td>커스텀 에뮬레이션 HW</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0"><strong>SCE-MI / DPI:</strong> 에뮬(HW) ↔ 테스트벤치(SW, 워크스테이션)를 잇는 표준 인터페이스. <strong>SCE-MI</strong>(Standard Co-Emulation Modeling Interface)로 트랜잭션을 주고받고, <strong>DPI</strong>(SystemVerilog Direct Programming Interface)로 C/C++ 모델을 호출. 핀 단위 대신 <strong class="hl3">트랜잭션 단위</strong> 통신이라 빨라짐.</p></div>
+      <div class="dev-bridge"><p style="margin:6px 0"><strong>hybrid emulation:</strong> CPU 같은 성숙 IP는 <strong>virtual platform(SW 모델, fast)</strong>로, 새로 만든 RTL은 에뮬로 — 둘을 붙여 돌립니다. "이미 검증된 건 빠른 모델, 새 RTL만 정밀 HW"라는 분업. 부팅·드라이버 같은 SW를 며칠이 아니라 시간 단위로 돌릴 수 있게 됩니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">더 빠른 길과 그 대가</div>
+    <h2>FPGA 프로토타이핑 — HAPS · S2C</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🏎️</span> FPGA proto (HAPS, S2C)</h3>
+        <ul>
+          <li>설계를 <strong>상용 FPGA</strong>에 매핑 → 에뮬보다도 <strong class="hl">빠름(수십~수백 MHz)</strong></li>
+          <li>실리콘 전 SW 개발·시연(near-real-time)에 유리</li>
+          <li><strong>HAPS</strong>(Synopsys), <strong>S2C</strong> 등 상용 보드</li>
+        </ul>
+      </div>
+      <div class="card" style="border-color:var(--deep)"><h3><span class="ico">🔍</span> 대가 — 디버그가 약하다</h3>
+        <ul>
+          <li>내부 신호 가시성·덤프가 <strong class="hl2">에뮬보다 떨어짐</strong></li>
+          <li>compile/partition 시간 길고, 변경 반영 느림</li>
+          <li>RTL을 FPGA에 맞게 손봐야 할 때도(메모리/클럭)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="spec mt"><p style="margin:6px 0"><strong>경험칙:</strong> <strong class="hl">에뮬</strong>=디버그 가시성 우수 + bring-up/하드웨어 검증, <strong class="hl3">FPGA proto</strong>=최고 속도 + SW 팀에 빠른 타깃 제공. 둘 다 <strong>capacity(게이트 용량)·컴파일 시간·비용</strong>이라는 제약을 공유합니다.</p></div>
+    <div class="pitfall"><p style="margin:6px 0"><strong>흔한 오답:</strong> "FPGA proto가 에뮬보다 항상 우월" ❌ → 속도는 빠르지만 <strong>디버그 가시성·반영 속도</strong>가 약해 <strong class="hl2">버그 사냥엔 에뮬</strong>이 보통 낫습니다. 둘은 경쟁이 아니라 <strong>용도 분담</strong>.</p></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>sim / emu / FPGA / formal — 무엇을 어디서</h2>
+    <p>하나로 다 못 합니다. 각 엔진은 <strong class="hl">속도 × 가시성 × 정확도 × 용량</strong>의 트레이드오프가 달라 <strong>역할로 나눕니다.</strong></p>
+    <table class="compare">
+      <tr><th>엔진</th><th>속도</th><th>디버그 가시성</th><th>주 용도</th></tr>
+      <tr><td>RTL 시뮬</td><td>느림(Hz~kHz)</td><td>최고(full wave, UPF/SVA/coverage)</td><td>기능·전력시퀀스·assertion 정밀검증</td></tr>
+      <tr><td>에뮬(Palladium/ZeBu/Veloce)</td><td>MHz급</td><td>높음(전용 캡처)</td><td>부팅·장시간 SW·HW/SW 통합·전력 회귀</td></tr>
+      <tr><td>FPGA proto(HAPS/S2C)</td><td>수십~수백 MHz</td><td>낮음</td><td>SW 조기 개발·near-real-time 시연</td></tr>
+      <tr><td>Formal</td><td>해석적(시간≠속도)</td><td>반례 trace</td><td>속성 증명·코너(데드락·X-prop·동등성)</td></tr>
+    </table>
+    <pre class="code sm mt"><code><span class="cmt">// UPF 검증의 두 축: PA-static + PA-dynamic(SVA로 시퀀스 단언)</span>
+<span class="cmt">// 예: isolation enable이 전원 OFF보다 먼저 떠야 한다 (X누출 방지)</span>
+iso_before_off: <span class="kw">assert property</span> (@(<span class="kw">posedge</span> aon_clk)
+   $rose(pmu.cpu_sleep) <span class="kw">|-></span> pmu.iso_en[*1:$] <span class="kw">throughout</span> (vdd_cpu == 1'b0)[->1]);</code></pre>
+    <div class="codecap">SVA: sleep 요청이 뜨면, VDD_CPU가 0이 되는 시점까지 iso_en이 유지돼야 한다(꺼지기 전 isolation 보장). formal/sim 양쪽에서 활용.</div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "실무자"로 보인다</h2>
+    <div class="qa"><div class="q">UPF의 isolation·level shifter·retention 명령과 핵심 인자는?</div><div class="a"><strong>isolation</strong>은 <code>set_isolation</code>(+<code>set_isolation_control</code>)으로, <code>-clamp_value</code>(0/1/latch)와 제어신호·sense·location을 지정합니다. <strong>level shifter</strong>는 <code>set_level_shifter</code>로 방향(LH=저→고, HL=고→저)을 줍니다. <strong>retention</strong>은 <code>set_retention</code>으로 <code>-save_signal</code>/<code>-restore_signal</code>을 정하고 <code>map_retention_cell</code>로 실제 셀에 매핑하며, 백업 전원은 always-on이어야 합니다(SRPG).</div></div>
+    <div class="qa"><div class="q">power-aware 시뮬의 simstate CORRUPT는 무슨 뜻인가요?</div><div class="a">도메인 전원이 꺼지면 그 안의 플롭·래치·조합 출력을 시뮬레이터가 <strong>X(unknown)로 강제</strong>하는 상태가 CORRUPT입니다. 단 retention으로 지정한 플롭과 isolation으로 보호한 출력은 예외입니다. 그래서 retention/isolation을 안 적으면 복귀 시 X가 그대로 전파됩니다. NORMAL은 정상 평가, CORRUPT_ON_ACTIVITY는 전압 부족 상태에서 토글하면 오염되는 변형입니다.</div></div>
+    <div class="qa"><div class="q">PA 정전검사가 잡는 것, 그리고 에뮬레이션 vs FPGA 프로토타입의 차이는?</div><div class="a"><strong>PA-static</strong>은 누락 isolation(off→on 경로), 누락/오방향 level shifter, isolation·retention 제어가 always-on이 아닌 경우 등 <strong>구조적 실수</strong>를 시뮬 전에 잡습니다. <strong>에뮬</strong>(Palladium/ZeBu/Veloce)은 MHz급으로 부팅·장시간 SW를 돌리며 디버그 가시성이 좋고, <strong>FPGA proto</strong>(HAPS/S2C)는 더 빠르지만(수십~수백 MHz) 내부 가시성과 반영 속도가 약해 SW 조기 개발·시연에 쓰고 버그 사냥은 에뮬이 유리합니다. 둘은 SCE-MI/DPI로 테스트벤치와 연결합니다.</div></div>
+  </section>
+
+  <!-- 16 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>UPF·에뮬레이션 정밀 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li>UPF=<code>IEEE 1801</code> Tcl. <code>create_power_domain</code>→<code>create_power_switch</code>→<code>set_isolation</code>→<code>set_retention</code></li>
+        <li>isolation <strong>clamp 0/1/latch</strong>, shifter <strong>LH/HL</strong>, retention=save/restore·SRPG·always-on 백업</li>
+        <li><strong>simstate CORRUPT</strong>=전원 off 시 로직을 <strong>X로 강제</strong>(retention/iso는 예외)</li>
+        <li><code>add_power_state</code>/PST로 합법 조합표, <strong>PA-static</strong>이 누락 iso/shifter 정전검사</li>
+        <li>에뮬(<strong>Palladium/ZeBu/Veloce</strong>) MHz급·부팅, <strong>SCE-MI/DPI</strong>·hybrid</li>
+        <li>FPGA proto(<strong>HAPS/S2C</strong>)는 더 빠르나 디버그 약함 → 용도 분담</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"UPF로 도메인·isolation(clamp)·retention(save/restore)을 <strong class="hl">RTL과 분리해</strong> 적고, simstate CORRUPT가 X를 주입하는 power-aware sim과 PA-static으로 검증합니다. 부팅·장시간 SW는 <strong class="hl">에뮬</strong>로, 더 빠른 시연은 <strong>FPGA proto</strong>로 — 엔진을 역할별로 나눠 씁니다."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>Part 6 시작</strong>: SoC 통합 검증과 시스템 레벨 시나리오 — 부팅 시퀀스, low-power 회귀, HW/SW 코베리피케이션을 신호·트랜잭션 레벨로.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

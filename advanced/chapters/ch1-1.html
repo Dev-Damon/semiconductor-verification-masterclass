@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 1-1 · Verilog 정밀(스케줄링·합성)</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 1 · 1-1 Verilog 정밀">
+<div class="track-switch"><a href="../../chapters/ch1-1.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">Verilog, 스케줄링과 합성까지</h1>
+    <p class="hook">개념판에서 "RTL은 회로 설계도"라는 직관을 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">= vs &lt;= 시뮬 스케줄링, 이벤트 큐 영역, latch 추론, generate·casez 함정</strong>까지 정확히 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"문법을 안다"에서 "합성·시뮬을 설명한다"로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li><code>module</code>·<code>wire</code>/<code>reg</code>·<code>always</code>의 존재</li><li>"RTL은 동시 실행되는 하드웨어"라는 직관</li><li>blocking·non-blocking이 다르다는 정도</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li>합성가능 RTL <strong>실제 코드</strong>(동기 카운터·FSM)</li><li><code>=</code> vs <code>&lt;=</code>와 <strong>이벤트 큐 영역</strong>(race)</li><li><code>generate</code>/<code>$clog2</code>/<code>parameter</code></li><li><strong>latch 추론</strong>·<code>casez</code>/<code>casex</code> 함정·4-state</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준 스펙: <strong>IEEE 1364-2005 (Verilog HDL)</strong> — §9.2 blocking/non-blocking, §11(현 1800에선 §4) <strong>stratified event queue</strong>. 시뮬레이터(Verilator 제외 이벤트형)·합성기(Design Compiler 등)는 이 표준 위에서 동작합니다. 면접에서 "Verilog 좀 봤다"와 "RTL 써봤다"를 가르는 건 이 디테일입니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">합성가능 RTL ①</div>
+    <h2>동기 카운터 — 정석 템플릿</h2>
+    <pre class="code"><code><span class="kw">module</span> <span class="fn">counter</span> #(<span class="kw">parameter</span> WIDTH = <span class="str">8</span>) (
+    <span class="kw">input</span>  <span class="kw">wire</span>              clk,
+    <span class="kw">input</span>  <span class="kw">wire</span>              rst_n,   <span class="cmt">// active-low 비동기 리셋</span>
+    <span class="kw">input</span>  <span class="kw">wire</span>              en,
+    <span class="kw">output</span> <span class="kw">reg</span> [WIDTH-<span class="str">1</span>:<span class="str">0</span>] cnt
+);
+    <span class="kw">always</span> @(<span class="kw">posedge</span> clk <span class="kw">or</span> <span class="kw">negedge</span> rst_n) <span class="kw">begin</span>
+        <span class="kw">if</span> (!rst_n)      cnt &lt;= {WIDTH{<span class="str">1'b0</span>}};  <span class="cmt">// 리셋 분기 먼저</span>
+        <span class="kw">else if</span> (en)     cnt &lt;= cnt + <span class="str">1'b1</span>;        <span class="cmt">// 순차 → NBA(&lt;=)</span>
+    <span class="kw">end</span>
+<span class="kw">endmodule</span></code></pre>
+    <p class="codecap">// 클럭드 always = 플립플롭. 비동기 리셋은 sensitivity에 negedge rst_n 포함, 본문 첫 분기로.</p>
+    <div class="spec"><p style="margin:6px 0">순차회로(레지스터 생성)의 합성 템플릿은 딱 정해져 있습니다: <code>always @(posedge clk ...)</code> + 대입은 전부 <strong class="hl2">non-blocking(&lt;=)</strong>. en이 false면 cnt는 <strong>현재값 유지</strong>(else가 없어 대입이 일어나지 않음) — 이건 의도된 enable 동작이지 latch가 아닙니다(이미 FF이므로).</p></div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">= vs &lt;= ①</div>
+    <h2>blocking vs non-blocking — 무엇이 다른가</h2>
+    <table class="compare">
+      <tr><th>항목</th><th>blocking <code>=</code></th><th>non-blocking <code>&lt;=</code></th></tr>
+      <tr><td>실행 시점</td><td>즉시 계산·즉시 대입(순차적)</td><td>RHS는 즉시 평가, LHS 대입은 <strong class="hl">NBA 영역에서 한꺼번에</strong></td></tr>
+      <tr><td>같은 블록 내</td><td>다음 줄이 새 값을 봄</td><td>다음 줄도 <strong>옛 값</strong>을 봄(병렬)</td></tr>
+      <tr><td>모델링 대상</td><td>조합논리·테스트벤치 임시변수</td><td><strong class="hl2">순차논리(FF)</strong></td></tr>
+      <tr><td>비유(SW)</td><td><code>a = a + 1;</code> 즉시 갱신</td><td>모든 RHS를 먼저 스냅샷 → 동시에 commit</td></tr>
+    </table>
+    <div class="dev-bridge mt"><p style="margin:6px 0">소프트웨어로 보면 <code>&lt;=</code>는 "이번 사이클의 입력은 <strong>전부 직전 값으로 고정</strong>해서 읽고, 출력은 사이클 끝에 일괄 반영"하는 <strong>더블 버퍼링</strong>과 같습니다. 그래서 두 FF이 서로의 값을 교환(swap)하는 코드가 자연스럽게 동작합니다.</p></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">= vs &lt;= ②</div>
+    <h2>실전 함정 — shift register race</h2>
+    <div class="grid2">
+      <div>
+        <pre class="code sm"><code><span class="cmt">// ❌ blocking: q2가 d를 즉시 봄 → 1-stage로 축소</span>
+<span class="kw">always</span> @(<span class="kw">posedge</span> clk) <span class="kw">begin</span>
+    q1 = d;     <span class="cmt">// q1 즉시 갱신</span>
+    q2 = q1;    <span class="cmt">// 방금 바뀐 q1(=d)을 봄!</span>
+<span class="kw">end</span>           <span class="cmt">// 결과: q2 == d, FF 1개처럼 동작</span></code></pre>
+        <pre class="code sm"><code><span class="cmt">// ✅ non-blocking: RHS는 옛 값 → 2-stage shift</span>
+<span class="kw">always</span> @(<span class="kw">posedge</span> clk) <span class="kw">begin</span>
+    q1 &lt;= d;    <span class="cmt">// RHS=옛 d</span>
+    q2 &lt;= q1;   <span class="cmt">// RHS=옛 q1 (이번 갱신 전)</span>
+<span class="kw">end</span>           <span class="cmt">// 결과: 정상 2단 시프트 q2←q1←d</span></code></pre>
+      </div>
+      <div>
+        <div class="pitfall"><p style="margin:6px 0"><strong>순차회로에 blocking을 쓰면</strong> 두 가지 사고가 납니다.<br>① 위처럼 줄 순서에 따라 <strong>의도와 다른 회로</strong>(시프트가 사라짐). ② 같은 신호를 여러 always가 blocking으로 건드리면 <strong class="hl">시뮬레이터 실행 순서에 따라 결과가 달라지는 race</strong> — 시뮬은 통과해도 합성 후 게이트와 불일치.</p></div>
+        <div class="note mt">규칙은 단순합니다: <strong>순차=&lt;= / 조합== / 둘을 한 always에 섞지 말 것.</strong> 거의 모든 RTL 린트(lint)가 이 위반을 잡습니다.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">왜 race가 생기나</div>
+    <h2>Verilog 이벤트 스케줄링 — 4개 영역</h2>
+    <p>같은 시뮬레이션 시각(time slot) 안에서도 이벤트는 <strong class="hl">정해진 영역 순서</strong>로 처리됩니다(stratified event queue). 이 순서가 <code>&lt;=</code>의 동작을 보장합니다.</p>
+    <div class="grid2">
+      <div class="diagram">
+        <svg viewBox="0 0 360 230" font-family="var(--mono)">
+          <rect x="40" y="14" width="280" height="40" rx="8" fill="#172236" stroke="#b388ff"/>
+          <text x="180" y="33" fill="#e8eef7" font-size="13" text-anchor="middle">① Active</text>
+          <text x="180" y="48" fill="#9fb0c7" font-size="10" text-anchor="middle">blocking(=), RHS 평가, #0</text>
+          <rect x="40" y="64" width="280" height="40" rx="8" fill="#172236" stroke="#5b9cff"/>
+          <text x="180" y="83" fill="#e8eef7" font-size="13" text-anchor="middle">② Inactive</text>
+          <text x="180" y="98" fill="#9fb0c7" font-size="10" text-anchor="middle">#0 지연 이벤트</text>
+          <rect x="40" y="114" width="280" height="44" rx="8" fill="rgba(56,225,198,.12)" stroke="#38e1c6" stroke-width="2"/>
+          <text x="180" y="134" fill="#38e1c6" font-size="13" text-anchor="middle" font-weight="bold">③ NBA</text>
+          <text x="180" y="150" fill="#9fb0c7" font-size="10" text-anchor="middle">non-blocking(&lt;=) LHS 대입</text>
+          <rect x="40" y="168" width="280" height="40" rx="8" fill="#172236" stroke="#6c7c95"/>
+          <text x="180" y="187" fill="#e8eef7" font-size="13" text-anchor="middle">④ Postponed</text>
+          <text x="180" y="202" fill="#9fb0c7" font-size="10" text-anchor="middle">$strobe / $monitor 읽기</text>
+          <line x1="180" y1="54" x2="180" y2="64" stroke="#6c7c95" marker-end="url(#a)"/>
+          <line x1="180" y1="104" x2="180" y2="114" stroke="#6c7c95"/>
+          <line x1="180" y1="158" x2="180" y2="168" stroke="#6c7c95"/>
+          <text x="332" y="140" fill="#38e1c6" font-size="10" transform="rotate(90 332 140)">시간 진행</text>
+        </svg>
+      </div>
+      <div class="spec">
+        <p style="margin:6px 0"><strong>③ NBA(Non-Blocking Assignment update) 영역</strong>이 핵심입니다.</p>
+        <ul>
+          <li>posedge에서 모든 always의 <code>&lt;=</code> <strong>RHS는 Active에서 먼저 전부 평가</strong>(옛 값 스냅샷).</li>
+          <li>실제 <strong>LHS 대입은 NBA 영역</strong>에서 일괄 수행 → 같은 슬롯의 다른 블록이 옛 값을 본다.</li>
+          <li>이 분리 덕분에 FF 간 값 교환·시프트가 <strong>실행 순서와 무관</strong>하게 결정적(deterministic).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">합성가능 RTL ②</div>
+    <h2>FSM — 3-always 정석 템플릿</h2>
+    <pre class="code"><code><span class="kw">localparam</span> [<span class="str">1</span>:<span class="str">0</span>] IDLE=<span class="str">2'd0</span>, RUN=<span class="str">2'd1</span>, DONE=<span class="str">2'd2</span>;
+<span class="kw">reg</span> [<span class="str">1</span>:<span class="str">0</span>] state, next;
+
+<span class="cmt">// (1) 상태 레지스터 — 순차 → NBA</span>
+<span class="kw">always</span> @(<span class="kw">posedge</span> clk <span class="kw">or</span> <span class="kw">negedge</span> rst_n)
+    <span class="kw">if</span> (!rst_n) state &lt;= IDLE;
+    <span class="kw">else</span>       state &lt;= next;
+
+<span class="cmt">// (2) 다음상태 논리 — 조합 → blocking, default 필수</span>
+<span class="kw">always</span> @(*) <span class="kw">begin</span>
+    next = state;                 <span class="cmt">// ★ latch 방지: 기본값 먼저</span>
+    <span class="kw">case</span> (state)
+        IDLE: <span class="kw">if</span> (start) next = RUN;
+        RUN:  <span class="kw">if</span> (done)  next = DONE;
+        DONE:            next = IDLE;
+        <span class="kw">default</span>:         next = IDLE;  <span class="cmt">// x-상태 복구</span>
+    <span class="kw">endcase</span>
+<span class="kw">end</span>
+
+<span class="cmt">// (3) 출력 논리(Moore) — 조합</span>
+<span class="kw">always</span> @(*) busy = (state == RUN);</code></pre>
+    <div class="pitfall"><p style="margin:6px 0">(2)에서 <strong>기본값(<code>next=state</code>)이나 default가 빠지면</strong> 어떤 입력 조합에서 <code>next</code>가 대입되지 않아 <strong class="hl">latch가 추론</strong>됩니다 — 다음 슬라이드에서 정밀히.</p></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">조합논리의 1번 사고</div>
+    <h2>Latch 추론 — 원인과 방어</h2>
+    <div class="grid2">
+      <div>
+        <p>조합 always는 <strong class="hl">모든 입력 조합에서 출력이 항상 대입</strong>되어야 순수 조합으로 합성됩니다. 한 경로라도 대입이 빠지면 합성기는 "이전 값을 기억"해야 하므로 <strong>의도치 않은 latch</strong>를 추론합니다.</p>
+        <pre class="code sm"><code><span class="cmt">// ❌ else 없음 → y가 a==0일 때 미대입 → LATCH</span>
+<span class="kw">always</span> @(*) <span class="kw">if</span> (a) y = b;
+
+<span class="cmt">// ✅ 모든 경로 대입 → 순수 MUX</span>
+<span class="kw">always</span> @(*) <span class="kw">if</span> (a) y = b; <span class="kw">else</span> y = c;</code></pre>
+      </div>
+      <div>
+        <div class="spec"><p style="margin:6px 0"><strong>3대 원인</strong></p>
+          <ul>
+            <li><code>if</code>에 <strong>else 누락</strong></li>
+            <li><code>case</code>에 <strong>default 누락</strong> + 비완전(non-full) 분기</li>
+            <li>다출력 블록에서 <strong>일부 출력만</strong> 대입</li>
+          </ul>
+          <p style="margin:6px 0"><strong>방어</strong>: 블록 맨 위에 <strong>모든 출력 기본값 대입</strong> → 그 뒤 조건부 덮어쓰기.</p>
+        </div>
+        <div class="pitfall mt"><p style="margin:6px 0">latch는 시뮬에선 멀쩡해 보이지만 <strong class="hl">정적 타이밍(STA)이 불가</strong>하고 글리치에 취약합니다. 합성 리포트의 <code>Inferred latch</code> 경고는 거의 항상 버그 신호입니다.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">sensitivity & 4-state</div>
+    <h2>always @(*) 와 0/1/x/z</h2>
+    <div class="grid2">
+      <div>
+        <h3 class="hl2" style="margin-bottom:6px">sensitivity list</h3>
+        <ul>
+          <li><code>always @(*)</code>(또는 <code>@*</code>): 우변에 읽히는 <strong>모든 신호 자동 포함</strong> → 누락 버그 차단. 조합 표준.</li>
+          <li>수동 리스트(<code>@(a or b)</code>)에서 신호 하나 빠지면 <strong class="hl">시뮬↔합성 불일치</strong>(시뮬은 안 깨어남, 합성은 다 본다).</li>
+          <li>순차는 <code>@(posedge clk or negedge rst_n)</code>처럼 <strong>엣지만</strong> 나열.</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="hl3" style="margin-bottom:6px">4-state 값</h3>
+        <table class="sig" style="font-size:14px">
+          <tr><th>값</th><th>의미</th></tr>
+          <tr><td>0 / 1</td><td>논리 로우/하이</td></tr>
+          <tr><td>x</td><td>unknown(미초기화·충돌·경합)</td></tr>
+          <tr><td>z</td><td>high-Z(미구동·tri-state)</td></tr>
+        </table>
+        <div class="note mt"><code>reg</code>는 4-state. <strong>x는 "아무 값"이 아니라 "모름"</strong>이라 비교 <code>==</code>가 <code>x</code>를 내기도. x-propagation 추적이 디버깅의 큰 부분입니다.</div>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><code>signed</code> 함정: 기본 <code>reg/wire</code>는 <strong>unsigned</strong>. 산술 비교·shift에서 부호가 필요하면 <code>reg signed</code>로 선언해야 하며, <strong>한 피연산자라도 unsigned면 식 전체가 unsigned</strong>로 평가됩니다.</p></div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">파라미터화 & 반복</div>
+    <h2>generate · genvar · $clog2</h2>
+    <pre class="code"><code><span class="kw">parameter</span> N = <span class="str">8</span>;
+<span class="kw">localparam</span> AW = $clog2(N);   <span class="cmt">// 8 → 3비트 (주소폭 자동 산출)</span>
+
+<span class="kw">genvar</span> i;
+<span class="kw">generate</span>
+    <span class="kw">for</span> (i = <span class="str">0</span>; i &lt; N; i = i + <span class="str">1</span>) <span class="kw">begin</span> : g_ff   <span class="cmt">// 이름표 필수</span>
+        <span class="fn">dff</span> u_dff (.clk(clk), .d(din[i]), .q(dout[i]));
+    <span class="kw">end</span>
+<span class="kw">endgenerate</span></code></pre>
+    <p class="codecap">// generate-for는 런타임 루프가 아니라 "컴파일 타임에 하드웨어 N개를 복제"하는 구조다.</p>
+    <div class="grid2">
+      <div class="spec">
+        <ul>
+          <li><strong>generate</strong>: 하드웨어 <strong class="hl2">반복 인스턴스화</strong>·조건부 생성(<code>if/case</code>). <code>genvar</code>는 상수 인덱스 전용.</li>
+          <li><strong>parameter</strong>: 인스턴스마다 override 가능(<code>#(.N(16))</code>). <strong>localparam</strong>: override 불가, 내부 파생 상수.</li>
+          <li><strong>$clog2(n)</strong>: ⌈log₂ n⌉ — N개를 가리킬 비트수. <code>$clog2(8)=3</code>, <code>$clog2(9)=4</code>.</li>
+        </ul>
+      </div>
+      <div class="pitfall"><p style="margin:6px 0"><code>$clog2</code> 경계 함정: <strong><code>$clog2(1)=0</code></strong>, <code>$clog2(8)=3</code>이지만 0~8(9개 값)을 표현하려면 <code>$clog2(9)=4</code>비트가 필요합니다. "N개 카운트의 최댓값 N-1"인지 "N까지 세는지"를 헷갈리면 1비트 off-by-one이 납니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">case의 위험한 변형</div>
+    <h2>casez · casex · full/parallel_case</h2>
+    <table class="sig">
+      <tr><th>구문</th><th>와일드카드</th><th>위험</th></tr>
+      <tr><td>case</td><td>없음(완전 일치, x/z도 그대로 비교)</td><td>안전 — 기본 선택</td></tr>
+      <tr><td>casez</td><td><code>z</code>와 <code>?</code>를 don't-care로</td><td>비교적 안전(<code>?</code> 권장)</td></tr>
+      <tr><td>casex</td><td><code>x</code>·<code>z</code>·<code>?</code> 모두 don't-care</td><td><strong class="hl">위험</strong> — 실제 x가 와일드매칭</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="pitfall"><p style="margin:6px 0"><strong>casex의 함정</strong>: 셀렉트에 미초기화 <code>x</code>가 끼면 그 비트가 <strong>아무 분기에나 매칭</strong>되어, RTL 시뮬은 우연히 통과하고 합성된 게이트는 다르게 동작 → x-blindness 버그. 디코더엔 <code>casez</code>(와일드카드 <code>?</code>)를 쓰세요.</p></div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>full_case/parallel_case</strong>(합성 pragma)는 합성기에게 "모든 케이스 커버됨/상호배타적"이라고 <strong>약속</strong>하는 것. 실제로 안 그러면 <strong class="hl">시뮬과 합성 결과가 갈라집니다</strong>. 권장: pragma 대신 <code>default</code>와 명시적 분기로 같은 효과를 내라.</p></div>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>이 함정들을 어떻게 잡나</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🧹</span> 정적(코드 안 돌리고)</h3>
+        <ul><li><strong>Lint</strong>(Spyglass/Verilator -Wall): blocking-in-seq, 불완전 case, 누락 sensitivity, 폭 불일치 검출</li><li><strong>CDC</strong> 분석은 별도지만 같은 흐름</li></ul></div>
+      <div class="card"><h3><span class="ico">📐</span> 동적(시뮬·정형)</h3>
+        <ul><li><strong>SVA assertion</strong>: <code>$rose(req) |-> ##[1:3] ack</code> 같은 시간 속성 검증</li><li><strong>Coverage</strong>: FSM 상태/전이 커버, case 분기 커버</li><li><strong>X-prop</strong> 모드로 x-pessimism/optimism 노출</li></ul></div>
+    </div>
+    <pre class="code sm"><code><span class="cmt">// SVA: 모든 case 진입 시 latch 없이 단일 사이클 결과 보장 예</span>
+<span class="kw">assert property</span> (@(<span class="kw">posedge</span> clk) <span class="kw">disable iff</span>(!rst_n)
+    (state inside {IDLE,RUN,DONE}));   <span class="cmt">// 미정의 상태 진입 금지</span></code></pre>
+    <div class="deepnote"><p style="margin:6px 0">"시뮬은 통과하는데 실리콘에서 깨지는" 1순위가 <strong>blocking race·latch·x-blind case</strong>입니다. 그래서 lint를 <strong>0 violation</strong>으로 유지하고 회귀에 SVA를 상시 켭니다.</p></div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "RTL 써본 사람"으로 보인다</h2>
+    <div class="qa"><div class="q">non-blocking 대입은 이벤트 큐의 어느 영역에서 적용되나요?</div><div class="a"><code>&lt;=</code>의 RHS는 Active 영역에서 즉시 평가되지만, LHS 대입은 같은 time slot의 <strong>NBA(Non-Blocking Assignment) 영역</strong>에서 일괄 수행됩니다. 영역 순서는 Active → Inactive → NBA → Postponed이고, 이 분리 덕에 같은 클럭에서 FF끼리 옛 값을 보며 race 없이 결정적으로 갱신됩니다.</div></div>
+    <div class="qa"><div class="q">왜 순차회로엔 non-blocking, 조합엔 blocking인가요?</div><div class="a">순차는 모든 FF이 같은 엣지에 <strong>동시에</strong> 옛 값으로 갱신돼야 실제 하드웨어와 맞습니다. <code>&lt;=</code>는 RHS를 스냅샷 후 NBA에서 일괄 대입해 이 동시성과 실행순서 독립성을 보장합니다. 조합은 한 always 안에서 임시값이 즉시 전파돼야 하므로 <code>=</code>가 맞고, 둘을 섞으면 race·합성불일치가 납니다.</div></div>
+    <div class="qa"><div class="q">latch는 왜 추론되며 casex는 왜 피하나요?</div><div class="a">latch는 조합 always에서 <strong>어떤 입력 경로에 출력 대입이 빠질 때</strong>(else/default 누락, 일부 출력만 대입) 합성기가 값을 기억해야 해서 생깁니다. 방어는 블록 상단 기본값 대입입니다. casex는 셀렉트의 <code>x</code>까지 don't-care로 와일드매칭해, 미초기화 x가 엉뚱한 분기에 걸려 시뮬↔합성 불일치를 만들므로 <code>?</code> 기반 <code>casez</code>를 씁니다.</div></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>Verilog 정밀 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li>순차=<code>&lt;=</code>(NBA), 조합=<code>=</code>, 한 always에 섞지 말 것</li>
+        <li>이벤트 큐: Active → Inactive → <strong>NBA</strong> → Postponed</li>
+        <li>조합 always는 <code>@(*)</code> + <strong>모든 경로 대입</strong> → latch 방지</li>
+        <li>latch 원인: else/default/일부출력 누락</li>
+        <li><code>generate</code>=HW 복제, <code>$clog2(N)</code>=비트폭, <code>localparam</code>≠override</li>
+        <li><code>casex</code> 위험(x 와일드매칭) → <code>casez</code>/<code>?</code>, pragma보다 default</li>
+        <li>4-state(0/1/<strong>x</strong>/<strong>z</strong>), <code>reg</code>는 기본 unsigned</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"RTL은 동시 실행 하드웨어이고, <code>&lt;=</code>의 NBA 스케줄링이 그 동시성을 보장합니다. <strong class="hl">순차 non-blocking · 조합 full-case 기본값</strong>으로 race와 latch를 막고, lint와 SVA로 검증합니다."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>1-2 SystemVerilog 정밀</strong>: <code>logic</code> vs <code>reg/wire</code>, <code>always_ff/comb/latch</code>, 인터페이스·패킹된 배열.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

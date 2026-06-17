@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 7-1 · LFS·멀티레포·tape-out 정밀</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 7 · 7-1 Git in HW팀 정밀">
+<div class="track-switch"><a href="../../chapters/ch7-1.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">Git in HW팀, 명령·포인터·태그까지</h1>
+    <p class="hook">개념판에서 "왜 HW는 Git만으로 안 되나"를 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">LFS 포인터 메커니즘, submodule vs repo/west, annotated/signed tag, tape-out 재현성</strong>까지 정확한 명령과 인코딩으로 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"Git 쓴다"에서 "HW 워크플로우를 운영한다"로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li>Git이 대용량 바이너리에 약하다는 직관</li><li>멀티레포·서브모듈이 있다는 존재 인식</li><li>tape-out에 "꼬리표"가 필요하다는 감</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li>LFS <strong>포인터 파일</strong> 구조와 <code>.gitattributes</code> 문법</li><li><code>submodule</code> vs <strong>repo/west</strong> manifest의 차이</li><li><strong>annotated/signed</strong> tag, manifest <strong>lock</strong>으로 재현성</li><li>Perforce/DesignSync를 <strong>왜</strong> HW가 택하나</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준 도구: <strong>Git LFS</strong>(Large File Storage), <strong>git-submodule</strong>, Google <strong>repo</strong>(Android), Zephyr <strong>west</strong>, <strong>Perforce Helix Core(P4)</strong>, Synopsys <strong>DesignSync</strong>. 면접에서 "Git 좀 안다"와 "양산 RTL 저장소를 운영해봤다"를 가르는 건 이 디테일입니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">왜 Git만으론 부족한가</div>
+    <h2>Git의 모델 = "전부 복제"</h2>
+    <p>Git은 분산 VCS라 <strong>clone 시 전체 히스토리</strong>를 가져옵니다. 텍스트 소스엔 최고지만, 파형 덤프·암호화된 IP·합성 라이브러리 같은 <strong class="hl">대용량 바이너리</strong>가 들어오면 무너집니다.</p>
+    <table class="compare">
+      <tr><th>측면</th><th>텍스트 RTL/TB</th><th>대용량 바이너리(파형·lib·GDS)</th></tr>
+      <tr><td>diff/merge</td><td>줄 단위로 깔끔</td><td><strong class="hl2">불가능</strong>(바이너리는 line diff 없음)</td></tr>
+      <tr><td>delta 압축</td><td>잘 됨 → 저장소 작음</td><td>거의 안 됨 → 버전마다 통째 저장</td></tr>
+      <tr><td>저장소 크기</td><td>수십 MB</td><td>금방 <strong>수십~수백 GB</strong>, clone 수 시간</td></tr>
+      <tr><td>권한</td><td>레포 단위면 충분</td><td>IP별 <strong>파일 단위 접근 통제</strong> 필요</td></tr>
+    </table>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>핵심 함정:</strong> Git은 한 번 커밋한 큰 파일을 히스토리에서 지워도 <strong>객체는 .git에 영구히 남습니다.</strong> "다음 커밋에서 지우면 되지" ❌ — clone 비용은 영원히 남습니다. 그래서 <strong>처음부터</strong> LFS/외부 VCS로 갈라놔야 합니다.</p></div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">Git LFS 메커니즘 ①</div>
+    <h2>포인터 파일 — 실제 내용은 "주소"만 커밋된다</h2>
+    <p>LFS는 추적 대상 파일을 커밋할 때, 진짜 바이너리를 <strong class="hl">별도 LFS 스토어</strong>로 보내고, Git 저장소에는 <strong>작은 텍스트 포인터</strong>만 남깁니다. 포인터는 콘텐츠 해시(<code>oid sha256</code>)와 크기를 담은 3줄짜리 파일입니다.</p>
+    <pre class="code"><code><span class="cmt"># Git에 실제로 커밋되는 "포인터 파일"의 전체 내용 (sim.vcd)</span>
+version https://git-lfs.github.com/spec/v1
+oid sha256:4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393
+size 134217728</code></pre>
+    <div class="codecap">실제 134 MB 파형은 LFS 스토어에 있고, Git이 추적하는 건 이 <strong>~130바이트</strong> 텍스트뿐. <code>git diff</code>도 이 세 줄에 대해서만 돕니다(해시가 바뀌면 내용이 바뀐 것).</div>
+    <div class="spec mt"><p style="margin:6px 0"><strong>동작 순서:</strong> <code>checkout/pull</code> 시 LFS smudge 필터가 포인터를 읽어 → 해당 <code>oid</code>의 실제 파일을 LFS 서버에서 받아 작업트리에 채웁니다. <code>commit/push</code> 시 clean 필터가 반대로 바이너리를 떼어내 포인터로 치환합니다. 둘 다 Git의 <strong>clean/smudge filter</strong> 메커니즘 위에 얹혀 있습니다.</p></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">Git LFS 메커니즘 ②</div>
+    <h2>.gitattributes — 무엇을 LFS로 보낼지 선언</h2>
+    <pre class="code"><code><span class="cmt"># 1) 어떤 확장자를 LFS로 추적할지 등록 (.gitattributes에 줄 추가)</span>
+<span class="fn">git lfs track</span> <span class="str">"*.vcd"</span> <span class="str">"*.fsdb"</span> <span class="str">"*.lib"</span> <span class="str">"*.gds"</span> <span class="str">"*.db"</span>
+
+<span class="cmt"># 2) 그 결과로 .gitattributes에 생기는 줄 (이 파일은 반드시 커밋!)</span>
+*.vcd  filter=lfs diff=lfs merge=lfs -text
+*.fsdb filter=lfs diff=lfs merge=lfs -text
+*.gds  filter=lfs diff=lfs merge=lfs -text
+
+<span class="cmt"># 3) 이후 평소처럼 add/commit/push — 자동으로 포인터화</span>
+<span class="fn">git add</span> sim.vcd .gitattributes
+<span class="fn">git commit</span> -m <span class="str">"add nightly waveform"</span>
+<span class="fn">git push</span></code></pre>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0"><code>filter=lfs</code>가 clean/smudge를, <code>diff=lfs merge=lfs</code>가 LFS 인식 diff/merge를, <code>-text</code>가 "줄바꿈 변환 금지(바이너리)"를 뜻합니다.</p></div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>가장 흔한 실수:</strong> <code>.gitattributes</code>를 <strong>커밋 안 함</strong> → 다른 팀원/CI는 추적 규칙을 몰라 실제 바이너리가 그대로 Git에 들어감. 또 <strong>track을 나중에</strong> 걸면 <strong>이미 커밋된 파일은 LFS로 안 옮겨짐</strong>(별도 <code>git lfs migrate</code> 필요).</p></div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">대용량 바이너리 처리 전략</div>
+    <h2>무엇을 버전관리하고 무엇을 버릴 것인가</h2>
+    <table class="sig">
+      <tr><th>자산</th><th>성격</th><th>권장 처리</th></tr>
+      <tr><td>RTL / TB / 스크립트</td><td>텍스트, diff 가능</td><td>일반 Git</td></tr>
+      <tr><td>foundry .lib/.db/.gds</td><td>거대·불변·재현불가</td><td><strong class="hl">LFS or 외부 VCS</strong> + 버전 핀</td></tr>
+      <tr><td>암호화 IP(encrypted RTL)</td><td>바이너리·라이선스</td><td>LFS + <strong>파일 단위 권한</strong></td></tr>
+      <tr><td>sim 파형(.vcd/.fsdb)</td><td>거대·재생성 가능</td><td><strong class="hl2">버전관리 X</strong> → 아티팩트 스토어</td></tr>
+      <tr><td>합성/PnR 산출물</td><td>거대·재생성 가능</td><td>버전관리 X → CI 아티팩트</td></tr>
+    </table>
+    <div class="deepnote mt"><p style="margin:6px 0"><strong>판단 기준:</strong> "스크립트+입력으로 재생성 가능하면 커밋하지 말고, 입력만 핀(pin)으로 고정"이 원칙. 재현불가하고 외부에서 받은 거대 입력(foundry deck)만 LFS/외부 VCS로 보존합니다.</p></div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>생성물 거대 커밋:</strong> nightly 회귀가 만든 수 GB 파형을 통째 커밋 → 저장소 폭발. 반드시 <code>.gitignore</code>로 막고, 보존이 필요하면 <strong>오브젝트 스토리지/아티팩트 서버</strong>(S3·Artifactory)로.</p></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">멀티레포 통합 ①</div>
+    <h2>submodule vs subtree — Git 내장 두 방식</h2>
+    <pre class="code"><code><span class="cmt"># submodule: 자식 레포를 "특정 커밋 SHA"로 참조(포인터). 내용은 별도 레포에 있음</span>
+<span class="fn">git submodule add</span> git@server:ip/aes_core.git ip/aes_core
+<span class="fn">git submodule update</span> --init --recursive   <span class="cmt"># clone 후 자식 받아오기</span>
+
+<span class="cmt"># 부모는 .gitmodules + 자식의 고정 SHA만 저장 → 자식 버전을 정확히 핀</span>
+<span class="cmt">cat .gitmodules:</span>
+[submodule "ip/aes_core"]
+    path = ip/aes_core
+    url  = git@server:ip/aes_core.git
+
+<span class="cmt"># 자식 버전 올리기: 자식에서 체크아웃 → 부모에서 그 SHA를 커밋</span>
+cd ip/aes_core && <span class="fn">git checkout</span> v2.3 && cd -
+<span class="fn">git add</span> ip/aes_core && <span class="fn">git commit</span> -m <span class="str">"bump aes_core to v2.3"</span></code></pre>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0"><strong>submodule</strong>: 자식 히스토리 <strong>분리</strong>, 부모엔 SHA 핀만. IP별 독립 레포·권한에 적합. <strong>subtree</strong>: 자식 코드를 부모에 <strong>병합해 넣음</strong> → clone 한 방에 다 옴, 대신 두 히스토리가 섞임.</p></div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>detached HEAD 함정:</strong> <code>submodule update</code>는 자식을 <strong>특정 SHA에 detached</strong> 상태로 체크아웃합니다. 그 안에서 수정하고 커밋하면 <strong>어느 브랜치에도 안 붙어</strong> 나중에 사라질 수 있음. 자식에서 작업할 땐 <strong>먼저 브랜치로 체크아웃</strong>하세요.</p></div>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">멀티레포 통합 ②</div>
+    <h2>repo(Android) · west(Zephyr) — manifest 방식</h2>
+    <p>수십~수백 개 레포를 묶을 땐 submodule 중첩이 지옥이 됩니다. 그래서 <strong class="hl">manifest XML/YAML 한 파일</strong>이 "어떤 레포를 어느 리비전으로 가져올지" 선언하고, 전용 툴이 일괄 동기화합니다.</p>
+    <pre class="code"><code><span class="cmt">&lt;!-- Google repo: default.xml manifest (Android식) --&gt;</span>
+<span class="kw">&lt;manifest&gt;</span>
+  <span class="kw">&lt;remote</span> name=<span class="str">"soc"</span> fetch=<span class="str">"git@server:"</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;default</span> remote=<span class="str">"soc"</span> revision=<span class="str">"main"</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;project</span> name=<span class="str">"ip/aes_core"</span> path=<span class="str">"ip/aes"</span>  revision=<span class="str">"v2.3"</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;project</span> name=<span class="str">"ip/uart"</span>     path=<span class="str">"ip/uart"</span> revision=<span class="str">"a1b2c3d"</span><span class="kw">/&gt;</span>
+<span class="kw">&lt;/manifest&gt;</span>
+
+<span class="cmt"># 동기화 — manifest에 적힌 모든 레포를 그 리비전으로</span>
+repo init -u git@server:manifest.git -b main
+repo sync -j8
+
+<span class="cmt"># Zephyr west는 west.yml(YAML) manifest로 동일 개념을 수행</span>
+west init -m git@server:manifest.git ;  west update</code></pre>
+    <div class="deepnote mt"><p style="margin:6px 0"><strong>submodule vs manifest tool:</strong> submodule은 핀이 <strong>부모 커밋 트리 안</strong>(SHA)에 박혀 Git 네이티브. repo/west는 핀이 <strong>별도 manifest 파일</strong>에 모여 있어 수백 레포를 <strong>한눈에·한 번에</strong> 다루기 쉽고, manifest 자체를 버전·태깅합니다.</p></div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">구조 선택</div>
+    <h2>모노레포 vs 멀티레포 — 트레이드오프</h2>
+    <table class="compare">
+      <tr><th></th><th>모노레포(한 레포에 전부)</th><th>멀티레포(IP별 분리)</th></tr>
+      <tr><td>원자적 변경</td><td><strong class="hl">한 커밋으로</strong> 교차 IP 수정</td><td>레포마다 따로 → 버전 정합 신경</td></tr>
+      <tr><td>버전 핀</td><td>커밋 SHA 하나면 전체 일관</td><td>submodule/manifest로 명시 핀</td></tr>
+      <tr><td>권한</td><td>레포 통째 → <strong>세밀 통제 어려움</strong></td><td>IP별 접근 통제 쉬움</td></tr>
+      <tr><td>clone/CI</td><td>거대 → 느림(부분 체크아웃 필요)</td><td>필요한 IP만 → 가벼움</td></tr>
+      <tr><td>리팩터/검색</td><td>전역 grep·일괄 변경 쉬움</td><td>흩어져 어려움</td></tr>
+    </table>
+    <div class="note mt">현실의 SoC 팀은 <strong>혼합형</strong>이 많습니다: 공용 인프라/플랫폼은 모노레포, 외부 IP·라이선스 묶음은 멀티레포(+manifest 핀). 선택 기준은 "<strong>원자성</strong>이 중요한가 vs <strong>권한·분리</strong>가 중요한가".</div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">브랜치 & CI</div>
+    <h2>release/IP 브랜치와 회귀 훅</h2>
+    <div class="grid2">
+      <div class="diagram">
+        <div class="flow" style="flex-wrap:wrap;gap:8px">
+          <div class="box">feature/&hellip;</div><div class="arrow">→</div>
+          <div class="box on">main</div><div class="arrow">→</div>
+          <div class="box">release/IP-r1</div>
+        </div>
+        <p class="dim" style="margin:10px 0 0">push/PR → <strong>CI 트리거</strong> → lint·smoke sim → merge → nightly 전체 회귀</p>
+      </div>
+      <div class="spec"><ul style="margin:8px 0">
+        <li><strong>feature</strong>: 작업 단위, PR로 리뷰</li>
+        <li><strong>main</strong>: 항상 "회귀 통과" 상태 유지</li>
+        <li><strong>release/IP</strong>: 양산·delivery용 안정 브랜치(버그픽스만 cherry-pick)</li>
+      </ul></div>
+    </div>
+    <pre class="code sm mt"><code><span class="cmt"># CI 회귀 훅: push → Jenkins → sim regression (개념 흐름)</span>
+on push/PR  →  Jenkins job
+   ├─ lint (spyglass/verible)        <span class="cmt"># 빠른 게이트</span>
+   ├─ smoke regression (수십 테스트)  <span class="cmt"># PR 게이트, ~분</span>
+   └─ nightly: full regression + coverage merge  <span class="cmt"># ~시간</span></code></pre>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>바이너리 머지 함정:</strong> 두 브랜치가 같은 <code>.gds</code>/<code>.fsdb</code>를 고치면 Git은 자동 머지 불가 → conflict. 바이너리는 "한 사람만 수정(lock)" 또는 <strong>regen 후 재핀</strong> 정책이 필요합니다(그래서 외부 VCS의 파일 락이 쓰임).</p></div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">tape-out 정밀</div>
+    <h2>annotated/signed tag로 "그 순간"을 박제</h2>
+    <pre class="code"><code><span class="cmt"># lightweight tag: 단순 이름표(메타 없음) — tape-out엔 부적절</span>
+<span class="fn">git tag</span> tapeout-a0
+
+<span class="cmt"># annotated tag: 작성자·날짜·메시지가 든 "객체"로 저장 → 추적 가능</span>
+<span class="fn">git tag</span> -a tapeout-a0 -m <span class="str">"AES SoC A0 tapeout 2026-06-12, DRC/LVS clean, rev a1b2c3d"</span>
+
+<span class="cmt"># signed tag: GPG 서명으로 "누가" 승인했는지 암호학적 증명</span>
+<span class="fn">git tag</span> -s tapeout-a0 -m <span class="str">"signed-off for mask order"</span>
+<span class="fn">git tag</span> -v tapeout-a0          <span class="cmt"># 서명 검증</span>
+<span class="fn">git push</span> origin tapeout-a0     <span class="cmt"># 태그는 자동 push 안 됨 → 명시</span></code></pre>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0"><strong>annotated</strong>는 태거·타임스탬프·메시지를 담은 별도 Git 객체. <strong>signed</strong>는 거기에 GPG 서명을 더해 "마스크 발주 승인"의 <strong class="hl">부인방지(non-repudiation)</strong>를 제공합니다. 감사 추적이 필수인 tape-out엔 annotated 이상을 씁니다.</p></div>
+      <div class="pitfall"><p style="margin:6px 0">lightweight tag만 쓰면 <strong>누가·언제·왜</strong>가 안 남습니다. 또 <code>git push</code>는 기본적으로 태그를 안 올리니 <strong>명시 push</strong>를 빠뜨려 "릴리스 태그가 서버에 없는" 사고가 흔합니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">재현성</div>
+    <h2>manifest lock — "6개월 뒤 똑같이 빌드"</h2>
+    <p>tape-out 칩에 버그가 나면 <strong class="hl">정확히 그 비트스트림</strong>을 재현해야 합니다. 태그 하나로는 부족 — 모든 IP·툴·deck의 버전이 한 곳에 고정돼야 합니다.</p>
+    <table class="sig">
+      <tr><th>고정 대상</th><th>방법</th></tr>
+      <tr><td>모든 서브레포</td><td>submodule SHA 핀 / repo·west manifest의 <strong>고정 revision</strong></td></tr>
+      <tr><td>manifest 자체</td><td>manifest 레포에 <strong>annotated tag</strong> → "이 태그 = 전체 BOM"</td></tr>
+      <tr><td>EDA 툴 버전</td><td>스크립트/도커 이미지로 버전 박제(예: VCS 2025.x)</td></tr>
+      <tr><td>foundry deck</td><td>LFS/외부 VCS의 라벨로 핀</td></tr>
+    </table>
+    <pre class="code sm mt"><code><span class="cmt"># repo: 현재 모든 레포의 정확한 SHA를 박제한 manifest 스냅샷 생성</span>
+repo manifest -r -o tapeout-a0-lock.xml   <span class="cmt"># -r = revision을 실제 SHA로 고정</span>
+<span class="cmt"># 6개월 뒤: 이 lock 파일로 init/sync 하면 비트 동일 재현</span></code></pre>
+    <div class="deepnote mt"><p style="margin:6px 0"><strong>BOM(Bill of Materials) = lock 파일.</strong> "tape-out 태그를 풀면 전체 컴포넌트 버전이 자동 복원"되는 상태가 재현성의 목표입니다. 면접에서 "재현성 어떻게 보장?"엔 <strong>annotated tag + manifest lock + 툴 버전 핀</strong> 3종을 말하세요.</p></div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">왜 HW는 Perforce/DesignSync인가</div>
+    <h2>중앙형 VCS를 택하는 진짜 이유</h2>
+    <div class="grid3">
+      <div class="card"><h3><span class="ico">🐘</span> 초대용량</h3><p>P4/DesignSync는 <strong>거대 바이너리 + 부분 동기화</strong>가 네이티브. 필요한 디렉터리만 받음(전체 히스토리 clone 불필요).</p></div>
+      <div class="card"><h3><span class="ico">🔒</span> 파일 락</h3><p><code>p4 lock</code>/exclusive checkout으로 <strong>바이너리 동시수정 차단</strong>. 머지 불가 파일의 충돌을 원천 봉쇄.</p></div>
+      <div class="card"><h3><span class="ico">🛂</span> 세밀 권한</h3><p>경로·파일 단위 ACL. 외부 IP를 라이선스 범위 내 인원만 접근 — <strong>레포 단위 Git으론 어려움</strong>.</p></div>
+    </div>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0"><strong>P4(Helix Core)</strong>: 중앙 depot, changelist 단위 atomic 커밋, exclusive lock(<code>+l</code> filetype). <strong>DesignSync(Synopsys)</strong>·<strong>ClearCase(IBM)</strong>: EDA 친화, 파일락·세밀 권한·대용량 특화로 반도체에서 오래 쓰임.</p></div>
+      <div class="pitfall"><p style="margin:6px 0">"HW도 그냥 Git 쓰지 왜?" ❌ — 파형/암호화 IP/GDS는 <strong>diff·merge가 불가</strong>하고 <strong>락이 필수</strong>이며 <strong>부분 동기</strong>가 필요합니다. Git의 분산·전체복제 모델과 정면 충돌. 그래서 <strong>RTL은 Git, 거대 자산은 P4/DesignSync</strong> 혼용이 흔합니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>저장소·재현성을 어떻게 "검증"하나</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🧪</span> 회귀 재현성</h3>
+        <ul><li>회귀 결과에 <strong>커밋 SHA·seed·manifest lock</strong>을 함께 기록</li><li>"이 fail을 정확히 재현" → SHA 체크아웃 + 같은 seed</li><li>nightly 후 <strong>coverage DB 머지</strong>(merge across runs)</li></ul></div>
+      <div class="card"><h3><span class="ico">🪝</span> 게이트 자동화</h3>
+        <ul><li>PR <strong>pre-merge 훅</strong>: lint + smoke 회귀 통과해야 merge</li><li><code>.gitattributes</code>·대용량 파일 <strong>금지 검사</strong>(pre-commit hook)</li><li>tape-out 태그는 <strong>회귀·DRC/LVS clean</strong> 증빙과 묶어 승인</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">검증 관점에선 저장소가 "<strong>실험 노트</strong>"입니다. 어떤 RTL·TB·seed·툴로 어떤 결과가 났는지 <strong class="hl">SHA로 못 박아야</strong> 회귀가 과학이 됩니다. 재현 불가한 fail은 디버그가 불가능합니다.</p></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "운영해봤다"로 보인다</h2>
+    <div class="qa"><div class="q">Git LFS는 정확히 어떻게 동작하나요?</div><div class="a"><code>.gitattributes</code>에 <code>filter=lfs</code>로 추적 패턴을 걸면, 커밋 시 clean 필터가 실제 바이너리를 LFS 스토어로 보내고 Git엔 <code>version/oid sha256/size</code> 세 줄짜리 포인터 파일만 들어갑니다. checkout 시 smudge 필터가 그 <code>oid</code>로 실제 파일을 받아 채웁니다. 그래서 저장소는 가볍고 clone이 빨라집니다.</div></div>
+    <div class="qa"><div class="q">submodule과 repo/west(manifest)의 차이는?</div><div class="a">submodule은 자식 레포의 커밋 SHA를 부모 트리 안에 핀으로 박는 Git 네이티브 방식이라 소수 레포에 적합합니다. repo/west는 수백 개 레포의 버전을 별도 manifest 파일(XML/YAML)에 모아 선언하고 전용 툴이 일괄 sync하며, manifest 자체를 태깅·lock해 대규모 SoC에 적합합니다.</div></div>
+    <div class="qa"><div class="q">HW가 Perforce/DesignSync를 쓰는 이유와 tape-out 재현성은?</div><div class="a">파형·암호화 IP·GDS는 diff/merge가 불가하고 동시수정 충돌을 막을 파일 락, 부분 동기화, 파일 단위 권한이 필요한데 이는 P4/DesignSync의 강점이고 Git의 분산·전체복제 모델과 충돌합니다. 재현성은 annotated(또는 signed) tag로 시점을 박고, manifest lock으로 모든 IP의 SHA와 툴·deck 버전을 고정해 BOM 전체를 복원 가능하게 만들어 보장합니다.</div></div>
+  </section>
+
+  <!-- 16 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>HW팀 Git 정밀 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li>LFS: <code>.gitattributes filter=lfs</code> → <strong>포인터(oid sha256/size)</strong>만 커밋</li>
+        <li>대용량: 재생성 가능하면 커밋 X(아티팩트), 재현불가 입력만 LFS/외부VCS 핀</li>
+        <li>멀티레포: submodule(SHA 핀) vs repo/west(manifest 선언) vs subtree(병합)</li>
+        <li>모노 vs 멀티: 원자성 vs 권한·분리 트레이드오프</li>
+        <li>tape-out: <strong>annotated/signed tag</strong> + <strong>manifest lock</strong> = 재현성</li>
+        <li>Perforce/DesignSync: 초대용량·파일락·세밀 권한 → HW에서 Git과 혼용</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"HW 저장소는 <strong class="hl">텍스트는 Git, 거대 바이너리는 LFS/외부 VCS</strong>로 가르고, 멀티레포를 manifest로 핀하며, tape-out을 annotated tag와 lock으로 박제해 <strong>재현 가능한 실험 노트</strong>로 만드는 일입니다."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>7-2 CI/회귀 인프라 정밀</strong>: Jenkins 파이프라인, 회귀 그리드(LSF/SGE), coverage merge와 트리아지 자동화.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

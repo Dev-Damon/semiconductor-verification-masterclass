@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 0-1 · 반도체·SoC·제작흐름 정밀</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 0 · 0-1 반도체·SoC·제작흐름 정밀">
+<div class="track-switch"><a href="../../chapters/ch0-1.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">RTL에서 실리콘까지, 흐름의 진짜 이름</h1>
+    <p class="hook">개념판에서 "설계→검증→제조"의 큰 그림을 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">합성·DFT·P&amp;R·STA·테이프아웃이라는 실제 단계와 툴 이름, PPA 트레이드오프, 검증이 왜 절반인지</strong>까지 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"흐름을 안다"에서 "단계와 툴로 말한다"로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li>설계→제조→테스트의 큰 흐름</li><li>SoC = 여러 IP를 한 칩에 통합</li><li>"검증이 중요하다"는 직관</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li>EDA 흐름의 <strong>실제 단계와 툴명</strong>(합성·P&amp;R·STA)</li><li>추상화 사다리(behavioral→RTL→gate→transistor, TLM)</li><li><strong>PPA</strong> 트레이드오프, <strong>사인오프</strong>의 의미</li><li>검증 계층(IP→SoC→post-silicon)과 shift-left</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준 흐름: <strong>RTL-to-GDSII(디지털 ASIC) 표준 EDA 플로우</strong>. 면접에서 "칩 어떻게 만드냐"에 "설계하고 공장 보낸다"가 아니라 <strong class="hl">합성→DFT→P&amp;R→STA 사인오프→테이프아웃</strong>이라고 단계 이름으로 답하면 레벨이 달라집니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">전체 지도</div>
+    <h2>EDA 흐름 — 툴 이름까지</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 760 250" font-family="var(--mono)">
+        <!-- boxes -->
+        <g font-size="12">
+          <rect x="8"  y="28" width="92" height="50" rx="8" fill="#172236" stroke="#b388ff"/>
+          <text x="54" y="50" fill="#e8eef7" font-size="12" text-anchor="middle">RTL</text>
+          <text x="54" y="66" fill="#9fb0c7" font-size="10" text-anchor="middle">Verilog/VHDL</text>
+
+          <rect x="120" y="28" width="110" height="50" rx="8" fill="#172236" stroke="#5b9cff"/>
+          <text x="175" y="48" fill="#e8eef7" font-size="12" text-anchor="middle">논리 합성</text>
+          <text x="175" y="64" fill="#9fb0c7" font-size="9" text-anchor="middle">DC / Genus</text>
+
+          <rect x="250" y="28" width="100" height="50" rx="8" fill="#172236" stroke="#5b9cff"/>
+          <text x="300" y="48" fill="#e8eef7" font-size="12" text-anchor="middle">DFT 삽입</text>
+          <text x="300" y="64" fill="#9fb0c7" font-size="9" text-anchor="middle">scan/BIST</text>
+
+          <rect x="370" y="28" width="110" height="50" rx="8" fill="#172236" stroke="#38e1c6"/>
+          <text x="425" y="48" fill="#e8eef7" font-size="12" text-anchor="middle">P&amp;R</text>
+          <text x="425" y="64" fill="#9fb0c7" font-size="9" text-anchor="middle">ICC2 / Innovus</text>
+
+          <rect x="500" y="28" width="120" height="50" rx="8" fill="#172236" stroke="#ffce6b"/>
+          <text x="560" y="48" fill="#e8eef7" font-size="12" text-anchor="middle">STA 사인오프</text>
+          <text x="560" y="64" fill="#9fb0c7" font-size="9" text-anchor="middle">PrimeTime</text>
+
+          <rect x="640" y="28" width="110" height="50" rx="8" fill="#172236" stroke="#ff7ac0"/>
+          <text x="695" y="48" fill="#e8eef7" font-size="12" text-anchor="middle">Tape-out</text>
+          <text x="695" y="64" fill="#9fb0c7" font-size="9" text-anchor="middle">GDSII → Fab</text>
+        </g>
+        <!-- arrows row1 -->
+        <g stroke="#22304a" stroke-width="2" fill="none">
+          <line x1="100" y1="53" x2="118" y2="53"/><polygon points="118,53 110,49 110,57" fill="#b388ff" stroke="none"/>
+          <line x1="230" y1="53" x2="248" y2="53"/><polygon points="248,53 240,49 240,57" fill="#5b9cff" stroke="none"/>
+          <line x1="350" y1="53" x2="368" y2="53"/><polygon points="368,53 360,49 360,57" fill="#5b9cff" stroke="none"/>
+          <line x1="480" y1="53" x2="498" y2="53"/><polygon points="498,53 490,49 490,57" fill="#38e1c6" stroke="none"/>
+          <line x1="620" y1="53" x2="638" y2="53"/><polygon points="638,53 630,49 630,57" fill="#ffce6b" stroke="none"/>
+        </g>
+        <!-- Fab → bring-up row2 -->
+        <g font-size="12">
+          <rect x="370" y="150" width="130" height="52" rx="8" fill="#172236" stroke="#ff7ac0"/>
+          <text x="435" y="172" fill="#e8eef7" font-size="12" text-anchor="middle">Fab 제조</text>
+          <text x="435" y="188" fill="#9fb0c7" font-size="9" text-anchor="middle">마스크·웨이퍼·패키징</text>
+
+          <rect x="540" y="150" width="160" height="52" rx="8" fill="#172236" stroke="#5ee6a0"/>
+          <text x="620" y="172" fill="#e8eef7" font-size="12" text-anchor="middle">Post-silicon bring-up</text>
+          <text x="620" y="188" fill="#9fb0c7" font-size="9" text-anchor="middle">실측·validation</text>
+        </g>
+        <g stroke="#22304a" stroke-width="2" fill="none">
+          <line x1="695" y1="80" x2="695" y2="120"/><line x1="695" y1="120" x2="435" y2="120"/><line x1="435" y1="120" x2="435" y2="148"/>
+          <polygon points="435,148 431,140 439,140" fill="#ff7ac0" stroke="none"/>
+          <line x1="500" y1="176" x2="538" y2="176"/><polygon points="538,176 530,172 530,180" fill="#5ee6a0" stroke="none"/>
+        </g>
+        <text x="20" y="180" fill="#9fb0c7" font-size="11">front-end ↑  ·  back-end →  ·  silicon ↓</text>
+      </svg>
+    </div>
+    <div class="note mt">왼쪽 4단계(합성·DFT·P&amp;R·STA)가 <strong>EDA 툴이 도는 자동화 흐름</strong>. STA를 통과(사인오프)해야 <code>GDSII</code>를 만들어 Fab으로 넘기고, 실리콘이 돌아오면 post-silicon bring-up이 시작됩니다.</div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">추상화 사다리</div>
+    <h2>같은 회로, 다른 높이에서 본다</h2>
+    <table class="sig">
+      <tr><th>레벨</th><th>무엇을 기술</th><th>언어/모델</th><th>시뮬 속도 · 정확도</th></tr>
+      <tr><td>behavioral</td><td>알고리즘·동작(클럭 무관 가능)</td><td>SystemVerilog, C/C++</td><td>가장 빠름 / 추상</td></tr>
+      <tr><td>TLM / SystemC</td><td>트랜잭션 단위(읽기/쓰기 호출)</td><td>SystemC TLM-2.0</td><td>매우 빠름 / 사이클 근사</td></tr>
+      <tr><td>RTL</td><td>레지스터+조합논리(클럭 단위)</td><td><strong class="hl">Verilog/VHDL</strong></td><td>중간 / 사이클 정확</td></tr>
+      <tr><td>gate</td><td>표준셀 네트리스트(AND/FF…)</td><td>합성 결과 netlist</td><td>느림 / 게이트 정확</td></tr>
+      <tr><td>transistor</td><td>트랜지스터·아날로그 거동</td><td>SPICE</td><td>가장 느림 / 물리 정확</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="dev-bridge"><p style="margin:6px 0">소프트웨어로 치면 <strong>고수준 언어 → 바이트코드 → 어셈블리 → 마이크로아키텍처</strong>로 내려가는 것과 같습니다. 위로 갈수록 빠르고 추상, 아래로 갈수록 느리지만 실제에 가깝습니다.</p></div>
+      <div class="deepnote"><p style="margin:6px 0"><strong>합성</strong>은 RTL을 gate 네트리스트로, <strong>P&amp;R</strong>은 gate를 물리 배치(layout)로, <strong>제조</strong>는 그걸 transistor로 실체화합니다. 한 단계 내려갈 때마다 "정말 같은가?"를 검증해야 합니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">front-end ①</div>
+    <h2>논리 합성 — RTL을 게이트로</h2>
+    <div class="grid2">
+      <div>
+        <p>합성기는 RTL을 읽어 <strong class="hl">표준셀 라이브러리</strong>의 게이트로 매핑하고, 타이밍·면적·전력 <strong>제약(constraint)</strong>을 만족하도록 최적화합니다.</p>
+        <ul>
+          <li>입력: RTL + 표준셀 라이브러리(<code>.lib</code>) + 제약(<code>.sdc</code>)</li>
+          <li>출력: gate-level <strong>netlist</strong> + 타이밍 리포트</li>
+          <li>툴: <strong>Synopsys Design Compiler</strong>, <strong>Cadence Genus</strong></li>
+        </ul>
+      </div>
+      <div class="diagram" style="text-align:left">
+        <pre class="code sm"><code><span class="cmt"># SDC: 클럭과 제약을 합성기에 알려준다</span>
+<span class="fn">create_clock</span> -name CLK -period <span class="str">2.0</span> [get_ports clk]
+<span class="cmt"># 1 GHz... 2.0 ns 주기</span>
+<span class="fn">set_input_delay</span>  <span class="str">0.4</span> -clock CLK [all_inputs]
+<span class="fn">set_output_delay</span> <span class="str">0.4</span> -clock CLK [all_outputs]
+<span class="fn">set_max_area</span> <span class="str">0</span>   <span class="cmt"># 면적 최소화</span></code></pre>
+        <div class="codecap">.sdc(Synopsys Design Constraints) — 클럭·I/O 지연·면적 목표</div>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>합성이 "통과"해도</strong> 제약(<code>.sdc</code>)이 틀리면 의미가 없습니다. 클럭 주기를 잘못 잡으면 타이밍이 통과한 것처럼 보여도 실제 칩은 그 주파수에서 못 돕니다 — "garbage in, garbage out".</p></div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">front-end ②</div>
+    <h2>DFT — 만든 뒤에 "테스트할 수 있게"</h2>
+    <div class="grid2">
+      <div>
+        <p><strong>DFT(Design For Test)</strong>는 제조 후 결함을 걸러내기 위한 회로를 <strong class="hl">합성 단계에 미리 삽입</strong>합니다. 칩이 "동작하는지"가 아니라 "<strong>잘 만들어졌는지</strong>"를 보는 장치입니다.</p>
+        <ul>
+          <li><strong>scan chain</strong>: 플립플롭을 시프트 레지스터로 엮어 내부 상태를 직접 넣고 빼기</li>
+          <li><strong>MBIST</strong>: 메모리 자체 테스트 로직</li>
+          <li><strong>JTAG / boundary scan</strong>(IEEE 1149.1): 핀 레벨 접근</li>
+          <li>패턴 생성: <strong>ATPG</strong>(자동 테스트 패턴)</li>
+        </ul>
+      </div>
+      <div class="spec">
+        <p style="margin:6px 0"><strong>구분이 핵심:</strong></p>
+        <ul style="margin:6px 0">
+          <li><strong class="hl2">기능 검증</strong> = "설계가 맞나?"(pre-silicon, 시뮬)</li>
+          <li><strong class="hl3">제조 테스트</strong> = "이 한 개의 칩에 제조 결함이 없나?"(post-silicon, ATE)</li>
+        </ul>
+        <p class="dim" style="margin:4px 0">DFT는 후자를 위한 것. <strong>fault coverage</strong>(예: stuck-at 99%+)로 품질을 측정합니다.</p>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0">DFT를 "검증 커버리지"와 혼동하면 함정. <strong>scan/fault coverage(제조 결함)</strong>와 <strong>functional/code coverage(설계 버그)</strong>는 완전히 다른 지표입니다.</p></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">back-end</div>
+    <h2>P&amp;R · STA — 물리와 타이밍의 진실</h2>
+    <table class="sig">
+      <tr><th>단계</th><th>하는 일</th><th>대표 툴</th></tr>
+      <tr><td>Floorplan</td><td>블록·매크로·전원망(PG) 배치</td><td>ICC2 / Innovus</td></tr>
+      <tr><td>Placement</td><td>표준셀 배치</td><td>ICC2 / Innovus</td></tr>
+      <tr><td>CTS</td><td>클럭 트리 합성(스큐 균형)</td><td>ICC2 / Innovus</td></tr>
+      <tr><td>Routing</td><td>실제 배선(metal layer 연결)</td><td>ICC2 / Innovus</td></tr>
+      <tr><td>STA</td><td><strong class="hl">setup/hold 타이밍 검증</strong></td><td><strong>PrimeTime</strong></td></tr>
+    </table>
+    <div class="spec mt"><p style="margin:6px 0"><strong>STA(Static Timing Analysis)</strong>는 자극(테스트벡터) 없이 <strong>모든 경로</strong>의 지연을 정적으로 계산해 타이밍을 검증합니다. 핵심 지표는 <strong class="hl2">slack</strong>: <code>slack = required_time − arrival_time</code>. <strong>slack ≥ 0이면 통과</strong>, 음수면 위반(setup이면 더 느린 셀/리타이밍, hold면 버퍼 삽입으로 고침).</p></div>
+    <div class="note mt">P&amp;R 후엔 실제 배선의 기생 성분(RC)을 추출(<code>SPEF</code>)해 STA에 넣습니다 — "배치 전 추정"이 아니라 "배선 후 실측 기반" 타이밍.</div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">사인오프의 의미</div>
+    <h2>Sign-off — "이제 공장에 보내도 된다"</h2>
+    <p><strong class="hl">사인오프</strong>는 테이프아웃 전에 통과해야 하는 <strong>최종 검증 게이트</strong>들입니다. 하나라도 깨지면 칩을 못 보냅니다.</p>
+    <table class="sig">
+      <tr><th>사인오프</th><th>무엇을 보장</th><th>대표 툴</th></tr>
+      <tr><td>STA</td><td>모든 코너에서 타이밍 만족(slack≥0)</td><td>PrimeTime</td></tr>
+      <tr><td>DRC</td><td>레이아웃이 <strong>공정 설계규칙</strong> 위반 없음</td><td>Calibre / IC Validator</td></tr>
+      <tr><td>LVS</td><td>레이아웃 = 회로도(netlist) 일치</td><td>Calibre / IC Validator</td></tr>
+      <tr><td>Power(IR/EM)</td><td>전압 강하·전류밀도 한계 내</td><td>Voltus / RedHawk</td></tr>
+      <tr><td>Formal(LEC)</td><td>RTL ≡ netlist 논리 등가</td><td>Conformal / Formality</td></tr>
+    </table>
+    <div class="deepnote mt"><p style="margin:6px 0"><strong>multi-corner / multi-mode(MCMM)</strong>가 핵심: SS/FF/TT 공정, 저온/고온, 저전압/고전압 <strong>여러 코너 전부</strong>에서 통과해야 합니다. "한 코너만 통과"는 사인오프가 아닙니다.</p></div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">왜 검증이 절반인가</div>
+    <h2>RTL sim 통과 ≠ silicon 동작</h2>
+    <div class="grid2">
+      <div>
+        <p>면접 단골 질문입니다. <strong class="hl">"시뮬레이션이 다 통과했는데 왜 검증이 끝이 아닌가?"</strong> — RTL 시뮬레이터는 <strong>이상화된 0지연·동기 세계</strong>를 가정하기 때문입니다.</p>
+        <ul>
+          <li><strong>타이밍</strong>: 시뮬은 사이클 단위, 실제는 셀 지연·배선 RC가 존재 → STA로 별도 검증</li>
+          <li><strong>CDC</strong>: 비동기 클럭 도메인 횡단 → 시뮬에선 안 보이는 메타스테이빌리티</li>
+          <li><strong>async reset</strong>: 리셋 release 타이밍·복구</li>
+          <li><strong>X 전파</strong>: 미초기화·unknown이 시뮬과 게이트에서 다르게 거동</li>
+        </ul>
+      </div>
+      <div class="pitfall">
+        <p style="margin:6px 0"><strong>대표 함정 4가지</strong></p>
+        <ul style="margin:6px 0">
+          <li><strong>타이밍</strong>: RTL은 통과, 실제 주파수에서 setup 위반</li>
+          <li><strong>X-optimism</strong>: RTL의 X가 게이트에선 0/1로 굳어져 버그를 숨김</li>
+          <li><strong>CDC</strong>: 동기화기 없는 횡단 → 간헐적 글리치(재현 어려움)</li>
+          <li><strong>async</strong>: 리셋 복구 타이밍 위반으로 미세 결함</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note mt">그래서 RTL 시뮬 외에 <strong>CDC 정적분석(SpyGlass-CDC 등)·gate-level sim(SDF 백애노테이션)·STA</strong>를 따로 돌립니다. 이 다층 검증이 프로젝트 공수의 <strong class="hl">절반 이상</strong>을 차지하는 이유입니다.</div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">검증 범위 계층</div>
+    <h2>IP → Subsystem → SoC → Post-silicon</h2>
+    <div class="flow">
+      <div class="box on">IP</div><div class="arrow">→</div>
+      <div class="box">Subsystem</div><div class="arrow">→</div>
+      <div class="box">SoC</div><div class="arrow">→</div>
+      <div class="box">Post-silicon</div>
+    </div>
+    <table class="sig mt">
+      <tr><th>계층</th><th>검증 초점</th><th>주 방법</th></tr>
+      <tr><td>IP</td><td>블록 내부 기능 전부(예: UART 레지스터·프로토콜)</td><td>UVM 환경, 제약랜덤+커버리지</td></tr>
+      <tr><td>Subsystem</td><td>몇 IP의 상호작용(버스·인터커넥트)</td><td>통합 testbench, VIP</td></tr>
+      <tr><td>SoC</td><td>전체 통합·SW/HW 부팅·시나리오</td><td>C 테스트+에뮬레이션/FPGA</td></tr>
+      <tr><td>Post-silicon</td><td>실제 칩의 실측·코너·SW 브링업</td><td>ATE·랩 보드·실측 디버그</td></tr>
+    </table>
+    <div class="deepnote mt"><p style="margin:6px 0"><strong>shift-left</strong>: 버그를 <strong class="hl">가능한 한 왼쪽(IP·이른 단계)</strong>에서 잡자는 원칙. IP 레벨 버그 수정은 RTL 한 줄이지만, post-silicon에서 발견하면 <strong>리스핀(re-spin)</strong>이 필요할 수 있습니다.</p></div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">PPA 트레이드오프</div>
+    <h2>Power · Performance · Area — 셋은 동시에 못 가진다</h2>
+    <div class="grid3">
+      <div class="card"><h3><span class="ico">⚡</span> Power</h3><p>동적+누설 전력. <strong class="hl3">전압↓</strong>·클럭 게이팅으로 줄이면 보통 성능이 깎임.</p></div>
+      <div class="card"><h3><span class="ico">🚀</span> Performance</h3><p>주파수·IPC. <strong class="hl2">주파수↑</strong>는 더 빠른(큰·전력 큰) 셀과 전압↑을 요구.</p></div>
+      <div class="card"><h3><span class="ico">📐</span> Area</h3><p>다이 면적=원가. <strong class="hl">면적↓</strong>는 셀을 줄여 타이밍 여유·전력 마진을 깎음.</p></div>
+    </div>
+    <div class="spec mt"><p style="margin:6px 0">예시 트레이드오프: 타이밍 위반 경로를 <strong>더 빠른 셀(high-drive)</strong>로 바꾸면 → slack은 좋아지지만 <strong>면적·전력↑</strong>. <strong>Vt 선택</strong>도 마찬가지 — LVT는 빠르지만 누설↑, HVT는 느리지만 누설↓. 합성·P&amp;R 전체가 이 세 축의 <strong class="hl">최적화 문제</strong>입니다.</p></div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">소프트웨어의 <strong>시간 vs 공간 vs 전력</strong> 최적화와 같습니다. 알고리즘 하나에 "빠르고 메모리 적고 배터리 적게"를 동시에 못 주듯, 칩도 PPA 중 무엇을 우선할지 <strong>스펙으로 정하고</strong> 그쪽으로 튜닝합니다.</p></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">마스크와 리스핀</div>
+    <h2>왜 "한 번에" 맞춰야 하나 — 비용의 무게</h2>
+    <div class="grid2">
+      <div>
+        <p>테이프아웃은 <strong class="hl">포토마스크 세트</strong> 제작으로 이어집니다. 첨단 공정일수록 마스크 수가 많고(수십 장), 한 세트가 <strong>매우 비쌉니다</strong>(첨단 노드에서 마스크+NRE는 흔히 수백만 달러 규모).</p>
+        <ul>
+          <li><strong>리스핀(re-spin)</strong>: 버그로 다시 마스크 만들고 재제조 — <strong>비용+수개월 일정</strong> 손실</li>
+          <li><strong>full-layer vs metal-only(ECO)</strong>: 금속층만 바꾸는 부분 수정으로 일부 비용을 줄이기도</li>
+        </ul>
+      </div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">검증이 프로젝트 공수의 <strong class="hl">절반 이상</strong>인 근본 이유 — 소프트웨어는 패치를 배포하면 끝이지만, 칩은 <strong>리스핀이 곧 돈과 시간</strong>입니다. "사후 패치 불가"가 검증을 비싸게 만듭니다.</p></div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0">"버그 나면 펌웨어로 우회하면 되지" — 일부는 맞지만, 하드웨어 로직·타이밍·아날로그 결함은 <strong>SW로 못 고칩니다</strong>. 그래서 shift-left와 사인오프 게이트가 강박적으로 엄격합니다.</p></div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>이 흐름을 어떻게 검증하나</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🧩</span> pre-silicon (왼쪽으로)</h3>
+        <ul><li><strong>UVM</strong> 환경 + 제약랜덤 자극 + <strong>functional coverage</strong></li><li><strong>SVA assertion</strong>으로 프로토콜·불변식 즉시 검출</li><li>한 단계 내려갈 때 <strong>LEC(formal equivalence)</strong>로 RTL≡netlist 보장</li><li><strong>CDC/lint 정적분석</strong>으로 시뮬에 안 잡히는 결함</li><li>속도 위해 <strong>에뮬레이션·FPGA 프로토타입</strong>으로 SoC·SW 부팅</li></ul></div>
+      <div class="card"><h3><span class="ico">🎯</span> post-silicon (오른쪽)</h3>
+        <ul><li>실측 코너(전압·온도·주파수 shmoo)에서 동작 확인</li><li>실리콘 디버그(스캔 덤프·trace)로 사일런트 버그 추적</li><li>ATE에서 <strong>제조 테스트</strong>(DFT 패턴) 적용</li><li>SW 브링업: 부트로더→드라이버→OS</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">"기능 커버리지(설계 버그) vs 패스/페일 코너(실리콘) vs fault 커버리지(제조 결함)"는 <strong>서로 다른 세 가지</strong>. 면접에서 이 셋을 구분해 말하면 검증 실무자로 보입니다.</p></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "실무자"로 보인다</h2>
+    <div class="qa"><div class="q">사인오프(sign-off)란 무엇인가요?</div><div class="a">테이프아웃 전 통과해야 하는 최종 검증 게이트들입니다. 대표적으로 STA(타이밍, slack≥0 · PrimeTime), DRC/LVS(레이아웃 규칙·회로 일치 · Calibre), Power/IR-drop, LEC(RTL≡netlist 논리 등가)가 있고, 모든 공정·전압·온도 코너(MCMM)에서 통과해야 합니다.</div></div>
+    <div class="qa"><div class="q">PPA가 뭐고 왜 트레이드오프인가요?</div><div class="a">Power(전력)·Performance(성능/주파수)·Area(면적)입니다. 셋은 서로 충돌해서 — 예를 들어 타이밍을 맞추려 더 빠른 셀을 쓰면 면적·전력이 늘고, 누설을 줄이려 HVT 셀을 쓰면 느려집니다. 그래서 무엇을 우선할지 스펙으로 정하고 합성·P&amp;R에서 그 방향으로 최적화합니다.</div></div>
+    <div class="qa"><div class="q">IP 검증과 SoC 검증의 차이는?</div><div class="a">IP 검증은 한 블록 내부 기능을 UVM·제약랜덤·커버리지로 철저히 닫는 것이고, SoC 검증은 다수 IP의 통합·버스 상호작용·SW 부팅 같은 시나리오를 봅니다. 후자는 시뮬이 느려 보통 에뮬레이션·FPGA를 씁니다. shift-left로 버그는 가능한 한 IP 단계에서 잡습니다.</div></div>
+    <div class="qa"><div class="q">post-silicon validation이 뭔가요?</div><div class="a">실제로 돌아온 칩(실리콘)을 랩 보드·ATE에서 실측해 검증하는 단계입니다. 전압·온도·주파수 코너(shmoo)를 쓸어 동작을 확인하고, 스캔 덤프·trace로 사일런트 버그를 디버그하며, DFT 패턴으로 제조 결함을 거릅니다. 여기서 발견된 치명 버그는 리스핀(re-spin)으로 이어질 수 있어 비용이 큽니다.</div></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>제작 흐름 정밀 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li>흐름: RTL → <strong>합성(DC/Genus)</strong> → DFT → <strong>P&amp;R(ICC2/Innovus)</strong> → <strong>STA(PrimeTime)</strong> → tape-out → Fab → bring-up</li>
+        <li>추상화: behavioral→TLM→RTL→gate→transistor</li>
+        <li><strong>사인오프</strong>=STA/DRC/LVS/Power/LEC, 모든 코너(MCMM)</li>
+        <li><strong>PPA</strong>는 트레이드오프(빠르게=크고 전력↑)</li>
+        <li>검증 계층 IP→SoC→post-silicon, <strong>shift-left</strong></li>
+        <li>RTL sim 통과 ≠ silicon(타이밍·X·CDC·async)</li>
+        <li>리스핀 비용 때문에 검증이 공수의 <strong>절반 이상</strong></li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"칩은 RTL을 합성·P&amp;R·STA로 내려 사인오프 후 마스크를 만들고, 돌아온 실리콘을 post-silicon으로 검증합니다. 사후 패치가 불가능해 <strong class="hl">검증을 shift-left로 앞당기는 것</strong>이 핵심입니다."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>0-2 디지털 설계 기초 정밀</strong>: 동기 설계·setup/hold·메타스테이빌리티와 CDC 동기화기.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

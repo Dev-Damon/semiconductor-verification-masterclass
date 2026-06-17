@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 0-3 · CDV·커버리지·SVA 정밀</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 0 · 0-3 검증 방법론 정밀">
+<div class="track-switch"><a href="../../chapters/ch0-3.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">커버리지·SVA·CDV, 코드 레벨까지</h1>
+    <p class="hook">개념판에서 "랜덤 자극으로 버그를 잡는다"를 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">covergroup 문법, concurrent SVA 동작, coverage closure 기준, 사인오프 곡선</strong>까지 정확히 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"검증한다"에서 "측정해서 닫는다"로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li>DUT / TB / 자극 / 체크의 큰 그림</li><li>constrained-random이 왜 좋은지의 직관</li><li>"커버리지로 진행도를 본다"는 개념</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li><code>covergroup/coverpoint/cross/bins</code> 실제 문법</li><li>코드 커버리지 5종(line/toggle/branch/cond/FSM) 구분</li><li>SVA <strong>immediate vs concurrent</strong>, <code>cover property</code></li><li>seed·regression·<strong>coverage closure</strong> 사인오프</li><li>formal(FPV/model checking)의 적용처</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준 언어/표준: <strong>IEEE 1800 SystemVerilog</strong>(SVA·functional coverage), <strong>UVM(IEEE 1800.2)</strong> 방법론. 면접에서 "시뮬 돌려봤다"는 사람과 "<strong>CDV 루프를 돌려 닫아봤다</strong>"는 사람을 가르는 게 이 디테일들입니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">전체 그림</div>
+    <h2>CDV 루프 — 측정이 자극을 이끈다</h2>
+    <p>Coverage-Driven Verification은 <strong class="hl">"랜덤 자극 → 커버리지 측정 → 구멍 분석 → 제약/시드 조정"</strong>을 회귀로 반복해 목표 커버리지에 수렴시키는 폐루프입니다.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 760 240" font-family="var(--mono)">
+        <!-- nodes -->
+        <g>
+          <rect x="20"  y="96" width="130" height="48" rx="10" fill="#172236" stroke="#b388ff"/>
+          <text x="85" y="117" fill="#e8eef7" font-size="12" text-anchor="middle">vplan</text>
+          <text x="85" y="133" fill="#9fb0c7" font-size="10" text-anchor="middle">기능 → 커버 항목</text>
+
+          <rect x="190" y="96" width="140" height="48" rx="10" fill="#172236" stroke="#5b9cff"/>
+          <text x="260" y="117" fill="#e8eef7" font-size="12" text-anchor="middle">constrained-random</text>
+          <text x="260" y="133" fill="#9fb0c7" font-size="10" text-anchor="middle">seed N개 회귀</text>
+
+          <rect x="370" y="96" width="130" height="48" rx="10" fill="#172236" stroke="#38e1c6"/>
+          <text x="435" y="117" fill="#e8eef7" font-size="12" text-anchor="middle">coverage 수집</text>
+          <text x="435" y="133" fill="#9fb0c7" font-size="10" text-anchor="middle">func + code</text>
+
+          <rect x="540" y="96" width="200" height="48" rx="10" fill="#172236" stroke="#ffce6b"/>
+          <text x="640" y="117" fill="#e8eef7" font-size="12" text-anchor="middle">merge / 구멍 분석</text>
+          <text x="640" y="133" fill="#9fb0c7" font-size="10" text-anchor="middle">closure?</text>
+        </g>
+        <!-- arrows forward -->
+        <g stroke="#22304a" stroke-width="2" fill="#22304a">
+          <line x1="150" y1="120" x2="186" y2="120"/><polygon points="186,120 178,116 178,124"/>
+          <line x1="330" y1="120" x2="366" y2="120"/><polygon points="366,120 358,116 358,124"/>
+          <line x1="500" y1="120" x2="536" y2="120"/><polygon points="536,120 528,116 528,124"/>
+        </g>
+        <!-- feedback loop -->
+        <polyline fill="none" stroke="#ff7ac0" stroke-width="2" stroke-dasharray="5 4" points="640,96 640,40 260,40 260,94"/>
+        <polygon points="260,94 256,86 264,86" fill="#ff7ac0"/>
+        <text x="450" y="32" fill="#ff7ac0" font-size="11" text-anchor="middle">구멍 → 제약/시드 조정 (feedback)</text>
+        <!-- closure exit -->
+        <polyline fill="none" stroke="#5ee6a0" stroke-width="2" points="640,144 640,196 360,196"/>
+        <polygon points="360,196 368,192 368,200" fill="#5ee6a0"/>
+        <text x="500" y="214" fill="#5ee6a0" font-size="11" text-anchor="middle">100% + 버그곡선 수렴 → 사인오프</text>
+      </svg>
+    </div>
+    <div class="note mt">핵심은 <strong>피드백</strong>입니다. 커버리지 구멍이 다음 회귀의 제약(constraint)·시드를 바꾸고, 그게 다시 자극을 만듭니다. "그냥 오래 돌리기"가 아니라 <strong class="hl">측정 기반으로 닫는</strong> 게 CDV.</div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">기능 커버리지 문법</div>
+    <h2>covergroup · coverpoint · bins</h2>
+    <pre class="code"><code><span class="kw">class</span> <span class="fn">txn</span>; <span class="kw">rand</span> bit [<span class="str">1</span>:<span class="str">0</span>] burst; <span class="kw">rand</span> bit [<span class="str">2</span>:<span class="str">0</span>] size; <span class="kw">rand</span> bit [<span class="str">7</span>:<span class="str">0</span>] len; <span class="kw">endclass</span>
+
+<span class="kw">covergroup</span> <span class="fn">cg_axi</span>(<span class="kw">ref</span> txn t) @(<span class="fn">posedge</span> clk);   <span class="cmt">// 샘플 트리거</span>
+  cp_burst : <span class="kw">coverpoint</span> t.burst {
+    <span class="kw">bins</span> fixed = {<span class="str">2'b00</span>};
+    <span class="kw">bins</span> incr  = {<span class="str">2'b01</span>};
+    <span class="kw">bins</span> wrap  = {<span class="str">2'b10</span>};
+    <span class="kw">illegal_bins</span> rsvd = {<span class="str">2'b11</span>};         <span class="cmt">// 맞으면 즉시 에러</span>
+  }
+  cp_size : <span class="kw">coverpoint</span> t.size {
+    <span class="kw">bins</span> sz[] = {[<span class="str">0</span>:<span class="str">7</span>]};                    <span class="cmt">// 8개 자동 분할(0..7)</span>
+  }
+  cp_len  : <span class="kw">coverpoint</span> t.len {
+    <span class="kw">bins</span> single = {<span class="str">0</span>};
+    <span class="kw">bins</span> mid[<span class="str">4</span>] = {[<span class="str">1</span>:<span class="str">254</span>]};                  <span class="cmt">// 범위를 4개 bin으로 균등 분배</span>
+    <span class="kw">bins</span> max256 = {<span class="str">255</span>};
+  }
+  x_bs : <span class="kw">cross</span> cp_burst, cp_size;             <span class="cmt">// 조합(곱) 커버리지</span>
+<span class="kw">endgroup</span></code></pre>
+    <div class="codecap">샘플은 covergroup이 보는 시점(@posedge clk 또는 명시적 .sample())에 일어난다.</div>
+    <div class="spec"><p style="margin:6px 0"><code>bins x[]</code>는 값마다 1개씩, <code>bins x[N]</code>은 N개로 <strong>균등 분배</strong>, <code>bins x = {set}</code>은 하나의 bin. <strong>cross</strong>는 cp들의 데카르트 곱(예: 3 burst × 8 size = <strong>24</strong>개 조합)을 본다.</p></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">두 커버리지의 차이</div>
+    <h2>기능 커버리지 vs 코드 커버리지</h2>
+    <table class="compare">
+      <tr><th>구분</th><th>기능 커버리지(functional)</th><th>코드 커버리지(code)</th></tr>
+      <tr><td>출처</td><td>사람이 <strong>vplan에서 직접 작성</strong>(covergroup)</td><td>시뮬레이터가 <strong>자동 계측</strong></td></tr>
+      <tr><td>측정 대상</td><td>"의도한 시나리오·조합이 발생했나"</td><td>"RTL 코드의 구조가 실행됐나"</td></tr>
+      <tr><td>구멍의 의미</td><td>설계 <strong>의도</strong>가 안 자극됨</td><td><strong>죽은/안 탄</strong> 코드</td></tr>
+      <tr><td>한계</td><td>안 적으면 안 보임(작성자 의존)</td><td>실행만 보고 <strong>정확성은 모름</strong></td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0"><strong>코드 커버리지 5종:</strong> <strong class="hl2">line</strong>(문장 실행), <strong class="hl2">toggle</strong>(각 비트 0→1·1→0), <strong class="hl2">branch</strong>(if/case 분기), <strong class="hl2">condition/expression</strong>(불 조건의 각 항 참/거짓), <strong class="hl2">FSM</strong>(상태·전이 도달).</p></div>
+      <div class="deepnote"><p style="margin:6px 0">둘은 <strong>상호 보완</strong>입니다. 코드 커버리지는 "TB가 RTL을 충분히 휘저었나(자극 빈약 탐지)", 기능 커버리지는 "의도한 일이 일어났나"를 봅니다. 어느 한쪽만으론 닫을 수 없습니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">치명적 함정</div>
+    <h2>100%인데 버그가 남는 두 경우</h2>
+    <div class="grid2">
+      <div class="pitfall"><p style="margin:6px 0"><strong>① 코드 커버리지 100% ≠ 검증 끝.</strong> 모든 line이 실행돼도 <strong class="hl2">기능 커버리지 구멍</strong>(예: WRAP+narrow+back-to-back 조합)은 그대로 남는다. "line 100% 찍었으니 됐다"는 신입 단골 오답.</p></div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>② all-pass ≠ 검증됨.</strong> 테스트가 전부 PASS여도 <strong>체크(scoreboard/assertion)가 없거나 약하면</strong> 단지 "안 터졌을 뿐". 커버리지가 올라가도 <strong class="hl2">체크가 비어 있으면</strong> 미검증.</p></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">그래서 사인오프는 <strong>3축</strong>을 같이 봅니다: ① 기능 커버리지(의도) ② 코드 커버리지(자극 충분성) ③ <strong>버그 발견 곡선의 수렴</strong>(더 안 나옴). 한 축만 100%는 의미가 약합니다. 특히 ②가 100%인데 ①에 구멍이 있으면 — <strong class="hl">"코드는 다 탔지만 의도는 안 자극됐다"</strong> — 가장 흔한 위험 신호.</p></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">SVA ① 두 종류</div>
+    <h2>immediate vs concurrent assertion</h2>
+    <div class="grid2">
+      <div class="spec">
+        <h3 style="color:var(--accent2)">immediate</h3>
+        <p style="margin:6px 0">절차 코드(always/initial) 안에서 <strong>그 시점 즉시</strong> 평가. 조합적 한 점 검사.</p>
+        <pre class="code sm"><code><span class="kw">always</span> @(<span class="fn">posedge</span> clk)
+  <span class="kw">if</span> (wr_en)
+    <span class="fn">assert</span>(addr <span class="kw"><</span> MEM_SIZE)
+    <span class="kw">else</span> $error(<span class="str">"OOR addr"</span>);</code></pre>
+        <p class="dim" style="margin:4px 0">시간(여러 클럭)에 걸친 관계는 못 본다.</p>
+      </div>
+      <div class="spec">
+        <h3 style="color:var(--accent2)">concurrent</h3>
+        <p style="margin:6px 0"><strong>클럭 기준</strong>으로 매 사이클 평가. <code>property</code>+temporal 연산자로 <strong>여러 클럭에 걸친 시퀀스</strong>를 검사.</p>
+        <pre class="code sm"><code><span class="kw">property</span> p_ack;
+  @(<span class="fn">posedge</span> clk) <span class="kw">disable iff</span>(!rst_n)
+    req <span class="kw">|-></span> <span class="kw">##</span>[<span class="str">1</span>:<span class="str">3</span>] ack;  <span class="cmt">// 1~3클럭 내 ack</span>
+<span class="kw">endproperty</span>
+a_ack : <span class="fn">assert property</span>(p_ack);</code></pre>
+        <p class="dim" style="margin:4px 0">대부분의 프로토콜 규칙이 여기 속한다.</p>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>혼동 주의:</strong> immediate는 "절차문, 즉시", concurrent는 "클럭 샘플링, 시간에 걸침". concurrent에서 신호는 <strong>preponed 영역</strong>(클럭 엣지 직전 안정값)으로 샘플돼 race를 피합니다. <code>disable iff</code>로 리셋 중엔 평가를 끕니다.</p></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">SVA ② 연산자와 cover</div>
+    <h2>|-> vs |=> · cover property</h2>
+    <table class="sig">
+      <tr><th>표기</th><th>이름</th><th>의미</th></tr>
+      <tr><td>|-></td><td>overlapping implication</td><td>선행 만족 → <strong>같은 클럭</strong>부터 후행 검사</td></tr>
+      <tr><td>|=></td><td>non-overlapping</td><td>선행 만족 → <strong>다음 클럭</strong>부터 후행 검사(= <code>|-> ##1</code>)</td></tr>
+      <tr><td>##N</td><td>delay</td><td>정확히 N클럭 뒤</td></tr>
+      <tr><td>##[m:n]</td><td>range delay</td><td>m~n클럭 사이</td></tr>
+      <tr><td>s[*3]</td><td>consecutive repeat</td><td>s가 3클럭 연속</td></tr>
+      <tr><td>$rose/$fell</td><td>edge</td><td>이전→현재 0→1 / 1→0 전이</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div>
+        <pre class="code sm"><code><span class="cmt">// 버그 잡기(assert)가 아니라</span>
+<span class="cmt">// "이 시퀀스가 일어났나"를 측정(cover)</span>
+c_btb : <span class="fn">cover property</span>(@(<span class="fn">posedge</span> clk)
+  $rose(start) <span class="kw">##</span>[<span class="str">1</span>:<span class="str">2</span>] done <span class="kw">##1</span> $rose(start));
+<span class="cmt">// → back-to-back 트랜잭션 커버 항목</span></code></pre>
+      </div>
+      <div class="spec"><p style="margin:6px 0"><code>assert property</code>는 <strong>위반 시 fail</strong>(버그 검출), <code>cover property</code>는 <strong>도달 시 hit</strong>(커버리지 측정). 같은 SVA 문법으로 <strong class="hl">체커</strong>와 <strong class="hl">커버 항목</strong>을 둘 다 만든다 — 이게 ABV의 핵심.</p></div>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">랜덤·시드·회귀</div>
+    <h2>constrained-random → seed → regression</h2>
+    <div class="grid3">
+      <div class="card"><h3><span class="ico">🎲</span> seed</h3><p>같은 TB라도 <strong>seed</strong>가 바뀌면 다른 랜덤 시퀀스. seed는 결과를 <strong>재현</strong>하는 키 — fail seed를 저장해야 디버그 가능.</p></div>
+      <div class="card"><h3><span class="ico">📦</span> regression</h3><p>수백~수천 seed를 <strong>병렬</strong>로 야간 실행(LSF/grid). 각 run의 커버리지 DB를 모은다.</p></div>
+      <div class="card"><h3><span class="ico">🔗</span> merge</h3><p><strong>모든 run의 커버리지를 합산</strong>(merge)해 누적 진행도를 본다. 한 run만으론 못 닫는다.</p></div>
+    </div>
+    <pre class="code sm mt"><code><span class="cmt"># 여러 seed로 회귀 → 커버리지 누적 병합 (벤더 예: VCS urg)</span>
+<span class="kw">for</span> s <span class="kw">in</span> 1 2 3 ... 500; <span class="kw">do</span> simv +ntb_random_seed=$s -cm line+cond+fsm+tgl; <span class="kw">done</span>
+urg -dir simv.vdb/*  <span class="cmt"># merge → 통합 커버리지 리포트(HTML)</span></code></pre>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>seed 1개로 100%</strong>는 우연일 수 있고, 디버그하려면 <strong>실패 seed를 반드시 로깅</strong>해야 한다. seed 없이 "랜덤이라 재현 안 됨"은 검증 실격.</p></div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">언제 닫나</div>
+    <h2>Coverage Closure — 사인오프 기준</h2>
+    <div class="spec"><p style="margin:6px 0">Coverage closure = <strong class="hl">vplan의 모든 커버 항목이 채워지고(목표 도달)</strong>, 남은 구멍은 분석을 거쳐 <strong>의도적으로 제외(waiver/exclusion)</strong>되어 더 채울 게 없는 상태. "100% 그 자체"가 아니라 <strong>"설명되지 않은 구멍이 0"</strong>이 본질.</p></div>
+    <div class="grid2 mt">
+      <div>
+        <p>사인오프 체크리스트(실무 통상):</p>
+        <ul>
+          <li>기능 커버리지 = <strong>100%</strong> (모든 bin·cross hit 또는 waiver)</li>
+          <li>코드 커버리지 ≈ <strong>95~100%</strong>, 미달분은 <strong>분석/제외 사유 명시</strong>(unreachable·dead code)</li>
+          <li>모든 assertion <strong>fail 0</strong>, 회귀 <strong>pass</strong></li>
+          <li>버그 발견 곡선이 <strong>수렴</strong>(시간 대비 신규 버그 ≈ 0)</li>
+        </ul>
+      </div>
+      <div class="diagram" style="text-align:left">
+        <svg viewBox="0 0 320 200" font-family="var(--mono)">
+          <line x1="36" y1="20" x2="36" y2="168" stroke="#22304a"/>
+          <line x1="36" y1="168" x2="300" y2="168" stroke="#22304a"/>
+          <text x="8" y="28" fill="#9fb0c7" font-size="10">%</text>
+          <text x="270" y="186" fill="#9fb0c7" font-size="10">시간</text>
+          <!-- coverage rising to 100 -->
+          <polyline fill="none" stroke="#38e1c6" stroke-width="2.5" points="36,160 80,120 130,78 190,50 250,40 296,38"/>
+          <text x="240" y="32" fill="#38e1c6" font-size="10">coverage</text>
+          <!-- bug curve rising then flat -->
+          <polyline fill="none" stroke="#ff7ac0" stroke-width="2.5" points="36,150 70,90 110,70 160,64 210,62 296,61"/>
+          <text x="150" y="56" fill="#ff7ac0" font-size="10">누적 버그(수렴)</text>
+          <line x1="250" y1="20" x2="250" y2="168" stroke="#ffce6b" stroke-dasharray="3 3"/>
+          <text x="252" y="32" fill="#ffce6b" font-size="9">사인오프</text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">랜덤이 안 닿는 곳</div>
+    <h2>Formal Verification — FPV는 어디에 쓰나</h2>
+    <p>Formal은 자극을 던지지 않습니다. <strong class="hl">수학적 증명(model checking)</strong>으로 "이 property가 <strong>모든 입력·모든 상태</strong>에서 참인가"를 탐색합니다. 반례가 있으면 <strong>최단 counterexample 파형</strong>을 줍니다.</p>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 잘 맞는 곳</h3>
+        <ul><li>제어 로직: arbiter 기아·데드락 free</li><li>FIFO over/underflow 불가 증명</li><li>프로토콜 준수(AXI 등) FPV</li><li>CDC·레지스터맵·X-propagation</li><li>코너 커버 구멍의 <strong>도달성</strong> 증명/반증</li></ul></div>
+      <div class="card"><h3><span class="ico">⚠️</span> 한계</h3>
+        <ul><li><strong>상태 폭발</strong> — 큰 데이터패스엔 부적합</li><li>증명엔 <strong>assume(제약)</strong>이 필요(과제약 위험)</li><li>곱셈기·대형 메모리 full proof는 어려움</li><li>그래서 보통 <strong>bounded proof</strong>로 절충</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0"><strong>시뮬 vs formal:</strong> 시뮬은 "본 시나리오만" 검증(예시 기반), formal은 "<strong>본 적 없어도 전부</strong>" 증명(전수). 둘은 경쟁이 아니라 분담 — 제어부는 formal, 데이터패스·시스템 시나리오는 시뮬/CDV로.</p></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">엔진 선택</div>
+    <h2>sim · emulation · FPGA · formal 비교</h2>
+    <table class="compare">
+      <tr><th>축</th><th>Simulation</th><th>Emulation</th><th>FPGA prototype</th><th>Formal</th></tr>
+      <tr><td>속도</td><td>수~수백 Hz~kHz</td><td>~MHz(수십만배↑)</td><td>~수십 MHz</td><td>N/A(증명)</td></tr>
+      <tr><td>가시성/디버그</td><td><strong class="hl">최상</strong>(모든 신호)</td><td>높음</td><td>낮음(probe 제한)</td><td>반례 파형</td></tr>
+      <tr><td>완전성</td><td>자극에 한정</td><td>자극에 한정</td><td>자극에 한정</td><td><strong class="hl">전수 증명</strong></td></tr>
+      <tr><td>주 용도</td><td>블록·기능 검증, CDV</td><td>SoC·펌웨어/OS 부팅</td><td>실시간·SW 개발</td><td>제어·프로토콜·코너</td></tr>
+      <tr><td>비용/셋업</td><td>낮음</td><td>매우 높음</td><td>중</td><td>낮음~중(전문성↑)</td></tr>
+    </table>
+    <div class="note mt">실무는 <strong>혼합</strong>합니다: 블록은 sim+formal로 닫고, 통합·SW는 emulation/FPGA로 올린다. 같은 SoC를 여러 엔진이 <strong class="hl">역할을 나눠</strong> 검증.</div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>UVM에서 이 모든 게 어디 붙나</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🧱</span> 어디에</h3>
+        <ul><li><strong>covergroup</strong>은 보통 monitor가 본 트랜잭션에서 <code>cg.sample()</code></li><li><strong>scoreboard</strong>가 정답 비교(체크), 빈 체크면 미검증</li><li><strong>SVA</strong>는 interface/bind로 RTL에 항상 켜둠(protocol checker)</li><li>sequence/constraint가 자극을 만들고, <strong>커버리지 피드백</strong>으로 reactive하게 조정</li></ul></div>
+      <div class="card"><h3><span class="ico">🎯</span> closure 운영</h3>
+        <ul><li>야간 회귀 → 커버리지 <strong>merge</strong> → 구멍 리스트</li><li>구멍을 vplan 항목에 <strong>역매핑</strong>(traceability)</li><li>못 닿는 코너는 <strong>directed test</strong> 또는 <strong>formal</strong>로 보강</li><li>설명 가능한 미달은 <strong>waiver</strong> 문서화 후 사인오프</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0"><code>bind</code>로 SVA를 RTL에 주입하면 RTL을 수정하지 않고도 protocol checker를 항상 켤 수 있습니다. "기능은 도는데 규칙 위반"을 회귀 내내 잡아내는 게 핵심.</p></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "실무자"로 보인다</h2>
+    <div class="qa"><div class="q">기능 커버리지와 코드 커버리지의 차이, 둘 다 100%면 끝인가요?</div><div class="a">코드 커버리지는 시뮬레이터가 자동 계측(line/toggle/branch/condition/FSM)해 "RTL 구조가 실행됐나"를, 기능 커버리지는 사람이 vplan으로 작성한 covergroup으로 "의도한 시나리오·조합이 일어났나"를 봅니다. 코드 100%여도 기능 구멍은 남고, 둘 다 100%여도 체크(scoreboard/assertion)가 약하면 미검증입니다. 그래서 버그 발견 곡선 수렴까지 함께 봅니다.</div></div>
+    <div class="qa"><div class="q">concurrent assertion은 어떻게 동작하나요? immediate와 차이는?</div><div class="a">concurrent는 클럭 기준으로 매 사이클 평가하고, 신호를 preponed 영역(엣지 직전 안정값)으로 샘플해 race를 피하며 <code>|->/|=>/##/[*]</code> 같은 temporal 연산자로 여러 클럭 시퀀스를 검사합니다. immediate는 always/initial 절차문 안에서 그 시점 즉시 한 점만 평가합니다. 또 <code>disable iff</code>로 리셋 중 평가를 끕니다.</div></div>
+    <div class="qa"><div class="q">coverage closure란 무엇이고 formal은 어디에 씁니까?</div><div class="a">closure는 vplan의 모든 커버 항목이 목표에 도달하고 남은 구멍은 분석 후 의도적으로 제외(waiver)되어 "설명되지 않은 구멍이 0"인 상태입니다. 단순 100%가 아니라 추적 가능성이 핵심이죠. formal은 자극 없이 모든 입력·상태에서 property를 증명하는 기법으로, arbiter 데드락/기아, FIFO over·underflow, 프로토콜 준수, 도달성 같은 제어·코너에 강하고, 상태 폭발 때문에 큰 데이터패스엔 bounded proof로 절충합니다.</div></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>CDV·커버리지·SVA — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li>CDV = 랜덤 → 측정 → 구멍분석 → 제약/시드 <strong>폐루프</strong></li>
+        <li>기능 커버리지(사람·의도) vs 코드 커버리지(자동 line/toggle/branch/cond/FSM)</li>
+        <li>SVA: <strong>immediate</strong>(절차·즉시) vs <strong>concurrent</strong>(클럭·시퀀스), <code>cover property</code>로 측정</li>
+        <li>seed·regression·<strong>merge</strong>로 커버리지 누적</li>
+        <li>closure = "설명되지 않은 구멍 0" + 버그곡선 수렴</li>
+        <li>formal = 전수 증명(제어·코너), 시뮬은 예시 기반</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"커버리지는 진행도를 <strong class="hl">측정</strong>하고, assertion은 규칙을 <strong class="hl">감시</strong>하고, formal은 코너를 <strong class="hl">증명</strong>합니다. CDV는 이 셋을 폐루프로 돌려 '설명되지 않은 구멍 0'에서 사인오프합니다."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>1-x RTL 정밀</strong>: always_ff vs always_comb, 블로킹/논블로킹과 시뮬레이션 영역(NBA), 합성 가능 코딩.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 4-1 · 컴파일·엘라보레이션 정밀</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 4 · 4-1 Compile/Elab 정밀">
+<div class="track-switch"><a href="../../chapters/ch4-1.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">컴파일 → 엘라보레이션, 실행 직전까지</h1>
+    <p class="hook">개념판에서 "소스가 simv가 된다"는 흐름을 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">vlogan/vcs/xrun 명령, elaboration이 실제로 하는 일, SV 이벤트 영역, 에러 3종 구분</strong>까지 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"빌드한다"에서 "단계마다 뭐가 일어나는지 말한다"로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li>소스 → 컴파일 → 실행이미지 → 시뮬</li><li>컴파일=문법 검사라는 직관</li><li>"빌드 한 번, 시뮬 여러 번"의 큰 그림</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li>VCS <strong>3-step</strong>(vlogan→vcs→simv) vs 통합 호출</li><li>Xcelium <code>xrun</code> 2-step/single-step</li><li>elaboration이 실제로 펼치는 것(generate·param·bind·계층)</li><li>SV <strong>이벤트 스케줄링 영역</strong> 7단계</li><li>compile-time / elab-time / run-time 에러 분리</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준: <strong>IEEE 1800-2017 (SystemVerilog LRM)</strong> §4 스케줄링 시맨틱, 그리고 Synopsys VCS / Cadence Xcelium 표준 플로우. 면접에서 "시뮬 돌려봤다"와 "빌드 플로우를 안다"를 가르는 건 <strong class="hl">"컴파일과 엘라보가 각각 뭘 하느냐"</strong>를 분리해 말할 수 있느냐입니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">큰 그림 먼저</div>
+    <h2>세 단계: Compile → Elaborate → Simulate</h2>
+    <div class="flow">
+      <div class="box">소스(.sv/.v)<br><span class="dim" style="font-size:12px">+define +incdir</span></div>
+      <div class="arrow">→</div>
+      <div class="box on">Analyze<br>(compile)<br><span class="dim" style="font-size:12px">파싱·문법·중간형식</span></div>
+      <div class="arrow">→</div>
+      <div class="box on">Elaborate<br><span class="dim" style="font-size:12px">계층 구축·바인딩</span></div>
+      <div class="arrow">→</div>
+      <div class="box">실행이미지<br>(simv / snapshot)</div>
+      <div class="arrow">→</div>
+      <div class="box">Run<br><span class="dim" style="font-size:12px">시뮬레이션</span></div>
+    </div>
+    <div class="grid2 mt">
+      <div class="note"><strong>Analyze/Compile</strong>: 파일 단위로 파싱·문법 검사 후 라이브러리에 중간 표현을 적재. <strong>Elaborate</strong>: top을 기준으로 디자인 전체를 한 덩어리로 조립(인스턴스화·파라미터 확정·연결 해결). <strong>Run</strong>: 만들어진 이미지로 시간을 진행.</div>
+      <div class="dev-bridge"><p style="margin:6px 0">개발자 비유: <code>compile</code>은 <strong>.o 오브젝트 만들기</strong>(파일별), <code>elaborate</code>는 <strong>link 단계</strong>(심볼·인스턴스 해결해 실행파일 생성), <code>run</code>은 그 바이너리 실행. 다만 HDL의 elaboration은 "하드웨어 계층을 펼치는" 작업이라 링크보다 훨씬 구조적입니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">VCS 플로우 ①</div>
+    <h2>Synopsys VCS — 3-step 정석</h2>
+    <pre class="code"><code><span class="cmt"># 1) Analyze : SV 소스를 파싱해 라이브러리에 적재</span>
+<span class="fn">vlogan</span> -full64 -sverilog +incdir+./rtl+./tb \
+       +define+SIM+WIDTH=32 -timescale=1ns/1ps \
+       ./rtl/dut.sv ./tb/top_tb.sv -l vlogan.log
+
+<span class="cmt"># 2) Elaborate : top을 잡아 디자인 조립 → simv 실행이미지 생성</span>
+<span class="fn">vcs</span>    -full64 -debug_access+all top_tb \
+       -P novas.tab pli.a            <span class="cmt"># (VPI/PLI 링크 예시)</span> \
+       -l vcs_elab.log
+
+<span class="cmt"># 3) Simulate : 만들어진 실행이미지 실행</span>
+<span class="fn">./simv</span> +UVM_TESTNAME=my_test +ntb_random_seed=7 \
+       -l sim.log</code></pre>
+    <div class="codecap">vlogan=분석, vcs=엘라보+링크(simv 생성), ./simv=런타임. VHDL은 <code>vhdlan</code> 사용.</div>
+    <div class="spec"><p style="margin:6px 0"><code>vlogan</code>이 만든 산출물은 보통 <code>./AN.DB</code> 라이브러리에 쌓이고, <code>vcs</code> 단계에서 top 모듈명을 인자로 받아 elaboration을 수행합니다. <strong class="hl2">+incdir</strong>은 \`include 탐색 경로, <strong class="hl2">+define</strong>은 매크로 정의 — 둘 다 <strong>분석(compile) 단계</strong>의 입력입니다.</p></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">VCS 플로우 ②</div>
+    <h2>통합 1-step 호출 vs 3-step, 언제 뭘 쓰나</h2>
+    <pre class="code sm"><code><span class="cmt"># 통합(single-call) : vcs 한 번이 내부에서 분석+엘라보를 함께</span>
+<span class="fn">vcs</span> -full64 -sverilog +incdir+./rtl \
+    +define+SIM ./rtl/dut.sv ./tb/top_tb.sv \
+    -debug_access+all -l build.log
+<span class="fn">./simv</span> +UVM_TESTNAME=my_test -l sim.log</code></pre>
+    <table class="compare mt">
+      <tr><th>구분</th><th>3-step (vlogan→vcs→simv)</th><th>통합 (vcs ... → simv)</th></tr>
+      <tr><td>분석/엘라보 분리</td><td>명시적으로 분리</td><td>vcs가 내부에서 둘 다 수행</td></tr>
+      <tr><td>증분 컴파일</td><td><strong class="hl">강함</strong> — 바뀐 파일만 다시 vlogan</td><td>제한적(전체 재처리 경향)</td></tr>
+      <tr><td>대형 회귀/CI</td><td>라이브러리 재사용에 유리</td><td>소규모·단발 빌드에 간단</td></tr>
+      <tr><td>전형적 사용처</td><td>UVM 검증 환경, 야간 회귀</td><td>빠른 스모크 테스트</td></tr>
+    </table>
+    <div class="pitfall mt"><p style="margin:6px 0">"통합 호출은 항상 더 편하다" ❌ — 파일 수백 개의 검증 환경에서 한 파일만 고쳐도 매번 전체를 재분석하면 빌드가 폭발합니다. 그래서 실무 회귀는 대개 <strong>vlogan으로 증분 분석 → vcs로 재엘라보</strong> 패턴을 씁니다.</p></div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">Xcelium 플로우</div>
+    <h2>Cadence Xcelium — xrun 2-step / single-step</h2>
+    <pre class="code"><code><span class="cmt"># single-step : xrun 한 번에 compile+elab+sim</span>
+<span class="fn">xrun</span> -sv -64bit +incdir+./rtl +define+SIM \
+     -uvmhome CDNS-1.2 +UVM_TESTNAME=my_test \
+     ./rtl/dut.sv ./tb/top_tb.sv -l xrun.log
+
+<span class="cmt"># 2-step (정밀 제어) : 컴파일 / 엘라보를 분리한 하위 툴</span>
+<span class="fn">xmvlog</span>  -sv +incdir+./rtl ./rtl/dut.sv ./tb/top_tb.sv  <span class="cmt"># 분석</span>
+<span class="fn">xmelab</span>  -access +rwc top_tb                            <span class="cmt"># 엘라보 → snapshot</span>
+<span class="fn">xmsim</span>   top_tb +UVM_TESTNAME=my_test                  <span class="cmt"># 런타임</span></code></pre>
+    <div class="codecap">xrun=올인원 프런트엔드. 내부적으로 xmvlog(분석)·xmelab(엘라보)·xmsim(런)을 호출. 산출물은 simv 같은 파일이 아니라 <strong>snapshot</strong>(worklib.top:module).</div>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0"><strong>VCS는 <code>simv</code> 실행이미지</strong>(독립 바이너리), <strong>Xcelium은 snapshot</strong>(라이브러리 안의 엘라보 결과)을 만듭니다. 이름·산출물 형태가 다르지만 "엘라보 결과를 저장해 재실행"이라는 개념은 동일합니다.</p></div>
+      <div class="note"><code>-access +rwc</code>(xmelab) / <code>-debug_access+all</code>(vcs)는 <strong>신호 가시성</strong> 옵션 — 파형 덤프·force·read 권한을 엘라보 시점에 결정합니다. 끄면 빨라지지만 디버깅이 막힙니다.</div>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">엘라보레이션의 정체</div>
+    <h2>Elaboration이 "실제로" 하는 일</h2>
+    <div class="spec"><ul style="margin:8px 0">
+      <li><strong>인스턴스화(instantiation):</strong> top부터 모듈/인터페이스/프로그램을 재귀적으로 펼쳐 <strong class="hl">유일한 인스턴스 트리</strong>를 만든다.</li>
+      <li><strong>파라미터 확정:</strong> <code>parameter</code>/<code>localparam</code>, <code>#(.WIDTH(32))</code> override, <code>defparam</code>을 해결해 <strong>상수값을 고정</strong>한다(엘라보 후엔 못 바꿈).</li>
+      <li><strong>generate 펼치기:</strong> <code>for/if generate</code>를 조건에 맞게 전개 — 코드가 실제 인스턴스/논리로 확정된다.</li>
+      <li><strong>bind 삽입:</strong> <code>bind</code> 문으로 모듈에 외부 모듈(주로 checker/assertion)을 붙인다.</li>
+      <li><strong>$unit·이름 해석:</strong> 컴파일 단위 스코프(<code>$unit</code>), 계층 이름(<code>top.u_dut.reg</code>) 참조를 해결한다.</li>
+      <li><strong>연결·폭 해결:</strong> 포트 연결, net 폭, 타입 정합성을 확정한다.</li>
+      <li><strong>PLI/VPI/DPI 링크:</strong> C 모델·세이버/덤퍼·DPI <code>import "DPI-C"</code>를 심볼 해결해 실행이미지에 묶는다.</li>
+    </ul></div>
+    <div class="deepnote mt"><p style="margin:6px 0">한 줄 요약: <strong>"파라미터·generate·연결·이름·외부코드를 전부 확정해, 시간이 0인 정적 하드웨어 그림을 완성"</strong>하는 단계입니다. 그래서 엘라보 후엔 디자인 구조가 바뀌지 않습니다.</p></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">파라미터·제너레이트</div>
+    <h2>엘라보 타임에 결정되는 코드 — 예시</h2>
+    <pre class="code sm"><code><span class="kw">module</span> fifo #(<span class="kw">parameter int</span> DEPTH = 16, <span class="kw">parameter int</span> W = 8)
+  (<span class="kw">input</span> clk, ...);
+  <span class="cmt">// 폭·깊이는 엘라보 시점에 상수로 박힘</span>
+  <span class="kw">logic</span> [W-1:0] mem [DEPTH];
+
+  <span class="kw">generate</span>
+    <span class="kw">if</span> (DEPTH &gt; 32) <span class="kw">begin</span> : g_big   <span class="cmt">// 조건이 엘라보 때 평가</span>
+      big_ctrl u_ctrl (.*);
+    <span class="kw">end</span> <span class="kw">else</span> <span class="kw">begin</span> : g_small
+      small_ctrl u_ctrl (.*);
+    <span class="kw">end</span>
+  <span class="kw">endgenerate</span>
+<span class="kw">endmodule</span>
+
+<span class="cmt">// 상위에서 override → 두 인스턴스가 서로 다른 하드웨어로 펼쳐짐</span>
+fifo #(.DEPTH(64), .W(32)) u_big   (.clk, ...);  <span class="cmt">// g_big 선택</span>
+fifo #(.DEPTH(8),  .W(8))  u_small (.clk, ...);  <span class="cmt">// g_small 선택</span></code></pre>
+    <div class="codecap"><code>DEPTH&gt;32</code> 분기는 런타임이 아니라 <strong>엘라보 타임</strong>에 평가되어 인스턴스 자체가 달라진다.</div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>가장 흔한 오개념:</strong> "파라미터를 시뮬 중에 plusarg로 바꾸면 폭이 바뀐다" ❌ — 파라미터는 <strong class="hl">엘라보 타임 상수</strong>라 런타임 <code>+ARG</code>로 못 바꿉니다. 폭/깊이를 바꾸려면 <strong>재엘라보(재빌드)</strong>가 필요. 런타임에 바꿀 수 있는 건 <code>$value$plusargs</code>로 읽는 <strong>변수·설정값</strong>뿐입니다.</p></div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">bind — 침투 없이 붙이기</div>
+    <h2>bind: RTL을 안 건드리고 checker/커버리지 삽입</h2>
+    <div class="grid2">
+      <div>
+        <p><code>bind</code>는 <strong>대상 모듈을 수정하지 않고</strong> 외부 모듈(주로 SVA assertion/커버리지/모니터)을 그 안에 인스턴스화하는 엘라보-타임 문법입니다.</p>
+        <ul>
+          <li>RTL 소유자와 검증자가 분리돼도 <strong class="hl">RTL 파일 불변</strong></li>
+          <li>주로 <code>checker</code>·protocol assertion·formal property 주입</li>
+          <li>대상의 내부 신호에 계층 이름으로 접근 가능</li>
+        </ul>
+      </div>
+      <pre class="code sm"><code><span class="cmt">// dut.sv 는 한 글자도 안 고침</span>
+<span class="kw">module</span> fifo_sva(<span class="kw">input</span> clk, full, push);
+  <span class="fn">a_no_push_when_full</span>: <span class="kw">assert property</span>(
+    @(<span class="kw">posedge</span> clk) full |-&gt; !push);
+<span class="kw">endmodule</span>
+
+<span class="cmt">// tb 어딘가에서 바인딩(엘라보 때 삽입)</span>
+<span class="kw">bind</span> fifo  fifo_sva u_chk (
+  .clk(clk), .full(full), .push(push));</code></pre>
+    </div>
+    <div class="spec mt"><p style="margin:6px 0"><code>bind &lt;대상모듈&gt; &lt;삽입모듈&gt; &lt;인스턴스명&gt; (...)</code>. <strong>엘라보 타임</strong>에 대상의 모든 인스턴스에 자동 삽입됩니다(또는 특정 인스턴스 지정 가능). 면접 단골: "RTL을 못 만지는데 assertion을 넣으려면?" → 정답이 <strong class="hl">bind</strong>.</p></div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">혼동 금지</div>
+    <h2>HDL elaboration ≠ UVM build_phase</h2>
+    <table class="compare">
+      <tr><th>구분</th><th>HDL Elaboration</th><th>UVM build_phase</th></tr>
+      <tr><td>시점</td><td>빌드 타임(시뮬 시작 전, 시간 0 이전)</td><td><strong>런타임</strong>(시뮬 시작 후, 시간 0)</td></tr>
+      <tr><td>대상</td><td>module/interface 정적 계층</td><td>uvm_component 객체 트리</td></tr>
+      <tr><td>하는 일</td><td>param·generate·연결·bind 확정</td><td><code>new()</code>로 컴포넌트 생성, config_db 적용</td></tr>
+      <tr><td>변경 가능성</td><td>이후 구조 불변</td><td>객체·연결을 런타임에 동적 구성</td></tr>
+      <tr><td>순서</td><td>—</td><td>top-down(부모→자식)</td></tr>
+    </table>
+    <div class="pitfall mt"><p style="margin:6px 0">"UVM도 일종의 elaboration 아니냐"는 말은 <strong>반쯤만 맞습니다.</strong> UVM의 "엘라보"는 비유일 뿐 — 실제로는 <strong class="hl">런타임 객체 생성</strong>(<code>build_phase</code>)이라 HDL의 정적 elaboration과 시점·메커니즘이 전혀 다릅니다. 이 둘을 정확히 구분하면 면접에서 깊이가 드러납니다.</p></div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">SystemVerilog 핵심</div>
+    <h2>이벤트 스케줄링 영역 — 한 타임슬롯의 7단계</h2>
+    <p>한 시뮬레이션 시각(time slot) 안에서 이벤트는 정해진 <strong class="hl">영역(region)</strong> 순서로 평가됩니다. 레이스를 막기 위해 LRM이 순서를 못박아 둔 것.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 760 200" font-family="var(--mono)" font-size="11">
+        <defs></defs>
+        <g>
+          <rect x="10"  y="60" width="92" height="56" rx="8" fill="#172236" stroke="#9fb0c7"/>
+          <rect x="112" y="60" width="92" height="56" rx="8" fill="#172236" stroke="#b388ff"/>
+          <rect x="214" y="60" width="92" height="56" rx="8" fill="#172236" stroke="#b388ff"/>
+          <rect x="316" y="60" width="92" height="56" rx="8" fill="#172236" stroke="#5b9cff"/>
+          <rect x="418" y="60" width="92" height="56" rx="8" fill="#172236" stroke="#38e1c6"/>
+          <rect x="520" y="60" width="100" height="56" rx="8" fill="#172236" stroke="#ff7ac0"/>
+          <rect x="630" y="60" width="100" height="56" rx="8" fill="#172236" stroke="#9fb0c7"/>
+        </g>
+        <g fill="#e8eef7" text-anchor="middle" font-weight="700">
+          <text x="56"  y="84">Preponed</text>
+          <text x="158" y="84">Active</text>
+          <text x="260" y="84">Inactive</text>
+          <text x="362" y="84">NBA</text>
+          <text x="468" y="84">Observed</text>
+          <text x="570" y="84">Reactive</text>
+          <text x="680" y="84">Postponed</text>
+        </g>
+        <g fill="#9fb0c7" text-anchor="middle" font-size="9.5">
+          <text x="56"  y="102">#1 샘플</text>
+          <text x="158" y="102">blocking,#0큐</text>
+          <text x="260" y="102">#0 지연</text>
+          <text x="362" y="102">&lt;= 갱신</text>
+          <text x="468" y="102">property평가</text>
+          <text x="570" y="102">program/PASS</text>
+          <text x="680" y="102">$strobe/$monitor</text>
+        </g>
+        <g stroke="#22304a"><line x1="102" y1="88" x2="112" y2="88"/><line x1="204" y1="88" x2="214" y2="88"/><line x1="306" y1="88" x2="316" y2="88"/><line x1="408" y1="88" x2="418" y2="88"/><line x1="510" y1="88" x2="520" y2="88"/><line x1="620" y1="88" x2="630" y2="88"/></g>
+        <path d="M408 130 C 360 170, 240 170, 204 130" fill="none" stroke="#ffce6b" stroke-dasharray="4 3"/>
+        <text x="306" y="178" fill="#ffce6b" text-anchor="middle" font-size="10">Inactive/NBA → 다시 Active 로 되먹임(iterative)</text>
+      </svg>
+    </div>
+    <div class="note mt">대표 7영역: <strong>Preponed → Active → Inactive → NBA → Observed → Reactive → Postponed</strong>. (LRM은 이 사이에 Pre-/Post- 보조 영역도 정의하지만, 면접은 이 7개를 묻습니다.)</div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">영역이 왜 중요한가</div>
+    <h2>blocking vs non-blocking, 그리고 레이스</h2>
+    <table class="sig">
+      <tr><th>영역</th><th>여기서 일어나는 일</th><th>관련 구문</th></tr>
+      <tr><td>Preponed</td><td>샘플링(값을 "이전" 시점으로 캡처)</td><td><code>@(...)</code>, SVA 샘플, <code>$sampled</code></td></tr>
+      <tr><td>Active</td><td>blocking 대입, RHS 평가, <code>#0</code></td><td><code>=</code>, <code>$display</code></td></tr>
+      <tr><td>Inactive</td><td><code>#0</code> 지연 이벤트 처리</td><td><code>#0</code></td></tr>
+      <tr><td>NBA</td><td>non-blocking 대입의 <strong>실제 갱신</strong></td><td><code>&lt;=</code></td></tr>
+      <tr><td>Observed</td><td>concurrent assertion property 평가</td><td><code>assert property</code></td></tr>
+      <tr><td>Reactive</td><td>program block / 클래스 기반 TB 실행</td><td><code>program</code>, UVM 드라이버</td></tr>
+      <tr><td>Postponed</td><td>안정된 최종값 읽기(쓰기 금지)</td><td><code>$strobe</code>, <code>$monitor</code></td></tr>
+    </table>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>클래식 레이스:</strong> 클럭 엣지에서 RTL은 <code>&lt;=</code>(NBA 영역에서 갱신)로 쓰는데, TB가 <code>=</code>(Active 영역)로 같은 신호를 읽으면 <strong class="hl">갱신 전 옛값</strong>을 보게 됩니다. 그래서 TB 샘플링은 <code>program</code>/Reactive나 <code>$sampled</code>(Preponed)에 맞춰 설계합니다 — UVM이 <code>clocking block</code>을 쓰는 이유.</p></div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">에러 3종</div>
+    <h2>compile-time vs elaboration-time vs run-time</h2>
+    <div class="grid3">
+      <div class="card"><h3><span class="ico">📝</span> Compile-time</h3>
+        <p>파일 단위 <strong>문법·타입</strong> 오류. 한 파일만 봐도 잡힘.</p>
+        <ul style="font-size:14px"><li>세미콜론 누락, 키워드 오타</li><li>타입 불일치, 미선언 식별자</li><li><code>vlogan/xmvlog</code>가 보고</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🔗</span> Elaboration-time</h3>
+        <p>여러 파일을 <strong>조립</strong>할 때만 드러나는 오류.</p>
+        <ul style="font-size:14px"><li>모듈/인스턴스 미해결</li><li>포트 폭·개수 불일치</li><li>파라미터 충돌, 중복 정의</li><li><code>vcs/xmelab</code>이 보고</li></ul></div>
+      <div class="card"><h3><span class="ico">⏱️</span> Run-time</h3>
+        <p>시간이 흐를 때 <strong>값에 의존</strong>해 터지는 오류.</p>
+        <ul style="font-size:14px"><li>배열 OOB, null 핸들 역참조</li><li>0 나눗셈, X 전파</li><li>assertion fail, timeout</li><li><code>simv/xmsim</code> 중 발생</li></ul></div>
+    </div>
+    <div class="spec mt"><p style="margin:6px 0">분리 기준: <strong>"한 파일만 보면 아나?"</strong> → compile. <strong>"파일들을 합쳐 top을 조립해야 아나?"</strong> → elaboration. <strong>"실행해서 값이 흘러야 아나?"</strong> → run-time. 면접에서 <code>port width mismatch</code>를 어디서 잡느냐 물으면 <strong class="hl">elaboration-time</strong>이 정답.</p></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">증분 빌드와 재처리</div>
+    <h2>재컴파일 vs 재엘라보 — 무엇이 무엇을 트리거하나</h2>
+    <table class="compare">
+      <tr><th>바뀐 것</th><th>필요한 작업</th><th>이유</th></tr>
+      <tr><td>한 모듈의 내부 RTL</td><td>그 파일만 <strong>재분석</strong> + 재엘라보</td><td>증분 컴파일이 변경 파일만 vlogan</td></tr>
+      <tr><td>파라미터 override 값</td><td><strong class="hl">재엘라보</strong>(재분석은 불필요할 수도)</td><td>param은 엘라보-타임 상수</td></tr>
+      <tr><td>+incdir/+define 매크로</td><td><strong>재분석</strong> 필요</td><td>전처리·\`include는 분석 단계 입력</td></tr>
+      <tr><td>런타임 plusarg(<code>+SEED</code> 등)</td><td><strong>아무것도 재빌드 안 함</strong></td><td><code>$value$plusargs</code>로 런타임에 읽음</td></tr>
+    </table>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>실무 함정:</strong> "테스트 케이스(시드/플러그)만 바꿨는데 매번 풀 빌드를 돌린다" — 시간 낭비입니다. plusarg·UVM_TESTNAME 변경은 <strong class="hl">simv 재실행만</strong> 하면 됩니다. 반대로 <code>+define</code> 매크로를 바꾸고 재분석을 안 하면, 이전 빌드가 그대로 돌아 <strong>"고쳤는데 안 바뀐다"</strong>는 유령 버그가 납니다.</p></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>빌드·스케줄링을 어떻게 검증·진단하나</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🧩</span> 무엇으로</h3>
+        <ul><li><strong>bind</strong>로 SVA/모니터를 RTL 침투 없이 주입</li><li>UVM <code>build_phase</code>에서 env 동적 구성, <code>clocking block</code>으로 샘플 영역 고정</li><li>VCS/Xcelium <strong>elab 로그</strong>에서 param·generate 해석 결과 확인</li><li>커버리지 빌드는 <code>vcs -cm</code> / <code>xrun -coverage</code> 옵션으로 계측</li></ul></div>
+      <div class="card"><h3><span class="ico">🎯</span> 무엇을(코너)</h3>
+        <ul><li>모든 파라미터 조합이 <strong>엘라보 성공</strong>하는지(generate 분기 전체)</li><li>샘플링 레이스: <code>$sampled</code>/clocking block으로 옛값/새값 일치</li><li>NBA vs blocking 순서 의존 버그</li><li>증분 빌드 후 결과가 풀 빌드와 동일한지(빌드 무결성)</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">"기능은 도는데 빌드 플로우가 틀린" 경우가 의외로 많습니다 — 옛 라이브러리 재사용, 매크로 미반영, 샘플 영역 레이스. 그래서 회귀는 <strong class="hl">클린 빌드 검증 + clocking 기반 샘플링 + assertion always-on</strong>을 묶어 돌립니다.</p></div>
+  </section>
+
+  <!-- 16 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "실무자"로 보인다</h2>
+    <div class="qa"><div class="q">VCS 2-step(통합)과 3-step의 차이는?</div><div class="a">3-step은 <code>vlogan</code>(분석)→<code>vcs</code>(엘라보+링크, simv 생성)→<code>./simv</code>(런)로 단계를 분리합니다. 분석 산출물을 라이브러리에 쌓아두니 한 파일만 고치면 그 파일만 재분석하는 <strong>증분 컴파일</strong>이 가능해 대형 회귀에 유리합니다. 통합 호출은 <code>vcs</code> 한 번이 분석+엘라보를 함께 해 소규모 빌드엔 간단하지만 증분에 약합니다. Xcelium은 <code>xrun</code> 단일 호출 또는 <code>xmvlog→xmelab→xmsim</code> 2-step입니다.</div></div>
+    <div class="qa"><div class="q">Elaboration에서 정확히 뭐가 일어나나요?</div><div class="a">top부터 모듈을 재귀 인스턴스화해 유일한 계층 트리를 만들고, 파라미터/override/defparam을 확정하며, <code>generate</code>를 조건에 맞게 펼치고, <code>bind</code>를 삽입하고, 포트 연결·net 폭·계층 이름(<code>$unit</code> 포함)을 해결하고, PLI/VPI/DPI 외부 코드를 링크해 실행이미지(simv) 또는 snapshot을 만듭니다. 끝나면 디자인 구조는 불변입니다.</div></div>
+    <div class="qa"><div class="q">SV 이벤트 영역을 순서대로, NBA가 왜 중요한가요?</div><div class="a">한 타임슬롯은 Preponed→Active→Inactive→NBA→Observed→Reactive→Postponed 순입니다. blocking(<code>=</code>)은 Active에서, non-blocking(<code>&lt;=</code>)의 갱신은 NBA에서 일어나죠. RTL이 NBA로 쓴 값을 TB가 Active에서 읽으면 옛값을 보는 레이스가 생기므로, 샘플링은 Preponed(<code>$sampled</code>)나 Reactive(program/clocking block)에 맞춥니다.</div></div>
+    <div class="qa"><div class="q">bind가 무엇이고 왜 쓰나요?</div><div class="a">대상 모듈을 수정하지 않고 외부 모듈(보통 SVA assertion·커버리지·모니터)을 엘라보 타임에 그 안으로 인스턴스화하는 문법입니다. RTL 파일을 못 건드리는 상황에서 protocol checker를 주입할 때 표준 해법입니다.</div></div>
+    <div class="qa"><div class="q">compile / elaboration / run-time 에러를 어떻게 구분하나요?</div><div class="a">한 파일만 봐도 잡히는 문법·타입 오류는 compile-time(vlogan/xmvlog), 파일을 합쳐 top을 조립할 때 드러나는 포트 폭 불일치·미해결 인스턴스·파라미터 충돌은 elaboration-time(vcs/xmelab), 실행 중 값에 의존해 터지는 배열 OOB·null 역참조·assertion fail은 run-time(simv/xmsim)입니다.</div></div>
+  </section>
+
+  <!-- 17 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>Compile·Elab 정밀 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li>VCS 3-step: <code>vlogan</code>→<code>vcs</code>(simv)→<code>./simv</code> · 통합은 vcs 한 번</li>
+        <li>Xcelium: <code>xrun</code> 단일 또는 <code>xmvlog→xmelab→xmsim</code>(snapshot)</li>
+        <li>Elaboration = param·generate·연결·bind·DPI 링크 확정(이후 불변)</li>
+        <li>HDL elab(빌드타임 정적) ≠ UVM <code>build_phase</code>(런타임 동적)</li>
+        <li>이벤트 영역: Preponed→Active→Inactive→<strong>NBA</strong>→Observed→Reactive→Postponed</li>
+        <li>에러 3종: 파일별=compile · 조립=elab · 값 의존=run-time</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"컴파일은 파일을 파싱하고, <strong class="hl">엘라보레이션은 디자인을 한 덩어리로 조립해 실행이미지를 만들며</strong>, 시뮬은 LRM이 정한 이벤트 영역 순서로 시간을 진행합니다. 파라미터는 엘라보 상수, 시드는 런타임 plusarg — 이 경계를 정확히 말하는 게 실무자입니다."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>4-2 UVM Phasing 정밀</strong>: build/connect/run_phase와 objection, 그리고 phase별 시간소비 규칙.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

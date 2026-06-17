@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 3-3 · MESI·ACE·CHI 정밀</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 3 · 3-3 Cache Coherency 정밀">
+<div class="track-switch"><a href="../../chapters/ch3-3.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">Cache Coherency, 상태 전이까지</h1>
+    <p class="hook">개념판에서 "여러 코어가 같은 메모리를 캐싱하면 일관성이 깨진다"를 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">MESI 전체 전이표, MOESI/MESIF 차이, snoop vs directory, ACE·CHI 채널과 트랜잭션 인코딩</strong>까지 정확히 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"코히런시 안다"에서 "전이로 설명한다"로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li>캐시 일관성 문제의 직관(stale copy)</li><li>MESI 네 글자가 있다는 것</li><li>스누핑으로 서로 엿본다는 그림</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li>MESI <strong>전체 상태 전이표</strong>(local/remote 이벤트)</li><li><strong>MOESI(O)·MESIF(F)</strong>가 푸는 비효율</li><li><strong>snoop vs directory</strong> 확장성 트레이드오프</li><li>AMBA <strong>ACE</strong> 스누프 3채널, <strong>CHI</strong> flit·트랜잭션</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준 스펙: <strong>AMBA ACE / ACE-Lite (ARM IHI 0022, AXI 확장)</strong>과 <strong>AMBA 5 CHI (ARM IHI 0050)</strong>. 코히런시 단위는 <strong class="hl">캐시 라인(coherency granule)</strong> — 보통 <strong>64바이트</strong>(ARM/x86 공통). 면접에서 "MESI 외워봤다"와 "전이를 그릴 수 있다"를 가르는 디테일들입니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">네 글자의 정확한 정의</div>
+    <h2>MESI — 각 상태의 불변식(invariant)</h2>
+    <table class="sig">
+      <tr><th>상태</th><th>유효?</th><th>이 캐시만 가짐?</th><th>메모리와 일치?</th><th>쓰기 가능?</th></tr>
+      <tr><td>M (Modified)</td><td>예</td><td><strong>예(유일)</strong></td><td><strong class="hl2">아니오(dirty)</strong></td><td>예(즉시)</td></tr>
+      <tr><td>E (Exclusive)</td><td>예</td><td><strong>예(유일)</strong></td><td>예(clean)</td><td>예(M으로 silent 전이)</td></tr>
+      <tr><td>S (Shared)</td><td>예</td><td>아니오(공유)</td><td>예(clean)</td><td>아니오(먼저 무효화 필요)</td></tr>
+      <tr><td>I (Invalid)</td><td><strong>아니오</strong></td><td>—</td><td>—</td><td>—</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0">핵심 불변식: <strong>한 라인은 어디서든 M/E 둘 중 최대 하나</strong>. M·E는 "나만 갖는다", S는 "여럿이 clean 공유", I는 "없음". <strong class="hl">E→M은 버스 트래픽 없이 silent</strong>하게 일어납니다(나만 가졌으니).</p></div>
+      <div class="dev-bridge"><p style="margin:6px 0">RDBMS의 잠금/버전과 닮았습니다: <code>E</code>=배타 잠금 가진 clean 캐시, <code>M</code>=아직 flush 안 한 dirty 페이지, <code>S</code>=읽기 전용 공유 스냅샷, <code>I</code>=캐시 미스.</p></div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">전이표 ① — 로컬 이벤트</div>
+    <h2>내 코어가 읽기/쓰기 할 때</h2>
+    <table class="sig">
+      <tr><th>현재</th><th>Local Read</th><th>Local Write</th></tr>
+      <tr><td>M</td><td>M (hit)</td><td>M (hit)</td></tr>
+      <tr><td>E</td><td>E (hit)</td><td><strong class="hl2">M</strong> (silent, 버스 X)</td></tr>
+      <tr><td>S</td><td>S (hit)</td><td><strong class="hl">M</strong> · <strong>Invalidate(BusUpgr) 방송</strong> 후</td></tr>
+      <tr><td>I (miss)</td><td>다른 캐시 있으면 <strong>S</strong>, 없으면 <strong>E</strong></td><td><strong>M</strong> · RFO(Read-For-Ownership)로 채움</td></tr>
+    </table>
+    <div class="spec mt"><p style="margin:6px 0"><strong>한 전이를 정확히:</strong> 라인이 <code>S</code> 상태인데 내 코어가 쓰면 → 버스에 <strong>Invalidate(BusUpgr / ACE의 CleanInvalid 계열)</strong>를 방송해 다른 모든 사본을 <code>I</code>로 내리고, 내 라인을 <code>S → M</code>으로 올립니다. 데이터를 다시 읽을 필요는 없습니다(이미 valid). <code>I</code>에서 쓰면 데이터까지 받아와야 하므로 <strong>RFO(ReadUnique)</strong>로 채운 뒤 <code>M</code>이 됩니다.</p></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">전이표 ② — 스누프(원격) 이벤트</div>
+    <h2>다른 코어가 읽기/쓰기 해서 내가 스누프당할 때</h2>
+    <table class="sig">
+      <tr><th>현재</th><th>Snoop Read (남이 읽음)</th><th>Snoop Write/Invalidate (남이 쓰려 함)</th></tr>
+      <tr><td>M</td><td><strong class="hl">S</strong> · <strong>데이터 공급(write-back 또는 직접 전달)</strong></td><td><strong>I</strong> · dirty 데이터 넘기고 무효화</td></tr>
+      <tr><td>E</td><td><strong>S</strong> (조용히 내려감)</td><td><strong>I</strong></td></tr>
+      <tr><td>S</td><td>S (변화 없음)</td><td><strong>I</strong></td></tr>
+      <tr><td>I</td><td>I (관여 없음)</td><td>I</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="pitfall"><p style="margin:6px 0"><strong>흔한 오답:</strong> "남이 읽으면 내 M이 그대로 M으로 남는다" ❌. 남이 읽는 순간 사본이 둘이 되므로 <strong>M→S</strong>로 내려가고, dirty였으니 <strong>최신 데이터를 공급</strong>해야 합니다(미공급 시 stale read 버그).</p></div>
+      <div class="deepnote"><p style="margin:6px 0">M에서 스누프 읽기를 받으면 보통 <strong>memory update(write-back)</strong>까지 같이 합니다. 이 비효율을 없애려고 나온 게 다음 장의 <strong class="hl2">MOESI의 O</strong> 상태입니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">MESI를 넘어서</div>
+    <h2>MOESI의 O · MESIF의 F — 무엇을 푸나</h2>
+    <div class="grid2">
+      <div class="spec">
+        <h3 style="color:var(--accent2)">MOESI — Owned</h3>
+        <p style="margin:6px 0"><code>O</code> = <strong class="hl">dirty인데 공유</strong>도 가능. M에서 남이 읽어도 메모리에 안 쓰고 <code>O</code>로 남아, 이후 스누프 요청에 <strong>O 보유자가 직접 데이터를 공급</strong>합니다.</p>
+        <ul><li>메모리 write-back을 미룸 → <strong>버스 트래픽↓</strong></li><li>"이 라인의 최신본 공급 책임자"가 명확</li><li>AMD(Opteron), ARM 일부, PowerPC가 채택</li></ul>
+      </div>
+      <div class="spec">
+        <h3 style="color:var(--accent2)">MESIF — Forward</h3>
+        <p style="margin:6px 0"><code>F</code> = clean 공유본 중 <strong class="hl">단 하나만 F</strong>. 새 읽기 요청에 <strong>F 보유자만 응답</strong>(나머지 S는 침묵).</p>
+        <ul><li>S가 여럿일 때 <strong>중복 응답·메모리 접근</strong>을 막음</li><li>캐시-투-캐시 전달 책임자를 1명으로 지정</li><li>Intel QPI/UPI가 채택</li></ul>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>O vs F 핵심 구분:</strong> O는 <strong>dirty</strong> 데이터의 공급자(메모리는 stale), F는 <strong>clean</strong> 데이터의 공급자(메모리도 최신). 둘 다 "여러 공유본 중 누가 데이터를 줄지" 책임을 한 명에게 지정하는 게 목적입니다.</p></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">확장성의 갈림길</div>
+    <h2>Snoop vs Directory — 코어 수가 늘면</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">📡</span> Snoop (방송)</h3>
+        <ul><li>요청을 <strong>모든 캐시에 broadcast</strong>, 각자 답</li><li>지연 짧음(directory 조회 없음)</li><li>트래픽이 <strong class="hl">코어 수에 ~O(N)</strong>로 증가 → 버스/링 포화</li><li>소수 코어·SMP에 적합</li></ul></div>
+      <div class="card"><h3><span class="ico">🗂️</span> Directory (조회)</h3>
+        <ul><li>각 라인의 <strong>공유자 목록(sharer bits)</strong>을 디렉터리가 관리</li><li>관련 캐시에만 <strong>point-to-point</strong> 메시지</li><li>트래픽↓ → <strong class="hl2">수십~수백 코어로 확장</strong></li><li>디렉터리 저장 오버헤드·조회 1홉 추가</li></ul></div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>면접 함정:</strong> "스누핑이 항상 빠르고 좋다" ❌. 스누프는 <strong>모든 코어에 방송</strong>하므로 코어가 많아지면 대역폭이 폭증해 <strong class="hl">확장이 안 됩니다</strong>. 그래서 메니코어/서버는 <strong>directory</strong>(또는 snoop filter)로 갑니다. CHI는 HN(Home Node)에 <strong>snoop filter/directory</strong>를 두어 필요한 노드만 스누프합니다.</p></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">AMBA ACE</div>
+    <h2>ACE = AXI 5채널 + 스누프 3채널</h2>
+    <p>ACE(AXI Coherency Extensions)는 기존 <strong>AXI 5채널(AR/R/AW/W/B)</strong>은 그대로 두고, 외부에서 이 마스터의 캐시를 들여다보기 위한 <strong class="hl">스누프 3채널</strong>을 추가합니다.</p>
+    <table class="sig">
+      <tr><th>채널</th><th>이름</th><th>방향</th><th>역할</th></tr>
+      <tr><td>AC</td><td>Snoop Address</td><td>Interconnect→Master</td><td>스누프 <strong>요청·주소</strong>(ACSNOOP으로 종류 지정)</td></tr>
+      <tr><td>CR</td><td>Snoop Response</td><td>Master→Interconnect</td><td>스누프 <strong>응답</strong>(데이터 있음/dirty/통과 등)</td></tr>
+      <tr><td>CD</td><td>Snoop Data</td><td>Master→Interconnect</td><td>스누프로 <strong>넘겨주는 캐시 라인 데이터</strong></td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0">ACE 트랜잭션 예: <code>ReadShared</code>(S로 받기), <code>ReadUnique</code>(쓰기 위해 배타로), <code>CleanUnique</code>(공유→배타 승격, S→M의 무효화), <code>MakeUnique</code>(데이터 없이 소유권만). <strong>ACE-Lite</strong>는 캐시 없는 IO 마스터용 — 스누프당하지 않지만 코히런트 메모리에 접근(AC/CR/CD 없음).</p></div>
+      <div class="pitfall"><p style="margin:6px 0">면접 함정: "ACE는 AXI에 1채널 추가" ❌ → <strong>3채널(AC/CR/CD)</strong>. AXI4 5채널과 합쳐 <strong>총 8채널</strong>이고, full ACE는 캐시 마스터, <strong>ACE-Lite</strong>는 IO 코히런시용으로 구분합니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">스누프 트랜잭션 흐름</div>
+    <h2>ReadUnique 한 번 — 누가 무엇을 보내나</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 250" font-family="var(--mono)">
+        <!-- nodes -->
+        <rect x="30" y="40" width="120" height="48" rx="10" fill="#172236" stroke="#b388ff"/>
+        <text x="90" y="62" fill="#e8eef7" font-size="13" text-anchor="middle">CPU0 (요청)</text>
+        <text x="90" y="79" fill="#9fb0c7" font-size="11" text-anchor="middle">write 의도</text>
+        <rect x="300" y="40" width="130" height="48" rx="10" fill="#172236" stroke="#5b9cff"/>
+        <text x="365" y="62" fill="#e8eef7" font-size="13" text-anchor="middle">Interconnect</text>
+        <text x="365" y="79" fill="#9fb0c7" font-size="11" text-anchor="middle">snoop filter</text>
+        <rect x="580" y="40" width="110" height="48" rx="10" fill="#172236" stroke="#38e1c6"/>
+        <text x="635" y="62" fill="#e8eef7" font-size="13" text-anchor="middle">CPU1</text>
+        <text x="635" y="79" fill="#9fb0c7" font-size="11" text-anchor="middle">라인 M 보유</text>
+        <!-- arrows / steps -->
+        <line x1="150" y1="120" x2="300" y2="120" stroke="#b388ff" stroke-width="2" marker-end="url(#a1)"/>
+        <text x="225" y="112" fill="#b388ff" font-size="11" text-anchor="middle">① AR: ReadUnique</text>
+        <line x1="430" y1="150" x2="580" y2="150" stroke="#5b9cff" stroke-width="2" marker-end="url(#a1)"/>
+        <text x="505" y="142" fill="#5b9cff" font-size="11" text-anchor="middle">② AC: snoop(invalidate)</text>
+        <line x1="580" y1="180" x2="430" y2="180" stroke="#38e1c6" stroke-width="2" marker-end="url(#a1)"/>
+        <text x="505" y="200" fill="#38e1c6" font-size="11" text-anchor="middle">③ CR+CD: dirty data, →I</text>
+        <line x1="300" y1="215" x2="150" y2="215" stroke="#ffce6b" stroke-width="2" marker-end="url(#a1)"/>
+        <text x="225" y="235" fill="#ffce6b" font-size="11" text-anchor="middle">④ R: data, CPU0 → M</text>
+        <defs><marker id="a1" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#9fb0c7"/></marker></defs>
+      </svg>
+    </div>
+    <div class="note mt">CPU0가 쓰기 위해 <code>ReadUnique</code> → interconnect가 CPU1에 <strong>AC로 스누프</strong> → CPU1이 <strong>CR(응답)+CD(dirty 데이터)</strong>를 넘기고 자신은 <code>M→I</code> → 최종적으로 CPU0이 <strong>R로 데이터</strong>를 받아 <code>I→M</code>. 메모리는 이후 정리되거나 O 상태 모델이면 미뤄집니다.</div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">AMBA 5 CHI</div>
+    <h2>CHI — 채널이 아니라 flit·메시지 기반</h2>
+    <p>CHI(Coherent Hub Interface)는 ACE의 와이어 핸드셰이크를 넘어, <strong class="hl">패킷화된 flit</strong>을 4종류 채널로 보내는 메시지 프로토콜입니다. 메니코어 메시(mesh) NoC를 위해 설계됐습니다.</p>
+    <table class="sig">
+      <tr><th>채널</th><th>이름</th><th>나르는 것</th></tr>
+      <tr><td>REQ</td><td>Request</td><td>읽기/쓰기/무효화 <strong>요청</strong>(ReadShared, ReadUnique …)</td></tr>
+      <tr><td>RSP</td><td>Response</td><td>완료/승인 <strong>응답</strong>(데이터 없는 ack류)</td></tr>
+      <tr><td>SNP</td><td>Snoop</td><td>Home Node가 캐시에 보내는 <strong>스누프</strong></td></tr>
+      <tr><td>DAT</td><td>Data</td><td><strong>데이터 flit</strong>(캐시 라인 페이로드)</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0">노드 역할: <strong>RN</strong>(Request Node, 코어/캐시), <strong>HN</strong>(Home Node, 코히런시 지점·디렉터리), <strong>SN</strong>(Slave Node, 메모리). HN-F(Fully coherent)가 <strong>directory/snoop filter</strong>를 들고 필요한 RN에만 SNP를 쏩니다 → <strong class="hl2">확장성</strong>의 핵심.</p></div>
+      <div class="spec"><p style="margin:6px 0">주요 요청: <code>ReadShared</code>(S/E 목표), <code>ReadUnique</code>(배타·쓰기용), <code>MakeUnique</code>(전체 라인 덮어쓸 때 데이터 안 받고 소유권만), <code>ReadNoSnoop</code>(non-coherent). CHI는 ACE의 ReadShared/ReadUnique 의미를 <strong>flit 트랜잭션</strong>으로 계승합니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">캐시 정책과 함정</div>
+    <h2>write-back/through · inclusive/exclusive · false sharing</h2>
+    <table class="compare">
+      <tr><th>축</th><th>한쪽</th><th>다른 쪽</th></tr>
+      <tr><td>쓰기 정책</td><td><strong>Write-back</strong>: dirty 보관, 교체 시 메모리에. 트래픽↓(M 상태가 이것)</td><td><strong>Write-through</strong>: 매 쓰기 즉시 하위로. 단순·트래픽↑</td></tr>
+      <tr><td>레벨 포함</td><td><strong>Inclusive</strong>: L2가 L1 내용 포함(스누프 필터링 쉬움)</td><td><strong>Exclusive</strong>: 중복 없이 용량↑(전이 복잡)</td></tr>
+    </table>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>False sharing(거짓 공유):</strong> 두 코어가 <strong class="hl">다른 변수</strong>를 쓰는데 <strong>같은 64B 캐시 라인</strong>에 있으면, 코히런시는 <strong>라인 단위</strong>라 매 쓰기마다 서로 라인을 <code>S/M↔I</code>로 핑퐁시켜 성능이 급락합니다. 해법: 핫 변수 <strong>패딩/정렬</strong>(예: <code>alignas(64)</code>, per-CPU 분리). 멀티스레드 SW 성능 버그 1순위.</p></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">코드로 보는 false sharing</div>
+    <h2>같은 라인 vs 패딩 — 무엇이 다른가</h2>
+    <pre class="code"><code><span class="cmt">// ❌ 두 카운터가 같은 64B 캐시 라인에 인접 → false sharing</span>
+<span class="kw">struct</span> Bad { <span class="kw">uint64_t</span> a; <span class="kw">uint64_t</span> b; };   <span class="cmt">// a,b 16B 이내, 한 라인</span>
+<span class="cmt">// CPU0이 a++, CPU1이 b++ 반복 → 라인이 M↔I 핑퐁(coherency miss 폭증)</span>
+
+<span class="cmt">// ✅ 각 카운터를 독립 캐시 라인(64B)으로 분리</span>
+<span class="kw">struct alignas</span>(64) Counter { <span class="kw">uint64_t</span> v; <span class="kw">char</span> pad[64 - <span class="kw">sizeof</span>(<span class="kw">uint64_t</span>)]; };
+Counter a, b;   <span class="cmt">// a,b 서로 다른 라인 → 스누프 충돌 없음</span></code></pre>
+    <div class="codecap">정렬/패딩으로 핫 변수를 라인 단위로 떼어내면 coherency 트래픽이 사라집니다.</div>
+    <div class="spec"><p style="margin:6px 0"><strong>정밀 포인트:</strong> 코히런시 단위는 <strong>변수 1개가 아니라 캐시 라인(보통 64B)</strong>입니다. <code>a</code>를 <code>S→M</code>으로 올리려면 라인 전체를 무효화하므로, <strong>같은 라인의 <code>b</code>까지</strong> 다른 코어에서 <code>I</code>가 됩니다. 데이터 의존이 전혀 없어도 충돌하는 게 "거짓" 공유인 이유.</p></div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>코히런시를 어떻게 검증하나</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🧩</span> 무엇으로</h3>
+        <ul><li><strong>ACE/CHI VIP</strong> — 캐시 마스터·interconnect BFM, 트랜잭션 자극·스누프 응답</li><li>UVM에 <strong>레퍼런스 캐시 모델(scoreboard)</strong>로 MESI 상태 추적</li><li>프로토콜 <strong>assertion(SVA)</strong>: 불법 전이·미응답 스누프·dirty 미공급 즉시 검출</li></ul></div>
+      <div class="card"><h3><span class="ico">🎯</span> 무엇을(커버리지 코너)</h3>
+        <ul><li><strong>MESI 전이 곱(cross) 커버리지</strong>: 현재상태 × 이벤트(local R/W, snoop R/W) 전 칸</li><li>두 코어가 같은 라인 동시 RFO(경쟁)·invalidate race</li><li><strong>false sharing</strong> 패턴, 인접 라인 경계</li><li>모든 스누프 타입(ReadShared/Unique, CleanUnique, MakeUnique)</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">핵심 불변식 체크: "어떤 라인도 <strong>두 캐시에서 동시에 M/E일 수 없다</strong>", "스누프 읽기에 M 보유자는 <strong>최신 데이터를 반드시 공급</strong>". 이 둘을 <strong>전역 assertion</strong>으로 박아두고 회귀를 돌립니다. 기능은 도는데 코히런시를 어긴 경우가 가장 잡기 어렵습니다.</p></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "실무자"로 보인다</h2>
+    <div class="qa"><div class="q">MESI 전이 예를 하나 정확히 들어보세요.</div><div class="a">라인이 한 캐시에서 M인데 다른 코어가 그 주소를 읽으면(snoop read), 보유 캐시는 <strong>M→S</strong>로 내려가면서 dirty 최신 데이터를 공급합니다. 만약 다른 코어가 쓰려고 ReadUnique/Invalidate를 보내면 <strong>M→I</strong>로 무효화하고 데이터를 넘깁니다. 반대로 내 라인이 S인데 내가 쓰면 Invalidate를 방송해 다른 사본을 I로 내리고 <strong>S→M</strong>이 됩니다.</div></div>
+    <div class="qa"><div class="q">ACE가 AXI에 더한 채널과, CHI는 무엇이 다른가요?</div><div class="a">ACE는 AXI 5채널은 그대로 두고 스누프용 <strong>3채널 AC(스누프 주소)·CR(스누프 응답)·CD(스누프 데이터)</strong>를 추가합니다(총 8채널). CHI는 와이어 채널 방식이 아니라 <strong>flit 기반 메시지</strong>로, <strong>REQ·RSP·SNP·DAT</strong> 4종 채널과 RN/HN/SN 노드 구조를 써서 메시 NoC와 메니코어로 확장합니다.</div></div>
+    <div class="qa"><div class="q">snoop과 directory의 트레이드오프, 그리고 MOESI의 O는?</div><div class="a">snoop은 모든 캐시에 방송이라 지연은 짧지만 트래픽이 코어 수에 비례해 확장이 안 됩니다. directory는 라인별 공유자 목록으로 필요한 노드에만 보내 수십~수백 코어로 확장되지만 저장·조회 오버헤드가 있습니다. <strong>MOESI의 O(Owned)</strong>는 dirty이면서 공유 가능한 상태로, M에서 남이 읽어도 메모리에 write-back하지 않고 O로 남아 이후 스누프에 직접 데이터를 공급해 <strong>메모리 트래픽을 줄입니다</strong>.</div></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>Cache Coherency 정밀 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li>불변식: 한 라인은 어디서든 <strong>M/E 최대 1개</strong>, S는 clean 공유</li>
+        <li>전이 핵: snoop read에 <strong>M→S(+공급)</strong>, snoop write에 <strong>M→I</strong>, local write에 <strong>S→M(+invalidate)</strong></li>
+        <li><strong>O</strong>=dirty 공유 공급자, <strong>F</strong>=clean 공유 응답자</li>
+        <li>snoop=방송(소수 코어), directory=조회(메니코어 확장)</li>
+        <li>ACE=AXI+<strong>AC/CR/CD</strong>, CHI=flit <strong>REQ/RSP/SNP/DAT</strong></li>
+        <li>코히런시 단위=<strong>64B 라인</strong> → false sharing 주의</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"코히런시는 <strong class="hl">라인 단위 상태기계</strong>입니다. MESI 전이로 정확성을, snoop→directory와 ACE→CHI로 <strong>확장성</strong>을 얻고, 검증은 전이 cross 커버리지와 불변식 assertion으로 합니다."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>3-4 메모리 컨트롤러·DDR 타이밍 정밀</strong>: tRCD/tRP/tCAS와 뱅크 인터리빙.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

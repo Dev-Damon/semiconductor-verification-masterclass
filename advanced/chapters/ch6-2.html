@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 6-2 · Scan·ATPG·MBIST·LBIST 정밀</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 6 · 6-2 Scan·MBIST·BIST 정밀">
+<div class="track-switch"><a href="../../chapters/ch6-2.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">DFT — 칩이 스스로를 검사하게 만드는 법</h1>
+    <p class="hook">개념판에서 "테스트하기 쉽게 설계한다(DFT)"를 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">mux-D 플립플롭 회로, shift/capture 사이클, ATPG fault model 인코딩, March 알고리즘, BISR fuse, MISR 서명</strong>까지 정확히 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"테스트 쉽게"에서 "그 회로/숫자로 설명한다"로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li>scan chain = "플립플롭을 시프트레지스터로 잇는다"</li><li>ATPG = "테스트 패턴 자동 생성"</li><li>MBIST/BIST = "칩 안에 자가 테스트 회로"</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li>mux-D FF 회로 · stitching · <strong>shift/capture</strong> 사이클</li><li>fault model: <code>stuck-at</code> / <code>transition(at-speed)</code> 인코딩</li><li>압축 <strong>EDT</strong>, <code>X-masking</code>, LOC vs LOS</li><li>March C- 시퀀스 · memory fault(SAF/TF/CF) · <strong>BISR</strong></li><li>LBIST = <code>PRPG + MISR</code>(STUMPS), POST 결합</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준 표준/IP: <strong>IEEE 1149.1(JTAG)</strong>, <strong>IEEE 1500(코어 테스트 wrapper)</strong>, <strong>IEEE 1687(IJTAG)</strong>, 그리고 ATPG/압축 EDA(Tessent / Synopsys TestMAX(DFTMAX)). 면접에서 "DFT 좀 들어봤다"와 "DFT 돌려봤다"를 가르는 건 이 인코딩·사이클·숫자입니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">Scan의 심장</div>
+    <h2>mux-D 스캔 플립플롭 — 회로 그대로</h2>
+    <p>일반 FF의 D 입력 앞에 <strong class="hl">2:1 MUX</strong> 하나를 끼웁니다. 선택신호가 <code>scan_enable(SE)</code>입니다. 이게 scan FF(SDFF)의 전부입니다.</p>
+    <div class="grid2">
+      <div class="diagram">
+        <svg viewBox="0 0 360 180" font-family="var(--mono)">
+          <!-- mux -->
+          <text x="6" y="58" fill="#9fb0c7" font-size="12">D</text>
+          <text x="6" y="98" fill="#b388ff" font-size="12">SI</text>
+          <line x1="24" y1="54" x2="70" y2="54" stroke="#5b9cff" stroke-width="2"/>
+          <line x1="24" y1="94" x2="70" y2="94" stroke="#b388ff" stroke-width="2"/>
+          <polygon points="70,44 70,104 98,90 98,58" fill="#172236" stroke="#22304a"/>
+          <text x="84" y="78" fill="#e8eef7" font-size="10" text-anchor="middle">M</text>
+          <text x="84" y="132" fill="#38e1c6" font-size="11" text-anchor="middle">SE</text>
+          <line x1="84" y1="104" x2="84" y2="122" stroke="#38e1c6" stroke-width="1.5"/>
+          <!-- to FF -->
+          <line x1="98" y1="74" x2="150" y2="74" stroke="#cfe0f5" stroke-width="2"/>
+          <rect x="150" y="48" width="80" height="56" fill="#172236" stroke="#5b9cff"/>
+          <text x="190" y="70" fill="#e8eef7" font-size="10" text-anchor="middle">FF</text>
+          <text x="190" y="92" fill="#9fb0c7" font-size="9" text-anchor="middle">D  Q</text>
+          <text x="160" y="124" fill="#6c7c95" font-size="10">CLK ▸</text>
+          <line x1="230" y1="74" x2="300" y2="74" stroke="#5ee6a0" stroke-width="2"/>
+          <text x="306" y="78" fill="#5ee6a0" font-size="12">Q / SO</text>
+        </svg>
+      </div>
+      <div class="spec"><ul style="margin:8px 0">
+        <li><code>SE=0</code> → MUX가 <strong class="hl2">D(기능 경로)</strong> 선택 = 보통의 회로 동작</li>
+        <li><code>SE=1</code> → MUX가 <strong class="hl2">SI(scan-in)</strong> 선택 = 옆 FF의 Q를 받아 시프트</li>
+        <li>한 FF의 <code>Q</code>가 다음 FF의 <code>SI</code>로 연결 = <strong>scan chain stitching</strong></li>
+        <li>비용: FF당 MUX 1개 → 면적·딜레이 약간↑(전형적으로 셀당 수 %)</li>
+      </ul></div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>오답 주의:</strong> "scan은 별도 시프트레지스터를 추가한다" ❌ — 기존 기능 FF을 <strong>그대로 재사용</strong>해 MUX만 끼웁니다. 그래서 "stitching(꿰매기)"이라 부릅니다. SI/SO 핀도 보통 <strong>기능 핀과 공유</strong>(test mode에서 재용도).</p></div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">스캔 테스트 1 사이클</div>
+    <h2>shift → capture → shift 의 박자</h2>
+    <p>한 패턴을 적용하는 순서는 항상 같습니다: <strong class="hl">긴 shift로 입력 채우기 → 한 박자 capture → 긴 shift로 출력 빼내기</strong>. 빼내는 shift와 다음 패턴 채우는 shift는 <strong>겹쳐서</strong> 돕니다.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 720 210" font-family="var(--mono)">
+        <!-- scan_enable -->
+        <text x="6" y="38" fill="#38e1c6" font-size="12">SE</text>
+        <polyline fill="none" stroke="#38e1c6" stroke-width="2" points="60,44 60,22 300,22 300,44 360,44 360,22 700,22"/>
+        <text x="180" y="16" fill="#38e1c6" font-size="10" text-anchor="middle">SE=1 (shift)</text>
+        <text x="330" y="58" fill="#ffce6b" font-size="10" text-anchor="middle">SE=0</text>
+        <text x="520" y="16" fill="#38e1c6" font-size="10" text-anchor="middle">SE=1 (shift/unload)</text>
+        <!-- clk pulses -->
+        <text x="6" y="98" fill="#9fb0c7" font-size="12">CLK</text>
+        <g stroke="#6c7c95" stroke-width="1.5" fill="none">
+          <polyline points="60,104 75,104 75,86 90,86 90,104 105,104 105,86 120,86 120,104 135,104 135,86 150,86 150,104 165,104 165,86 180,86 180,104 195,104 195,86 210,86 210,104 285,104"/>
+          <!-- capture pulse -->
+          <polyline points="320,104 335,104 335,86 350,86 350,104"/>
+          <polyline points="375,104 390,104 390,86 405,86 405,104 420,104 420,86 435,86 435,104 450,104 450,86 465,86 465,104 480,104 480,86 495,86 495,104 510,104 510,86 525,86 525,104 600,104"/>
+        </g>
+        <!-- phase boxes -->
+        <rect x="55" y="120" width="240" height="34" fill="rgba(179,136,255,.12)" stroke="#b388ff"/>
+        <text x="175" y="142" fill="#b388ff" font-size="11" text-anchor="middle">SHIFT-IN (N 클럭, 패턴 로드)</text>
+        <rect x="305" y="120" width="65" height="34" fill="rgba(255,206,107,.14)" stroke="#ffce6b"/>
+        <text x="337" y="138" fill="#ffce6b" font-size="9" text-anchor="middle">CAPTURE</text>
+        <text x="337" y="150" fill="#ffce6b" font-size="9" text-anchor="middle">(1 클럭)</text>
+        <rect x="375" y="120" width="240" height="34" fill="rgba(94,230,160,.12)" stroke="#5ee6a0"/>
+        <text x="495" y="142" fill="#5ee6a0" font-size="11" text-anchor="middle">SHIFT-OUT (N) ＝ 다음 SHIFT-IN</text>
+        <!-- note -->
+        <text x="60" y="186" fill="#9fb0c7" font-size="11">SE=1: 체인이 시프트레지스터 = 조합로직과 분리</text>
+        <text x="60" y="202" fill="#9fb0c7" font-size="11">SE=0: 단 1박자만 기능 경로로 결과를 FF에 "포착"</text>
+      </svg>
+    </div>
+    <div class="grid2 mt">
+      <div class="note"><strong>왜 capture는 1박자뿐?</strong> 그 1박자에 조합로직 출력을 FF에 가둬야 다음 shift로 그 값을 꺼내 비교할 수 있기 때문. 그 1박자가 곧 "회로를 실제로 시험하는 순간".</div>
+      <div class="spec"><p style="margin:6px 0">체인이 1024 FF 길면, 패턴 1개당 shift만 <strong>~1024 클럭</strong>. 그래서 <strong>shift는 느린 클럭</strong>(예: 수십 MHz)으로, capture만 빠르게 — 테스트 시간(=비용)을 좌우하는 핵심.</p></div>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">ATPG fault model ①</div>
+    <h2>Stuck-at vs Transition — 정확히 무엇을 잡나</h2>
+    <table class="sig">
+      <tr><th>fault model</th><th>모델링하는 결함</th><th>패턴/클럭</th><th>잡는 불량</th></tr>
+      <tr><td>stuck-at</td><td>노드가 <strong>0 또는 1에 고정</strong>(SA0/SA1)</td><td>1개 capture(정적)</td><td>오픈/쇼트·연결 끊김</td></tr>
+      <tr><td>transition</td><td>0→1/1→0 <strong>천이가 느림</strong>(slow-to-rise/fall)</td><td><strong class="hl">2 capture(at-speed)</strong></td><td>타이밍 약점·딜레이 결함</td></tr>
+      <tr><td>bridging</td><td>두 노드 단락(AND/OR/dominant)</td><td>다중 노드 조건</td><td>인접선 쇼트</td></tr>
+      <tr><td>IDDQ</td><td>정지 상태 누설전류 측정</td><td>전류 임계 비교</td><td>게이트 누설·미세 쇼트</td></tr>
+    </table>
+    <div class="spec mt"><p style="margin:6px 0"><strong>핵심 차이:</strong> stuck-at은 "값이 맞나"만 본다(정적, 1 capture). transition은 "값이 <strong class="hl">정해진 시간 안에</strong> 맞나"를 본다 → 반드시 <strong>2번의 capture(launch→capture)를 빠른 기능 주파수</strong>로 줘야 함. 그래서 transition을 <strong>at-speed test</strong>라 부릅니다.</p></div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>오답 주의:</strong> "stuck-at만 돌리면 충분" ❌. stuck-at은 딜레이 결함을 못 잡습니다. 미세공정/고주파에서는 <strong>transition + path-delay</strong> at-speed가 필수. 반대로 "transition만" ❌ — 둘은 보완 관계라 둘 다 돌립니다.</p></div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">ATPG 품질 지표</div>
+    <h2>Test coverage ≠ Fault coverage</h2>
+    <div class="grid2">
+      <div class="spec">
+        <p style="margin:6px 0"><strong>Fault coverage</strong> = 검출 fault ÷ <strong>전체 fault</strong></p>
+        <p style="margin:6px 0"><strong>Test coverage</strong> = 검출 fault ÷ <strong>검출 가능(testable) fault</strong></p>
+        <p class="dim" style="margin:6px 0">분모에서 ATPG가 "untestable(UD)"로 증명한 fault(미사용 로직·tie·redundant 등)를 빼면 test coverage. 그래서 <strong>test coverage ≥ fault coverage</strong>.</p>
+      </div>
+      <div>
+        <p>ATPG는 각 fault를 분류합니다:</p>
+        <ul>
+          <li><strong class="hl">DT/DR</strong>(detected): 패턴이 잡음</li>
+          <li><strong>ATPG_untestable(AU)</strong>: 제약상 잡을 패턴 없음</li>
+          <li><strong>undetectable(UD)</strong>: 구조적으로 관측 불가(redundant)</li>
+          <li><strong>ND</strong>(not detected): 아직 못 잡음 → coverage 손해</li>
+        </ul>
+        <p class="dim" style="margin:6px 0">현업 목표는 보통 stuck-at <strong>99%+</strong>, transition은 그보다 낮게 잡습니다.</p>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>면접 함정:</strong> "coverage 100%면 불량 0" ❌. ATPG coverage는 <strong>모델링된 fault</strong> 기준이지 모든 물리적 불량이 아닙니다. 그래서 IDDQ·번인·실측 양산 데이터로 보완합니다.</p></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">테스트 데이터 폭발 막기</div>
+    <h2>압축(EDT/DFTMAX)과 X-masking</h2>
+    <p>scan 체인이 수백~수천이면 ATE 핀 수가 모자랍니다. 그래서 <strong class="hl">소수의 외부 채널</strong>을 칩 내부에서 <strong>수백 개 짧은 체인</strong>으로 펼칩니다.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 700 150" font-family="var(--mono)">
+        <text x="20" y="20" fill="#9fb0c7" font-size="11">ATE 핀 (소수)</text>
+        <g fill="#172236" stroke="#5b9cff"><rect x="20" y="30" width="70" height="60"/></g>
+        <text x="55" y="64" fill="#5b9cff" font-size="11" text-anchor="middle">decompr.</text>
+        <text x="55" y="106" fill="#6c7c95" font-size="9" text-anchor="middle">(LFSR/XOR)</text>
+        <!-- short chains -->
+        <g stroke="#22304a" stroke-width="1"><line x1="90" y1="60" x2="300" y2="40"/><line x1="90" y1="60" x2="300" y2="60"/><line x1="90" y1="60" x2="300" y2="80"/><line x1="90" y1="60" x2="300" y2="100"/></g>
+        <g fill="#172236" stroke="#b388ff"><rect x="300" y="32" width="160" height="16"/><rect x="300" y="52" width="160" height="16"/><rect x="300" y="72" width="160" height="16"/><rect x="300" y="92" width="160" height="16"/></g>
+        <text x="380" y="124" fill="#b388ff" font-size="10" text-anchor="middle">짧은 내부 체인 ×N</text>
+        <!-- compactor -->
+        <g stroke="#22304a" stroke-width="1"><line x1="460" y1="40" x2="610" y2="60"/><line x1="460" y1="60" x2="610" y2="60"/><line x1="460" y1="80" x2="610" y2="60"/><line x1="460" y1="100" x2="610" y2="60"/></g>
+        <g fill="#172236" stroke="#38e1c6"><rect x="610" y="30" width="70" height="60"/></g>
+        <text x="645" y="58" fill="#38e1c6" font-size="11" text-anchor="middle">compact</text>
+        <text x="645" y="106" fill="#6c7c95" font-size="9" text-anchor="middle">(XOR+mask)</text>
+      </svg>
+    </div>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0"><strong>EDT</strong>(Embedded Deterministic Test, Tessent) / <strong>DFTMAX</strong>(Synopsys): 입력은 <strong>decompressor</strong>(LFSR/XOR 망)로 펼치고, 출력은 <strong>compactor</strong>(XOR 트리)로 모음. 데이터·시간 <strong class="hl">수십~수백×</strong> 절감.</p></div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>X(unknown)가 적이다:</strong> 미초기화 FF·비스캔 셀이 만든 <code>X</code>가 compactor의 XOR로 들어가면 <strong>좋은 비트까지 오염</strong>(masking 효과). 그래서 <strong>X-masking</strong> 로직으로 그 비트를 막아 coverage 손실을 줄입니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">at-speed 클럭킹</div>
+    <h2>Launch-on-Capture vs Launch-on-Shift</h2>
+    <p>transition test는 <strong>천이를 만들고(launch) → 빠르게 포착(capture)</strong>해야 합니다. 그 두 펄스를 어디서 주느냐로 갈립니다.</p>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">LOC</span> Launch-on-Capture</h3>
+        <p><strong>마지막 shift 후 SE=0</strong> 상태에서 <strong class="hl">capture 펄스 2개</strong>(launch+capture)를 기능 주파수로. 천이를 <strong>조합로직</strong>이 만든다.</p>
+        <ul><li>+ 더 현실적(기능 경로 사용), 오버테스트 적음</li><li>– 패턴 생성 어려움(2차 상태 필요)</li></ul></div>
+      <div class="card"><h3><span class="ico">LOS</span> Launch-on-Shift</h3>
+        <p>마지막 <strong>shift 펄스로 launch</strong>(SE가 늦게 0됨) 후 capture. 천이를 <strong>shift</strong>가 만든다.</p>
+        <ul><li>+ 패턴 생성 쉬움, coverage 높게</li><li>– <strong class="hl2">SE 신호가 at-speed로 토글</strong>해야 함(타이밍 부담), 오버테스트 위험</li></ul></div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>at-speed의 핫스팟:</strong> shift는 느리게, <strong>capture window만 기능 주파수</strong>로 줘야 함 — 잘못 주면 (1) <strong>false fail</strong>(테스트 클럭 타이밍 문제로 좋은 칩을 버림) 또는 (2) <strong>오버테스트</strong>(실제로 안 쓰는 경로를 fail 처리). on-chip PLL/clock-controller로 정확한 펄스 폭을 만드는 게 핵심. LOS는 SE가 at-speed라 특히 까다롭습니다.</p></div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">코어 격리</div>
+    <h2>IEEE 1500 Wrapper — 코어를 봉투에 넣기</h2>
+    <div class="grid2">
+      <div>
+        <p>큰 SoC는 IP 코어가 많습니다. 각 코어를 <strong class="hl">wrapper cell(WBR)</strong>로 둘러싸 <strong>코어 단위로 따로 테스트/격리</strong>합니다(코어 재사용·계층적 테스트).</p>
+        <ul>
+          <li><strong>WIR</strong>(Wrapper Instruction Register): 모드 선택</li>
+          <li><strong>WBR</strong>(Wrapper Boundary Register): 코어 경계 FF</li>
+          <li><strong>WBY</strong>(Wrapper Bypass Register): 우회 경로</li>
+          <li>제어: <code>WSI/WSO</code>(시리얼), <code>WRCK/WRSTN/SelectWIR/...</code></li>
+        </ul>
+        <p class="dim" style="margin:6px 0">JTAG(1149.1) 바운더리 스캔과 사촌 — 1149.1은 보드/핀 레벨, 1500은 <strong>칩 내부 코어</strong> 레벨.</p>
+      </div>
+      <div class="deepnote">
+        <p style="margin:6px 0"><strong>왜 필요?</strong> IP를 만든 벤더가 내부를 모르는 통합팀에 "이 모드로 이 핀에 패턴 넣으면 됨"이라고 <strong class="hl">테스트 인터페이스를 표준화</strong>해 넘기기 위함. 코어 ATPG 패턴을 SoC에서 <strong>그대로 재생(retargeting)</strong>.</p>
+        <p style="margin:6px 0">관련: <strong>IEEE 1687(IJTAG)</strong>은 내장 계측기(BIST 등)에 접근하는 네트워크(SIB/ICL/PDL)를 표준화 — MBIST/온칩 모니터를 JTAG로 구동.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">MBIST ①</div>
+    <h2>메모리 결함 모델과 March 알고리즘</h2>
+    <p>SRAM은 ATPG로 못 잡습니다(주소·셀 구조가 특수). 대신 <strong class="hl">MBIST 컨트롤러</strong>가 주소를 훑으며 정해진 순서로 쓰고/읽어 비교합니다. 그 순서가 <strong>March 알고리즘</strong>.</p>
+    <table class="sig">
+      <tr><th>fault</th><th>이름</th><th>증상</th></tr>
+      <tr><td>SAF</td><td>Stuck-At</td><td>셀이 0 또는 1에 고정</td></tr>
+      <tr><td>TF</td><td>Transition</td><td>0→1 또는 1→0 천이 불가</td></tr>
+      <tr><td>CF</td><td>Coupling</td><td>한 셀 쓰기가 <strong>다른 셀</strong>을 뒤집음(idempotent/inversion/state)</td></tr>
+      <tr><td>AF</td><td>Address decoder</td><td>주소 → 엉뚱한 셀 접근/중복</td></tr>
+    </table>
+    <div class="spec mt"><p style="margin:6px 0">March 표기: <code>{ ⇕(w0); ⇑(r0,w1,r1); ⇑(r1,w0,r0); ⇓(r0,w1,r1); ⇓(r1,w0,r0); ⇕(r0) }</code> 같은 <strong>March C-</strong>. <code>⇑</code>=주소 증가, <code>⇓</code>=감소, <code>⇕</code>=방향무관, <code>w/r</code>=write/read. March C-는 <strong class="hl">총 10N</strong> 연산(N=셀 수)으로 SAF·TF·AF·CF를 커버.</p></div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">MBIST ② — 코드로</div>
+    <h2>March C- 컨트롤러 골격(개념 RTL)</h2>
+    <pre class="code"><code><span class="cmt">// March C- : { ⇕w0; ⇑(r0,w1,r1); ⇑(r1,w0,r0);</span>
+<span class="cmt">//             ⇓(r0,w1,r1); ⇓(r1,w0,r0); ⇕r0 }  → 10N operations</span>
+<span class="kw">always</span> @(<span class="kw">posedge</span> clk) <span class="kw">case</span> (march_state)
+  M0: <span class="kw">begin</span> mem[a] = <span class="str">0</span>;        <span class="cmt">// ⇕ w0  (전체 0으로 초기화)</span>
+      <span class="kw">if</span>(a==LAST) {march_state=M1; a=<span class="str">0</span>;} <span class="kw">else</span> a=a+1; <span class="kw">end</span>
+  M1: <span class="kw">begin</span> exp = <span class="str">0</span>;              <span class="cmt">// ⇑ (r0, w1, r1)  주소 증가</span>
+      <span class="fn">check</span>(mem[a], exp);  mem[a]=<span class="str">1</span>;  exp=<span class="str">1</span>; <span class="fn">check</span>(mem[a],exp);
+      <span class="kw">if</span>(a==LAST) {march_state=M2; a=<span class="str">0</span>;} <span class="kw">else</span> a=a+1; <span class="kw">end</span>
+  M2: <span class="cmt">// ⇑ (r1, w0, r0) ...   M3/M4 는 주소 감소(⇓)로 동일 패턴</span>
+  M5: <span class="kw">begin</span> exp=<span class="str">0</span>; <span class="fn">check</span>(mem[a],exp); <span class="cmt">// ⇕ r0 (최종 검증)</span>
+      <span class="kw">if</span>(a==LAST) march_state=DONE; <span class="kw">else</span> a=a+1; <span class="kw">end</span>
+<span class="kw">endcase</span>
+<span class="cmt">// check(): 읽은 값≠exp 면 fail_flag<=1, fail_addr 캡쳐 → BIRA로</span></code></pre>
+    <div class="codecap">실제 MBIST는 합성된 FSM + 데이터/어드레스 제너레이터 + 비교기. 위는 알고리즘 흐름만 보인 의사-RTL.</div>
+    <div class="pitfall"><p style="margin:6px 0"><strong>주의:</strong> March에서 <strong class="hl">w 다음 바로 r</strong>(같은 셀)은 SAF/TF용, <strong>증가/감소 양방향</strong> 순회는 CF(coupling)·AF(address)용. 방향을 한쪽만 돌면 CF를 놓칩니다. 그래서 "10N"의 <strong>up/down 둘 다</strong>가 의미 있는 것.</p></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">MBIST ③ — repair</div>
+    <h2>BIRA / BISR — 불량 메모리를 "고친다"</h2>
+    <p>대용량 SRAM은 100% 양품이 드뭅니다. 그래서 <strong class="hl">여분 row/column</strong>을 깔아두고, 불량 셀을 여분으로 <strong>대체(repair)</strong>합니다.</p>
+    <div class="flow">
+      <div class="box">MBIST<br><span class="dim">불량 검출</span></div>
+      <div class="arrow">→</div>
+      <div class="box">BIRA<br><span class="dim">불량 주소 수집·<br>repair 해 계산</span></div>
+      <div class="arrow">→</div>
+      <div class="box on">BISR<br><span class="dim">redundant 매핑<br>적용</span></div>
+      <div class="arrow">→</div>
+      <div class="box">fuse blow<br><span class="dim">영구 저장</span></div>
+    </div>
+    <div class="grid2 mt">
+      <div class="spec"><ul style="margin:8px 0">
+        <li><strong>BIRA</strong>(Built-In Redundancy Analysis): fail 주소를 모아 <strong>redundant row/column 할당</strong>을 풀 수 있는지 계산(must-repair / 2-D 분석)</li>
+        <li><strong>BISR</strong>(Built-In Self-Repair): 그 매핑을 메모리 디코더에 적용 → 불량 row/col을 여분으로 우회</li>
+        <li>repair 정보는 <strong class="hl">eFuse(OTP)</strong>에 굽고, <strong>부팅 시 다시 로드</strong>해 매핑 재적용</li>
+      </ul></div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>fuse 함정:</strong> eFuse는 <strong>일회성(OTP)</strong> — 한 번 blow하면 못 되돌림. repair 데이터가 틀리거나 fuse 굽기를 실패하면 칩을 못 살립니다. 또 <strong>매 부팅 fuse→레지스터 로드(BISR boot)</strong>가 정상 동작 전에 끝나야 하므로, 부팅 시퀀스에 이 단계를 반드시 넣습니다(소프트 repair 미적용 시 그 메모리는 불량 상태로 동작).</p></div>
+    </div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">LBIST</div>
+    <h2>PRPG + MISR — 칩이 자기 로직을 채점</h2>
+    <p>외부 ATE 없이 <strong class="hl">칩 내부에서 패턴을 만들고 응답을 채점</strong>하는 게 LBIST. 표준 구조가 <strong>STUMPS</strong>(self-test using MISR & parallel SRSG).</p>
+    <div class="diagram">
+      <svg viewBox="0 0 700 160" font-family="var(--mono)">
+        <g fill="#172236" stroke="#b388ff"><rect x="20" y="50" width="90" height="60"/></g>
+        <text x="65" y="76" fill="#b388ff" font-size="12" text-anchor="middle">PRPG</text>
+        <text x="65" y="94" fill="#6c7c95" font-size="9" text-anchor="middle">(LFSR)</text>
+        <g stroke="#22304a"><line x1="110" y1="62" x2="280" y2="50"/><line x1="110" y1="80" x2="280" y2="80"/><line x1="110" y1="98" x2="280" y2="110"/></g>
+        <g fill="#172236" stroke="#5b9cff"><rect x="280" y="44" width="160" height="14"/><rect x="280" y="73" width="160" height="14"/><rect x="280" y="103" width="160" height="14"/></g>
+        <text x="360" y="138" fill="#5b9cff" font-size="10" text-anchor="middle">scan chains (CUT)</text>
+        <g stroke="#22304a"><line x1="440" y1="50" x2="590" y2="62"/><line x1="440" y1="80" x2="590" y2="80"/><line x1="440" y1="110" x2="590" y2="98"/></g>
+        <g fill="#172236" stroke="#38e1c6"><rect x="590" y="50" width="90" height="60"/></g>
+        <text x="635" y="76" fill="#38e1c6" font-size="12" text-anchor="middle">MISR</text>
+        <text x="635" y="94" fill="#6c7c95" font-size="9" text-anchor="middle">→ signature</text>
+      </svg>
+    </div>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0"><strong>PRPG</strong>(Pseudo-Random Pattern Generator) = <strong>LFSR</strong>. seed에서 <strong class="hl">의사난수 패턴</strong>을 만들어 scan 체인에 뿌림. (deterministic 점화가 필요하면 weighted/embedded 패턴 보강)</p></div>
+      <div class="spec"><p style="margin:6px 0"><strong>MISR</strong>(Multiple-Input Signature Register) = 출력을 받는 LFSR. 수천 박자 응답을 <strong class="hl">하나의 짧은 서명(signature)</strong>으로 압축. 끝의 서명을 <strong>기대값(golden)과 1번 비교</strong> → pass/fail.</p></div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>MISR의 약점 — aliasing:</strong> 다른 응답이 우연히 <strong>같은 서명</strong>으로 압축돼 불량을 놓칠 확률. n-bit MISR에서 약 <code>2<sup>-n</sup></code>로 매우 작지만 0은 아님. 그래서 서명 폭을 충분히(예: 32-bit↑) 잡고, <strong>X는 반드시 마스킹</strong>(X가 MISR에 들어가면 서명이 오염돼 무의미).</p></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">IST / POST</div>
+    <h2>부팅·필드 자가테스트와 기능안전</h2>
+    <div class="grid2">
+      <div>
+        <p>같은 BIST 회로를 <strong>제조 테스트뿐 아니라 필드</strong>에서도 씁니다:</p>
+        <ul>
+          <li><strong class="hl">POST</strong>(Power-On Self-Test): 부팅 때 1회 — MBIST/LBIST 실행 후 정상이면 펌웨어 진입</li>
+          <li><strong>IST</strong>(In-System Test) / 주기적 LBIST·MBIST: 키온/키오프·idle 구간에 반복 실행</li>
+          <li>자동차 <strong>ISO 26262</strong>(기능안전): 잠재고장(latent fault)을 주기적 자가진단으로 검출 → <strong>LFM/SPFM</strong> 지표 충족에 LBIST/MBIST가 기여</li>
+        </ul>
+      </div>
+      <div class="deepnote">
+        <p style="margin:6px 0"><strong>부팅 시퀀스 결합(전형 순서):</strong></p>
+        <ol style="margin:6px 0 6px 18px;color:var(--ink)">
+          <li>reset 해제 → PLL lock</li>
+          <li><strong class="hl">BISR boot</strong>: eFuse → repair 레지스터 로드(메모리 우회 적용)</li>
+          <li>MBIST(March) 실행 → fail 시 fault 처리/안전상태</li>
+          <li>LBIST(PRPG/MISR) 실행 → MISR 서명 비교</li>
+          <li>모두 pass → CPU 부트 코드 진입</li>
+        </ol>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>순서 함정:</strong> repair(BISR) 로드를 MBIST <strong>앞에</strong> 두지 않으면, 이미 고친 메모리를 또 fail로 잡거나 fail로 동작합니다. 또 필드 LBIST는 <strong>회로 상태를 파괴</strong>(scan)하므로 안전상태에서만, 정해진 시간예산 안에 끝내야 합니다.</p></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>DFT 자체를 어떻게 검증하나</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🧩</span> 무엇으로</h3>
+        <ul>
+          <li><strong>DFT rule check</strong>(DRC): scan-ability·clock/reset uncontrollable·X-source를 합성 전 점검</li>
+          <li><strong>ATPG 패턴 시뮬</strong>: 생성 패턴을 게이트넷+SDF로 다시 돌려 <strong class="hl">테스트벤치 없는 검증</strong>(pattern verify)</li>
+          <li>MBIST/LBIST <strong>UVM testbench</strong> + assertion(SVA)로 컨트롤러 FSM·fail 경로 자극</li>
+          <li><strong>fault simulation</strong>으로 coverage 실측, X-mask·MISR 서명 일치 확인</li>
+        </ul></div>
+      <div class="card"><h3><span class="ico">🎯</span> 무엇을(코너)</h3>
+        <ul>
+          <li>shift/capture 경계, <strong>SE 타이밍</strong>(LOC/LOS)</li>
+          <li>at-speed 클럭 controller 펄스 폭·도메인 크로싱</li>
+          <li><strong>X 전파</strong>: 미초기화·비스캔 셀이 compactor/MISR로 새는지</li>
+          <li>BISR repair 적용 후 정상 read/write, fuse 로드 순서</li>
+          <li>March로 <strong>의도 주입한 fault(SAF/TF/CF)</strong>가 잡히는지(fault injection)</li>
+        </ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">DFT 검증의 정수는 <strong class="hl">"테스트 로직이 정말 불량을 잡는가"를 fault injection으로 증명</strong>하는 것. 좋은 신호만 넣어 pass 보는 건 절반짜리 — 일부러 결함을 심어 fail이 떠야 진짜 검증입니다.</p></div>
+  </section>
+
+  <!-- 16 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "실무자"로 보인다</h2>
+    <div class="qa"><div class="q">mux-D scan FF은 일반 FF과 뭐가 다르고 SE의 역할은?</div><div class="a">D 입력 앞에 2:1 MUX를 추가하고 select가 scan_enable(SE)입니다. SE=0이면 기능 경로 D, SE=1이면 앞 FF의 Q(SI)를 받아 시프트합니다. 기능 FF을 재사용하므로 비용은 FF당 MUX 1개 수준입니다.</div></div>
+    <div class="qa"><div class="q">stuck-at과 transition fault, 그리고 at-speed의 관계는?</div><div class="a">stuck-at은 노드가 0/1에 고정된 정적 결함이라 1번 capture로 잡습니다. transition은 천이가 느린(slow-to-rise/fall) 딜레이 결함이라 launch+capture 2펄스를 기능 주파수로 줘야 하고, 이게 at-speed test입니다. LOC는 capture로 launch, LOS는 마지막 shift로 launch하며 LOS는 SE가 at-speed로 토글돼야 해 더 까다롭습니다.</div></div>
+    <div class="qa"><div class="q">scan 데이터·시간 폭발은 어떻게 줄이고, X는 왜 문제인가?</div><div class="a">EDT/DFTMAX 압축으로 소수 ATE 채널을 decompressor(LFSR)로 수백 개 짧은 체인에 펼치고, 출력은 compactor(XOR)로 모읍니다. 문제는 미초기화 FF 등에서 나온 X가 XOR compactor·MISR에 들어가면 좋은 비트까지 오염시켜 coverage를 떨어뜨리는 것이라, X-masking으로 그 비트를 막습니다.</div></div>
+    <div class="qa"><div class="q">March C-는 무엇을 몇 번에 잡고, BISR과 부팅은 어떻게 엮이나?</div><div class="a">March C-는 up/down 양방향 순회로 약 10N 연산에 SAF·TF·AF·CF를 잡습니다. 불량 주소는 BIRA가 모아 redundant row/col 할당을 계산하고 BISR이 디코더에 매핑을 적용, 결과를 eFuse(OTP)에 굽습니다. 부팅 때는 fuse→repair 레지스터 로드(BISR boot)를 MBIST보다 먼저 해야, 이미 고친 메모리를 다시 fail로 잡지 않습니다.</div></div>
+  </section>
+
+  <!-- 17 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>DFT 정밀 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li><strong>Scan</strong>: mux-D FF(SE select), stitching, <code>shift→capture→shift</code></li>
+        <li><strong>ATPG</strong>: stuck-at(1 capture) vs transition(2 capture, at-speed)</li>
+        <li>coverage: test ≥ fault, 100%≠불량0; IDDQ/bridging 보완</li>
+        <li>압축 <strong>EDT/DFTMAX</strong> + <strong>X-masking</strong>; LOC vs LOS</li>
+        <li><strong>MBIST</strong>: March C-(10N), SAF/TF/CF/AF, BIRA→BISR→fuse</li>
+        <li><strong>LBIST</strong>: PRPG(LFSR)+MISR(서명, aliasing 2<sup>-n</sup>), STUMPS</li>
+        <li><strong>POST/IST</strong>: 부팅 결합·ISO 26262 주기 자가진단</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"DFT는 칩에 <strong class="hl">관측·제어 통로(scan)와 자가채점기(BIST)</strong>를 심는 일입니다. 정확한 fault model로 패턴을 만들고, 압축·X-masking으로 비용을 줄이며, repair·서명으로 양품을 살리고 채점합니다. 검증의 핵심은 <strong>fault injection으로 '정말 잡는지' 증명</strong>하는 것."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>6-3 JTAG / IEEE 1149.1 · 1687(IJTAG) 정밀</strong>: TAP 상태기계와 BSDL·ICL/PDL.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

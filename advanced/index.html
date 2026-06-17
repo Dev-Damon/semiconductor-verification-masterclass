@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화판(Deep Dive) — 목차</title>
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/advanced.css">
+<style>
+  body{overflow:auto}
+  .wrap{max-width:1080px;margin:0 auto;padding:64px 24px 100px}
+  .hero{text-align:center;margin-bottom:46px}
+  .hero h1{font-size:clamp(34px,6vw,60px)}
+  .hero p{max-width:720px;margin:10px auto 0}
+  .backlink{display:inline-block;margin-top:18px;color:var(--dim);text-decoration:none;border:1px solid var(--line);background:var(--panel);padding:8px 16px;border-radius:30px;font-size:13.5px;transition:.15s}
+  .backlink:hover{color:var(--ink);border-color:var(--accent)}
+  .part{margin-top:40px}
+  .part-h{display:flex;align-items:baseline;gap:14px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+  .part-h .n{font-family:var(--mono);color:var(--accent);font-weight:800;font-size:15px}
+  .part-h h2{font-size:22px;margin:0}
+  .part-h .d{color:var(--dim);font-size:14px;margin-left:auto}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+  a.chap{display:block;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;text-decoration:none;transition:.16s}
+  a.chap:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:var(--shadow)}
+  a.chap .num{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:700}
+  a.chap h3{color:var(--ink);font-size:16.5px;margin:6px 0 7px}
+  a.chap p{font-size:13px;color:var(--dim);margin:0;line-height:1.55}
+  .foot{text-align:center;color:var(--dim);font-size:13px;margin-top:56px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">반도체 검증 — 심화판</h1>
+    <p class="lead">개념을 잡았다면, 이제 면접관이 파고드는 <strong class="hl">신호·코드·스펙·숫자</strong> 레벨까지.<br>실제 Verilog/UVM 코드, 프로토콜 인코딩, 타이밍 파형, 흔한 함정을 담았습니다.</p>
+    <a class="backlink" href="../index.html">↩ 개념판 목차로 돌아가기</a>
+  </div>
+
+  <div class="part">
+    <div class="part-h"><span class="n">PART 0</span><h2>기초 정밀</h2><span class="d">타이밍·CDC·검증 방법론</span></div>
+    <div class="cards">
+      <a class="chap" href="chapters/ch0-1.html"><div class="num">0-1</div><h3>반도체·SoC·제작흐름 정밀</h3><p>EDA 툴체인, PPA, 사인오프, 검증 계층.</p></a>
+      <a class="chap" href="chapters/ch0-2.html"><div class="num">0-2</div><h3>디지털 타이밍·CDC 정밀</h3><p>setup/hold 식, 메타스테이빌리티/MTBF, 2-FF 동기화.</p></a>
+      <a class="chap" href="chapters/ch0-3.html"><div class="num">0-3</div><h3>CDV·커버리지·SVA 정밀</h3><p>covergroup·SVA 코드, coverage closure, formal.</p></a>
+    </div>
+  </div>
+
+  <div class="part">
+    <div class="part-h"><span class="n">PART 1</span><h2>설계 언어 정밀</h2><span class="d">스케줄링·검증기능</span></div>
+    <div class="cards">
+      <a class="chap" href="chapters/ch1-1.html"><div class="num">1-1</div><h3>Verilog 정밀</h3><p>NBA 스케줄링, blocking race, latch 추론, generate.</p></a>
+      <a class="chap" href="chapters/ch1-2.html"><div class="num">1-2</div><h3>SystemVerilog 정밀</h3><p>clocking block, constraint, covergroup, SVA 코드.</p></a>
+    </div>
+  </div>
+
+  <div class="part">
+    <div class="part-h"><span class="n">PART 2</span><h2>검증 방법론 정밀</h2><span class="d">UVM 코드·SoC bring-up</span></div>
+    <div class="cards">
+      <a class="chap" href="chapters/ch2-1.html"><div class="num">2-1</div><h3>UVM 정밀</h3><p>driver/sequencer 핸드셰이크, phase·objection, factory.</p></a>
+      <a class="chap" href="chapters/ch2-2.html"><div class="num">2-2</div><h3>C-test·DPI 정밀</h3><p>베어메탈 C, DPI-C import/export, backdoor, PSS.</p></a>
+    </div>
+  </div>
+
+  <div class="part">
+    <div class="part-h"><span class="n">PART 3</span><h2>버스 정밀</h2><span class="d">신호·인코딩·일관성</span></div>
+    <div class="cards">
+      <a class="chap" href="chapters/ch3-1.html"><div class="num">3-1</div><h3>APB 정밀</h3><p>SETUP/ACCESS 신호값, wait state, 타이밍 파형.</p></a>
+      <a class="chap" href="chapters/ch3-2.html"><div class="num">3-2</div><h3>AXI 정밀</h3><p>핸드셰이크 규칙, AxLEN/SIZE 인코딩, WRAP, WSTRB.</p></a>
+      <a class="chap" href="chapters/ch3-3.html"><div class="num">3-3</div><h3>Cache Coherency 정밀</h3><p>MESI 전이표, ACE 스누프 채널, CHI, MOESI.</p></a>
+    </div>
+  </div>
+
+  <div class="part">
+    <div class="part-h"><span class="n">PART 4</span><h2>시뮬레이션 정밀</h2><span class="d">명령·도구·타이밍</span></div>
+    <div class="cards">
+      <a class="chap" href="chapters/ch4-1.html"><div class="num">4-1</div><h3>Compile·Elaboration 정밀</h3><p>VCS/xrun 명령, 이벤트 영역, bind, 에러 3종.</p></a>
+      <a class="chap" href="chapters/ch4-2.html"><div class="num">4-2</div><h3>VCS·Xcelium 실무 정밀</h3><p>명령줄, FSDB 덤프, 커버리지 merge, +UVM_TESTNAME.</p></a>
+      <a class="chap" href="chapters/ch4-3.html"><div class="num">4-3</div><h3>GLS·SDF·타이밍 정밀</h3><p>$sdf_annotate, setup/hold 체크, X-pessimism, STA vs GLS.</p></a>
+    </div>
+  </div>
+
+  <div class="part">
+    <div class="part-h"><span class="n">PART 5</span><h2>SoC·전력 정밀</h2><span class="d">부팅·DVFS·UPF</span></div>
+    <div class="cards">
+      <a class="chap" href="chapters/ch5-1.html"><div class="num">5-1</div><h3>ARM 부팅·Secure Boot 정밀</h3><p>BL1~BL33/TF-A, RVBAR, DDR training, chain of trust.</p></a>
+      <a class="chap" href="chapters/ch5-2.html"><div class="num">5-2</div><h3>DVFS·전력·시퀀싱 정밀</h3><p>CV²f, OPP, governor, V/f 전환 순서, AVS.</p></a>
+      <a class="chap" href="chapters/ch5-3.html"><div class="num">5-3</div><h3>UPF·에뮬레이션 정밀</h3><p>UPF 명령, isolation/retention, simstate, 에뮬 vs FPGA.</p></a>
+    </div>
+  </div>
+
+  <div class="part">
+    <div class="part-h"><span class="n">PART 6</span><h2>DFT 정밀</h2><span class="d">JTAG·Scan·BIST</span></div>
+    <div class="cards">
+      <a class="chap" href="chapters/ch6-1.html"><div class="num">6-1</div><h3>TAP·1149.1·1687·DAP 정밀</h3><p>TAP 16상태, 명령, iJTAG SIB, JTAG2APB/DAP.</p></a>
+      <a class="chap" href="chapters/ch6-2.html"><div class="num">6-2</div><h3>Scan·ATPG·MBIST·LBIST 정밀</h3><p>mux-D scan, fault model, March, BISR, MISR.</p></a>
+    </div>
+  </div>
+
+  <div class="part">
+    <div class="part-h"><span class="n">PART 7</span><h2>협업 도구 정밀</h2><span class="d">대용량·재현성</span></div>
+    <div class="cards">
+      <a class="chap" href="chapters/ch7-1.html"><div class="num">7-1</div><h3>Git in HW팀 정밀</h3><p>LFS 메커니즘, 멀티레포, tape-out 태깅, Perforce.</p></a>
+    </div>
+  </div>
+
+  <div class="foot">반도체 검증 마스터클래스 · 심화판(Deep Dive) · 키보드 ← → 로 슬라이드 이동</div>
+</div>
+</body>
+</html>

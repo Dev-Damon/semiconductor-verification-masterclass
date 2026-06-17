@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 1-2 · SystemVerilog 정밀(검증기능)</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 1 · 1-2 SystemVerilog 정밀">
+<div class="track-switch"><a href="../../chapters/ch1-2.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">SystemVerilog, 검증 기능을 신호·코드 레벨까지</h1>
+    <p class="hook">개념판에서 "객체지향+제약랜덤+커버리지"를 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">2-state vs 4-state, virtual interface, clocking block의 race 제거, constraint 해법 순서, concurrent assertion의 정확한 동작</strong>까지 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"문법을 안다"에서 "왜 그렇게 쓰는지 설명한다"로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li>SV는 Verilog의 검증 확장이라는 큰 그림</li><li>class·rand·covergroup·assertion이 있다는 것</li><li>interface로 신호를 묶는다는 직관</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li><code>logic/bit</code> — <strong>4-state vs 2-state</strong> 인코딩·성능</li><li><code>clocking block</code>로 <strong>sampling/driving race 제거</strong></li><li><code>virtual interface</code>가 왜 필요한가(class↔신호)</li><li>constraint <code>-&gt;</code> / <code>solve before</code> / <code>dist</code>의 정확한 의미</li><li>concurrent assertion <code>|-&gt;</code> <code>|=&gt;</code> <code>##n</code> 동작</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준 스펙: <strong>IEEE Std 1800-2017 (SystemVerilog LRM)</strong>. 면접에서 "SV 좀 봤다"와 "SV로 환경 짜봤다"를 가르는 건 이 디테일들입니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">자료형 ① — 상태</div>
+    <h2>logic(4-state) vs bit(2-state)</h2>
+    <table class="sig">
+      <tr><th>타입</th><th>값</th><th>비트당 인코딩</th><th>리셋 초기값</th><th>용도</th></tr>
+      <tr><td>logic / reg</td><td><strong class="hl">0 1 X Z</strong> (4-state)</td><td>2비트(val+control)</td><td><code>X</code></td><td>RTL, DUT 연결, 미초기화/충돌 탐지</td></tr>
+      <tr><td>bit / int</td><td><strong class="hl2">0 1</strong> (2-state)</td><td>1비트</td><td><code>0</code></td><td>TB 산술·카운터·스코어보드</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0"><code>logic</code>은 단일 드라이버용 <strong>data type</strong>이고, 다중 드라이버(버스)면 <code>wire</code>(net) + resolution이 필요합니다. <code>reg</code>는 SV에서 <code>logic</code>과 사실상 동의어(오해 유발 이름이라 SV는 <code>logic</code> 권장).</p></div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>흔한 오답:</strong> "bit는 1비트, logic은 여러 비트" ❌. 둘 다 폭은 <code>[31:0]</code>처럼 선언으로 정함. 차이는 <strong>비트당 표현할 수 있는 값(2 vs 4-state)</strong>입니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">자료형 ② — 컨테이너</div>
+    <h2>packed/unpacked · queue · assoc · struct</h2>
+    <pre class="code"><code><span class="cmt">// packed: 연속 비트(벡터). 산술/슬라이스 가능, 합성 가능</span>
+<span class="kw">logic</span> [<span class="str">31</span>:<span class="str">0</span>] word;          <span class="cmt">// 32비트 하나의 묶음</span>
+<span class="kw">logic</span> [<span class="str">3</span>:<span class="str">0</span>][<span class="str">7</span>:<span class="str">0</span>] bytes;     <span class="cmt">// packed 2D = 여전히 32비트</span>
+
+<span class="cmt">// unpacked: 별개 원소 배열(메모리/컬렉션). 합성 제한적</span>
+<span class="kw">int</span> mem [<span class="str">256</span>];                <span class="cmt">// 고정 크기 unpacked</span>
+<span class="kw">int</span> dyn [];                  <span class="cmt">// dynamic: dyn = new[N];</span>
+<span class="kw">int</span> q  [$];                  <span class="cmt">// queue: q.push_back(x); q.pop_front();</span>
+<span class="kw">int</span> ap [<span class="kw">string</span>];            <span class="cmt">// associative: ap["key"], 희소 메모리</span>
+
+<span class="cmt">// 합성 구조체 / enum / union</span>
+<span class="kw">typedef</span> <span class="kw">struct</span> <span class="kw">packed</span> { <span class="kw">logic</span> [<span class="str">7</span>:<span class="str">0</span>] id; <span class="kw">logic</span> [<span class="str">31</span>:<span class="str">0</span>] addr; } hdr_t;
+<span class="kw">typedef</span> <span class="kw">enum</span> <span class="kw">logic</span> [<span class="str">1</span>:<span class="str">0</span>] { IDLE=<span class="str">0</span>, REQ=<span class="str">1</span>, RESP=<span class="str">2</span> } state_e;</code></pre>
+    <div class="codecap">packed = 비트들이 메모리상 연속 → 통째로 캐스팅·연산. unpacked = 원소 단위 → 동적/연관 배열의 베이스.</div>
+    <div class="pitfall"><p style="margin:6px 0"><code>struct packed</code>만 벡터처럼 한 번에 대입/슬라이스됩니다. <code>packed</code> 멤버는 모두 <strong>integral</strong>이어야 하며(실수·동적배열 불가), 멤버 선언 순서가 <strong>MSB→LSB</strong>로 매핑됩니다.</p></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">랜덤화 ① — 클래스+제약</div>
+    <h2>rand / randc / constraint 실코드</h2>
+    <pre class="code"><code><span class="kw">class</span> <span class="fn">AxiTxn</span>;
+  <span class="kw">rand</span>  <span class="kw">bit</span> [<span class="str">31</span>:<span class="str">0</span>] addr;
+  <span class="kw">rand</span>  <span class="kw">bit</span> [<span class="str">7</span>:<span class="str">0</span>]  len;       <span class="cmt">// beats-1 (0..255)</span>
+  <span class="kw">rand</span>  <span class="kw">bit</span> [<span class="str">2</span>:<span class="str">0</span>]  size;      <span class="cmt">// 2^size 바이트</span>
+  <span class="kw">randc</span> <span class="kw">bit</span> [<span class="str">1</span>:<span class="str">0</span>]  burst;     <span class="cmt">// 매 사이클 전 조합 소진 후 반복</span>
+
+  <span class="kw">constraint</span> c_size { size <span class="kw">inside</span> {[<span class="str">0</span>:<span class="str">3</span>]}; }            <span class="cmt">// 1,2,4,8 B</span>
+  <span class="kw">constraint</span> c_dist { len <span class="kw">dist</span> { <span class="str">0</span>:=<span class="str">50</span>, [<span class="str">1</span>:<span class="str">15</span>]:/<span class="str">30</span>, [<span class="str">16</span>:<span class="str">255</span>]:/<span class="str">20</span> }; }
+  <span class="cmt">// implication: WRAP이면 len은 1,3,7,15 (2/4/8/16 beats)</span>
+  <span class="kw">constraint</span> c_wrap { burst==<span class="str">2</span>'b10 <span class="kw">-></span> len <span class="kw">inside</span> {<span class="str">1</span>,<span class="str">3</span>,<span class="str">7</span>,<span class="str">15</span>}; }
+  <span class="cmt">// 정렬: addr는 size 경계에 정렬</span>
+  <span class="kw">constraint</span> c_align { addr % (<span class="str">1</span> << size) == <span class="str">0</span>; }
+  <span class="kw">constraint</span> c_order { <span class="kw">solve</span> size <span class="kw">before</span> addr; }     <span class="cmt">// size 먼저 → addr 분포 균형</span>
+  <span class="kw">constraint</span> c_soft { <span class="kw">soft</span> len == <span class="str">7</span>; }              <span class="cmt">// 충돌 시 양보</span>
+<span class="kw">endclass</span>
+
+<span class="cmt">// 사용</span>
+AxiTxn t = <span class="kw">new</span>();
+<span class="kw">if</span> (!t.<span class="fn">randomize</span>() <span class="kw">with</span> { addr <span class="kw">inside</span> {[<span class="str">32</span>'h1000:<span class="str">32</span>'h1FFF]}; })
+  `<span class="fn">uvm_error</span>(<span class="str">"RND"</span>, <span class="str">"randomize failed"</span>)</code></pre>
+    <div class="codecap"><code>:=</code> = 절대 가중치, <code>:/</code> = 범위 전체에 가중치를 균등 분할. <code>-&gt;</code> = implication(왼쪽 참이면 오른쪽 강제). <code>with{}</code> = 인라인 제약.</div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">랜덤화 ② — 정확한 의미</div>
+    <h2>implication · solve before · randc</h2>
+    <div class="grid2">
+      <div class="spec">
+        <h3 style="color:var(--accent2)"><code>-&gt;</code> implication</h3>
+        <p style="margin:6px 0"><code>A -&gt; B</code>는 "A이면 B"일 뿐 <strong>양방향이 아님</strong>. A가 거짓이면 B는 자유. <code>if(A) B; else C;</code> 형태도 가능.</p>
+        <h3 style="color:var(--accent2);margin-top:14px"><code>solve … before …</code></h3>
+        <p style="margin:6px 0">두 변수의 <strong>해 분포</strong>를 바꿀 뿐, 해집합 자체는 안 바꿈. 순서를 주면 첫 변수를 먼저 균등 선택 후 둘째를 만족시킴.</p>
+      </div>
+      <div class="spec">
+        <h3 style="color:var(--accent2)"><code>randc</code> 주기성</h3>
+        <p style="margin:6px 0">선언 폭의 <strong>모든 값을 한 번씩 소진</strong>한 뒤에야 같은 값 반복(랜덤 순열). N비트면 주기 = <code>2^N</code>.</p>
+        <table class="sig" style="font-size:13.5px"><tr><th>키워드</th><th>의미</th></tr>
+          <tr><td>inside</td><td>집합/범위 멤버십</td></tr>
+          <tr><td>dist</td><td>가중 분포(:=, :/)</td></tr>
+          <tr><td>soft</td><td>충돌 시 자동 양보</td></tr></table>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>solve-before 오용:</strong> 결과를 "강제"한다고 착각 — 실제론 분포만 조정합니다. 또 <strong>randc 남용</strong>은 위험: 32비트에 <code>randc</code>를 쓰면 솔버가 <code>2^32</code> 순열 상태를 관리하려다 폭증/성능 저하. randc는 <strong>좁은 필드(상태·opcode)</strong>에만.</p></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">커버리지</div>
+    <h2>covergroup · bins · cross</h2>
+    <pre class="code"><code><span class="kw">covergroup</span> cg_axi <span class="kw">with</span> <span class="kw">function</span> <span class="kw">sample</span>(AxiTxn t);
+  cp_size : <span class="kw">coverpoint</span> t.size {
+    <span class="kw">bins</span> small[] = {[<span class="str">0</span>:<span class="str">2</span>]};       <span class="cmt">// 1,2,4B 각각 별도 bin</span>
+    <span class="kw">bins</span> wide      = {<span class="str">3</span>};           <span class="cmt">// 8B</span>
+    <span class="kw">illegal_bins</span> bad = {[<span class="str">4</span>:<span class="str">7</span>]};   <span class="cmt">// 발생 시 즉시 에러</span>
+  }
+  cp_burst: <span class="kw">coverpoint</span> t.burst {
+    <span class="kw">bins</span> fixed={<span class="str">0</span>}; <span class="kw">bins</span> incr={<span class="str">1</span>}; <span class="kw">bins</span> wrap={<span class="str">2</span>};
+    <span class="kw">ignore_bins</span> rsvd = {<span class="str">3</span>};      <span class="cmt">// 커버리지 계산서 제외</span>
+  }
+  cp_len  : <span class="kw">coverpoint</span> t.len {
+    <span class="kw">bins</span> lo={[<span class="str">0</span>:<span class="str">15</span>]}; <span class="kw">bins</span> hi={[<span class="str">16</span>:<span class="str">255</span>]};
+  }
+  x_bs : <span class="kw">cross</span> cp_burst, cp_size;     <span class="cmt">// 조합 커버리지(곱집합)</span>
+<span class="kw">endgroup</span>
+
+cg_axi cg = <span class="kw">new</span>();
+... cg.<span class="fn">sample</span>(t);   <span class="cmt">// 트랜잭션마다 호출</span></code></pre>
+    <div class="codecap"><code>bins x[]</code>(array bins)=값마다 별도 bin, <code>illegal_bins</code>=발생 즉시 에러, <code>ignore_bins</code>=분모에서 제외. cross=각 coverpoint bin의 곱집합.</div>
+    <div class="pitfall"><p style="margin:6px 0"><strong>cross 폭증:</strong> coverpoint bin 수가 곱해집니다(예 16×8=128). 의미 없는 조합은 <code>ignore_bins</code>/<code>binsof()</code> 표현식으로 잘라내야 커버리지 닫기(closure)가 현실화됩니다.</p></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">인터페이스 ① — race 제거</div>
+    <h2>clocking block — 샘플/드라이브 타이밍을 못 박다</h2>
+    <pre class="code"><code><span class="kw">interface</span> axi_if(<span class="kw">input</span> <span class="kw">bit</span> clk);
+  <span class="kw">logic</span> [<span class="str">31</span>:<span class="str">0</span>] addr;
+  <span class="kw">logic</span>        valid, ready;
+
+  <span class="cmt">// 테스트벤치 시점: skew로 샘플/드라이브를 클럭에서 떼어냄</span>
+  <span class="kw">clocking</span> cb @(<span class="kw">posedge</span> clk);
+    <span class="kw">default</span> <span class="kw">input</span> #<span class="str">1step</span> <span class="kw">output</span> #<span class="str">1</span>;   <span class="cmt">// 입력은 직전 안정값, 출력은 +1 후</span>
+    <span class="kw">input</span>  ready;                       <span class="cmt">// DUT→TB : 샘플</span>
+    <span class="kw">output</span> addr, valid;                 <span class="cmt">// TB→DUT : 드라이브</span>
+  <span class="kw">endclocking</span>
+
+  <span class="kw">modport</span> TB (<span class="kw">clocking</span> cb, <span class="kw">input</span> clk);   <span class="cmt">// 검증측</span>
+  <span class="kw">modport</span> DUT(<span class="kw">input</span> addr, valid, <span class="kw">output</span> ready, <span class="kw">input</span> clk);
+<span class="kw">endinterface</span>
+
+<span class="cmt">// 드라이버에서: 신호를 직접이 아니라 cb를 통해 움직인다</span>
+<span class="kw">task</span> drive(axi_if.TB vif);
+  vif.cb.addr  <= <span class="str">32</span>'h40; <span class="cmt">// output skew(#1)만큼 늦게 드라이브</span>
+  vif.cb.valid <= <span class="str">1</span>'b1;
+  @(vif.cb);                  <span class="cmt">// 다음 clocking 이벤트까지 대기</span>
+  <span class="kw">wait</span>(vif.cb.ready);          <span class="cmt">// #1step로 샘플된 안정값</span>
+<span class="kw">endtask</span></code></pre>
+    <div class="spec"><p style="margin:6px 0"><strong>race가 제거되는 이유:</strong> <code>input #1step</code>은 클럭 엣지 <strong>바로 직전(Preponed region)</strong>의 안정된 값을 샘플 → DUT가 같은 엣지에 바꾸는 값과 경합하지 않습니다. <code>output #1</code>은 엣지보다 <strong>늦게</strong> 드라이브 → DUT 입력 셋업과 충돌 없음. 즉 <strong>샘플=엣지 전, 드라이브=엣지 후</strong>로 분리됩니다.</p></div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">인터페이스 ② — clocking 없을 때</div>
+    <h2>왜 직접 신호를 건드리면 안 되나</h2>
+    <div class="grid2">
+      <div class="diagram" style="text-align:left">
+        <pre class="code sm"><code><span class="cmt">// ❌ clocking block 없이 직접</span>
+<span class="kw">always</span> @(<span class="kw">posedge</span> clk)
+  <span class="kw">if</span> (vif.ready)        <span class="cmt">// DUT도 같은 엣지에</span>
+    do_something();    <span class="cmt">// ready를 바꾸는 중!</span>
+<span class="cmt">// → TB가 새 값 본 건지 옛 값 본 건지</span>
+<span class="cmt">//   시뮬레이터 스케줄 순서에 의존 (race)</span></code></pre>
+      </div>
+      <div>
+        <p>Verilog 이벤트 큐에서 같은 시각의 <strong>Active region</strong> 안 실행 순서는 비결정적입니다. TB의 샘플과 DUT의 갱신이 같은 엣지에 얽히면 <strong class="hl">읽는 값이 시뮬레이터/최적화에 따라 달라집니다.</strong></p>
+        <ul>
+          <li><code>#1step</code> 샘플 = <strong>Preponed</strong>(엣지 직전 안정값)</li>
+          <li>드라이브 = <strong>NBA/Reactive</strong> 이후 적용</li>
+          <li>그래서 결과가 <strong>재현 가능(deterministic)</strong></li>
+        </ul>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>clocking block 없이 race:</strong> "내 시뮬에선 됐는데 회귀/다른 툴에선 깨진다"의 대표 원인. blocking <code>=</code>로 인터페이스 신호를 같은 엣지에 읽고 쓰면 거의 확정적으로 race. <strong>TB는 cb를 통해서만</strong> 신호를 만지는 게 표준 패턴입니다.</p></div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">인터페이스 ③ — 연결 다리</div>
+    <h2>virtual interface — class와 신호를 잇다</h2>
+    <p><code>interface</code>는 <strong>static</strong>(컴파일 시 인스턴스 고정)이고, <code>class</code> 기반 TB는 <strong>dynamic</strong>(<code>new()</code>로 런타임 생성). 클래스 안에서 정적 인터페이스를 직접 참조할 수 없으므로 <strong class="hl">핸들(포인터)</strong>이 필요합니다 — 그게 virtual interface.</p>
+    <pre class="code sm"><code><span class="cmt">// 드라이버(class)는 어떤 물리 인터페이스인지 모른 채 핸들만 보유</span>
+<span class="kw">class</span> <span class="fn">AxiDriver</span>;
+  <span class="kw">virtual</span> axi_if.TB vif;          <span class="cmt">// 가상 인터페이스 핸들</span>
+  <span class="kw">task</span> run(); vif.cb.valid <= <span class="str">1</span>; @(vif.cb); <span class="kw">endtask</span>
+<span class="kw">endclass</span>
+
+<span class="cmt">// top: 실제 인터페이스 인스턴스를 핸들에 바인딩</span>
+axi_if dut_if(clk);
+AxiDriver d = <span class="kw">new</span>();
+<span class="kw">initial</span> d.vif = dut_if;          <span class="cmt">// 동적 class ↔ 정적 if 연결</span>
+<span class="cmt">// UVM이면: uvm_config_db#(virtual axi_if)::set/get 으로 전달</span></code></pre>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0">한 클래스를 여러 인터페이스 인스턴스에 <strong>재사용</strong>할 수 있고, 테스트마다 다른 DUT 포트에 같은 드라이버를 꽂을 수 있습니다(reusability).</p></div>
+      <div class="pitfall"><p style="margin:6px 0">virtual interface가 <strong>null</strong>인 채 사용 = 런타임 fatal. config_db <code>get</code> 실패(이름/타입 mismatch)가 단골 원인. <code>build_phase</code>에서 null 체크는 필수.</p></div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">단언 — SVA</div>
+    <h2>concurrent assertion: |-> · |=> · ##n · throughout</h2>
+    <pre class="code"><code><span class="cmt">// 클럭마다 평가되는 concurrent assertion (RTL과 병렬)</span>
+<span class="kw">property</span> p_req_ack;
+  @(<span class="kw">posedge</span> clk) <span class="kw">disable</span> <span class="kw">iff</span> (!rst_n)        <span class="cmt">// 리셋 중엔 비활성</span>
+    req <span class="kw">|-></span> ##[<span class="str">1</span>:<span class="str">3</span>] ack;                  <span class="cmt">// req 후 1~3클럭 내 ack</span>
+<span class="kw">endproperty</span>
+assert_req: <span class="kw">assert</span> <span class="kw">property</span>(p_req_ack)
+  <span class="kw">else</span> `<span class="fn">uvm_error</span>(<span class="str">"SVA"</span>, <span class="str">"ack not seen in 1..3"</span>)
+
+<span class="cmt">// |->(overlap): 같은 클럭에서 consequent 시작</span>
+<span class="cmt">// |=>(non-overlap): 다음 클럭에서 시작  ==  |-> ##1</span>
+<span class="kw">property</span> p_stable;
+  @(<span class="kw">posedge</span> clk)
+    valid && !ready <span class="kw">|=></span> $stable(data);   <span class="cmt">// stall 동안 data 유지</span>
+<span class="kw">endproperty</span>
+
+<span class="cmt">// throughout: 시퀀스 진행 내내 조건이 참이어야</span>
+<span class="kw">property</span> p_burst;
+  @(<span class="kw">posedge</span> clk)
+    $rose(start) <span class="kw">|-></span> (!abort) <span class="kw">throughout</span> (##[<span class="str">1</span>:<span class="str">8</span>] done);
+<span class="kw">endproperty</span></code></pre>
+    <div class="codecap"><code>|-&gt;</code>=overlap(같은 클럭), <code>|=&gt;</code>=non-overlap(다음 클럭, <code>|-&gt; ##1</code>과 동일), <code>##n</code>=n클럭 지연, <code>##[a:b]</code>=범위, <code>throughout</code>=구간 내내 참, <code>$rose/$stable</code>=엣지/유지.</div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">단언 — 동작 모델</div>
+    <h2>concurrent assertion은 어떻게 평가되나</h2>
+    <div class="grid2">
+      <div class="spec">
+        <p style="margin:6px 0"><strong>clock 엣지마다 antecedent 매칭을 시도</strong>합니다. antecedent가 참이면 그 시점에서 <strong>스레드 하나가 출발</strong>해 consequent를 추적. 여러 시점에서 동시에 여러 스레드가 진행될 수 있습니다(파이프라인).</p>
+        <ul style="margin:8px 0">
+          <li>샘플은 <strong>Preponed</strong> 값(clocking과 동일 원리 → race 없음)</li>
+          <li>antecedent 불일치 = <strong>vacuous</strong> 성공(실패 아님)</li>
+          <li><code>immediate assertion</code>은 절차문처럼 <strong>그 즉시</strong> 1회 평가(조합)</li>
+        </ul>
+      </div>
+      <div class="diagram">
+        <svg viewBox="0 0 360 200" font-family="var(--mono)">
+          <text x="6" y="24" fill="#9fb0c7" font-size="12">CLK</text>
+          <polyline fill="none" stroke="#6c7c95" stroke-width="1.5" points="50,28 70,28 70,12 90,12 90,28 110,28 110,12 130,12 130,28 150,28 150,12 170,12 170,28 190,28 190,12 210,12 210,28 230,28 230,12 250,12 250,28 270,28 270,12 290,12 290,28 330,28"/>
+          <text x="6" y="74" fill="#b388ff" font-size="12">req</text>
+          <polyline fill="none" stroke="#b388ff" stroke-width="2" points="50,82 90,82 90,58 130,58 130,82 330,82"/>
+          <text x="6" y="124" fill="#38e1c6" font-size="12">ack</text>
+          <polyline fill="none" stroke="#38e1c6" stroke-width="2" points="50,132 210,132 210,108 250,108 250,132 330,132"/>
+          <rect x="90" y="50" width="160" height="98" fill="rgba(255,206,107,.08)" stroke="none"/>
+          <line x1="90" y1="46" x2="90" y2="155" stroke="#ffce6b" stroke-dasharray="3 3"/>
+          <text x="170" y="172" fill="#ffce6b" font-size="10" text-anchor="middle">req↑ 에서 출발 → ##[1:3] 내 ack</text>
+          <text x="230" y="100" fill="#5ee6a0" font-size="11" text-anchor="middle">PASS</text>
+        </svg>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>X 처리:</strong> 부울 자동이 <code>X/Z</code>면 의도와 다른 vacuous/실패가 날 수 있어, 입력에 <code>$isunknown()</code> 가드를 넣기도 합니다. 또 <code>disable iff</code> 없이 리셋 중 단언이 깨지는 거짓양성도 단골.</p></div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">동시성 · 통신</div>
+    <h2>fork-join · mailbox · semaphore · DPI</h2>
+    <div class="grid2">
+      <div>
+        <pre class="code sm"><code><span class="cmt">// fork variants</span>
+<span class="kw">fork</span> a(); b(); <span class="kw">join</span>        <span class="cmt">// 둘 다 끝나야</span>
+<span class="kw">fork</span> a(); b(); <span class="kw">join_any</span>    <span class="cmt">// 하나라도 끝나면</span>
+<span class="kw">fork</span> a(); b(); <span class="kw">join_none</span>   <span class="cmt">// 안 기다리고 진행</span>
+
+<span class="cmt">// 생산자-소비자: mailbox(typed queue)</span>
+mailbox #(AxiTxn) mb = <span class="kw">new</span>();
+mb.<span class="fn">put</span>(t);  mb.<span class="fn">get</span>(t);   <span class="cmt">// blocking</span>
+
+<span class="cmt">// 자원 N개 보호: semaphore</span>
+semaphore sem = <span class="kw">new</span>(<span class="str">1</span>);
+sem.<span class="fn">get</span>(<span class="str">1</span>); ... sem.<span class="fn">put</span>(<span class="str">1</span>);</code></pre>
+      </div>
+      <div>
+        <p><code>program</code> block은 모든 코드를 <strong>Reactive region</strong>에서 돌려 design과의 race를 줄이려 도입(UVM 시대엔 clocking block + class로 대체되는 추세).</p>
+        <pre class="code sm"><code><span class="cmt">// DPI-C: C 함수 호출</span>
+<span class="kw">import</span> <span class="str">"DPI-C"</span> <span class="kw">function</span> <span class="kw">int</span> ref_model(
+  <span class="kw">input</span> <span class="kw">int</span> a, <span class="kw">input</span> <span class="kw">int</span> b);
+<span class="cmt">// SV에서 그냥 호출</span>
+exp = ref_model(x, y);</code></pre>
+        <div class="dev-bridge"><p style="margin:6px 0">mailbox = thread-safe queue, semaphore = counting lock, DPI = SV↔C FFI. 멀티스레드 서버 코드의 채널/뮤텍스/네이티브 바인딩과 1:1 대응.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>이 기능들이 UVM 환경에서 어떻게 합쳐지나</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🧩</span> 어디에 쓰이나</h3>
+        <ul>
+          <li><strong>class+rand+constraint</strong> → sequence_item / sequence</li>
+          <li><strong>virtual interface</strong> → driver/monitor가 DUT 핀과 통신</li>
+          <li><strong>clocking block</strong> → driver의 race-free 드라이브/샘플</li>
+          <li><strong>covergroup</strong> → 기능 커버리지(coverage closure 목표)</li>
+          <li><strong>SVA</strong> → 프로토콜·인터페이스 assertion(항상 ON)</li>
+        </ul>
+      </div>
+      <div class="card"><h3><span class="ico">🎯</span> 무엇을 측정하나</h3>
+        <ul>
+          <li><strong>code coverage</strong>(line/toggle/FSM) + <strong>functional coverage</strong>(covergroup)</li>
+          <li>제약랜덤으로 자극 다양화 → 커버리지 구멍 보고 제약 보강</li>
+          <li>SVA로 "기능은 돌지만 프로토콜 위반"을 즉시 검출</li>
+          <li>스코어보드(mailbox로 expected vs actual 비교)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">면접 핵심 흐름: <strong>제약랜덤 자극 → 커버리지 측정 → 구멍을 제약/시퀀스로 메움(closure) → assertion으로 정합성 보증</strong>. 이 루프를 자기 말로 설명할 수 있으면 합격선입니다.</p></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "실무자"로 보인다</h2>
+    <div class="qa"><div class="q">clocking block의 목적과 race를 어떻게 없애나요?</div><div class="a">샘플과 드라이브 타이밍을 클럭 엣지에서 분리해 race를 제거합니다. <code>input #1step</code>은 엣지 직전(Preponed)의 안정값을 샘플하고, <code>output #1</code>은 엣지보다 늦게 드라이브해 DUT 갱신과 경합하지 않습니다. 그래서 결과가 재현 가능해집니다.</div></div>
+    <div class="qa"><div class="q">virtual interface는 왜 필요한가요?</div><div class="a">interface는 컴파일 시 고정되는 static이고 class 기반 TB는 <code>new()</code>로 생성되는 dynamic이라, 클래스가 정적 인터페이스를 직접 못 가집니다. virtual interface는 그 인터페이스를 가리키는 핸들이라 class와 신호를 잇고, 한 드라이버를 여러 인스턴스에 재사용하게 해줍니다.</div></div>
+    <div class="qa"><div class="q">constraint의 <code>-&gt;</code>와 <code>solve before</code> 차이, randc 주의점은?</div><div class="a"><code>-&gt;</code>는 "A이면 B"의 단방향 implication으로 해집합을 좁힙니다. <code>solve A before B</code>는 해집합은 그대로 두고 A를 먼저 균등 선택해 <strong>분포만</strong> 바꿉니다. randc는 폭의 모든 값(<code>2^N</code>)을 순열로 소진하므로 좁은 필드에만 쓰고, 넓은 필드엔 솔버 폭증 때문에 피합니다.</div></div>
+  </section>
+
+  <!-- 16 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>SystemVerilog 검증 기능 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li><code>logic</code>=4-state(0/1/X/Z, 미초기화·충돌 탐지), <code>bit</code>=2-state(빠름, TB 산술)</li>
+        <li>packed=연속 비트(연산), unpacked=원소 배열(queue/assoc/dynamic)</li>
+        <li><code>rand/randc</code> + <code>inside/dist/-&gt;/solve before/soft</code>로 자극 제어</li>
+        <li><code>covergroup·cross·bins</code>로 기능 커버리지 측정</li>
+        <li><code>clocking block</code>=race 제거, <code>virtual interface</code>=class↔신호</li>
+        <li>SVA <code>|-&gt; |=&gt; ##n throughout</code>=프로토콜 정합성</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"SV의 검증 기능은 <strong class="hl">제약랜덤(class+rand)으로 자극을, covergroup으로 측정을, clocking/virtual if로 race-free 연결을, SVA로 정합성을</strong> 책임집니다. 이 넷이 UVM에서 하나의 검증 루프를 이룹니다."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>1-3 UVM 정밀</strong>: phase 순서, factory override, sequence-driver handshake, TLM port/analysis.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

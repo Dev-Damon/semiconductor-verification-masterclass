@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 5-1 · ARM 부팅·Secure Boot 정밀</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 5 · 5-1 SoC 부팅 정밀">
+<div class="track-switch"><a href="../../chapters/ch5-1.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">ARM 부팅 체인, reset부터 kernel까지</h1>
+    <p class="hook">개념판에서 "전원 들어오면 펌웨어가 순서대로 뜬다"를 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">RVBAR·EL 전이·BL1~BL33 단계·root of trust 서명검증·DDR 트레이닝·warm/cold</strong>까지 신호와 숫자로 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"부팅한다"에서 "부팅 단계를 신호로 설명한다"로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li>BootROM → 부트로더 → 커널의 큰 그림</li><li>"보안 부팅은 서명을 확인한다"는 직관</li><li>SoC가 reset 후 펌웨어를 실행한다는 흐름</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li>TF-A <strong>BL1/BL2/BL31/BL33</strong> 단계와 <code>EL3→EL1</code> 전이</li><li><strong>RVBAR</strong> reset vector, 클럭/PLL lock, <strong>DDR PHY 트레이닝</strong></li><li><strong>RoT</strong> 서명검증·anti-rollback·eFuse/OTP</li><li><strong>warm vs cold</strong>, 전원 시퀀싱, JTAG halt</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준 스택: <strong>ARM Trusted Firmware-A (TF-A)</strong> + <strong>U-Boot</strong> + Linux. AArch64 예외 레벨 정의는 <strong>ARM ARM (DDI 0487, Armv8-A Architecture Reference Manual)</strong>. 면접에서 "부팅 좀 안다"와 "bring-up 해봤다"를 가르는 건 이 단계 이름·EL·레지스터입니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">부팅 체인 전체</div>
+    <h2>reset → BL1 → BL2 → BL31 → BL33 → kernel</h2>
+    <div class="flow">
+      <div class="box on">BL1<br><span class="dim" style="font-size:12px;font-weight:400">BootROM·EL3</span></div>
+      <div class="arrow">→</div>
+      <div class="box">BL2<br><span class="dim" style="font-size:12px;font-weight:400">Trusted Boot FW·EL1*</span></div>
+      <div class="arrow">→</div>
+      <div class="box on">BL31<br><span class="dim" style="font-size:12px;font-weight:400">Secure Monitor·EL3</span></div>
+      <div class="arrow">→</div>
+      <div class="box">BL33<br><span class="dim" style="font-size:12px;font-weight:400">U-Boot·EL2/EL1</span></div>
+      <div class="arrow">→</div>
+      <div class="box">Kernel<br><span class="dim" style="font-size:12px;font-weight:400">Linux·EL1</span></div>
+    </div>
+    <table class="sig mt">
+      <tr><th>단계</th><th>이름 / 역할</th><th>실행 위치</th><th>특징</th></tr>
+      <tr><td>BL1</td><td>AP Trusted ROM (BootROM)</td><td><strong class="hl">EL3</strong>, on-chip ROM</td><td>변경 불가, RoT 시작점, BL2 로드·검증</td></tr>
+      <tr><td>BL2</td><td>Trusted Boot Firmware</td><td>EL1-S (또는 EL3)</td><td>나머지 이미지 로드·검증, DDR 초기화</td></tr>
+      <tr><td>BL31</td><td>EL3 Runtime / Secure Monitor</td><td><strong class="hl">EL3</strong>, DRAM 상주</td><td>SMC 처리, PSCI(전원관리), 런타임 상주</td></tr>
+      <tr><td>BL32</td><td>Secure-EL1 Payload (OP-TEE 등)</td><td>S-EL1</td><td><strong>선택</strong> — TEE OS (없을 수도)</td></tr>
+      <tr><td>BL33</td><td>Non-trusted FW (U-Boot/UEFI)</td><td>EL2 또는 EL1 (NS)</td><td>커널 로드·부팅, 일반세계 진입</td></tr>
+    </table>
+    <div class="note mt">*BL2 EL은 플랫폼·빌드 옵션(<code>BL2_AT_EL3</code>)에 따라 다름. BL31은 부팅 후에도 <strong>메모리에 상주</strong>하는 유일한 BL — 런타임 SMC 서비스를 계속 제공합니다.</div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">예외 레벨</div>
+    <h2>EL3 → EL2 → EL1 — 권한이 내려간다</h2>
+    <div class="grid2">
+      <div class="spec">
+        <table class="sig" style="font-size:14px"><tr><th>EL</th><th>누가</th><th>역할</th></tr>
+          <tr><td>EL3</td><td>BL1/BL31 (Secure Monitor)</td><td>최고권한, 세계 전환(SMC)</td></tr>
+          <tr><td>EL2</td><td>하이퍼바이저 / U-Boot</td><td>가상화, 스테이지2 변환</td></tr>
+          <tr><td>EL1</td><td>OS 커널 (Linux)</td><td>커널, 스테이지1 MMU</td></tr>
+          <tr><td>EL0</td><td>유저 앱</td><td>최저권한</td></tr></table>
+      </div>
+      <div>
+        <p>부팅은 <strong class="hl">가장 높은 EL3에서 시작</strong>해 점점 낮은 EL로 내려가며 권한을 떨군다. 전환은 <code>ELR_ELx</code>(복귀주소)·<code>SPSR_ELx</code>(저장된 상태)를 세팅하고 <code>ERET</code> 명령으로 수행.</p>
+        <ul>
+          <li><code>SCR_EL3.NS</code> 비트로 Secure ↔ Non-secure 세계 구분</li>
+          <li>BL31이 <code>SPSR</code>에 목표 EL(보통 EL2)을 적고 <code>ERET</code> → BL33로 점프</li>
+        </ul>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>흔한 혼동:</strong> "리눅스가 EL3에서 돈다" ❌ — 리눅스 커널은 <strong>EL1</strong>(하이퍼바이저 있으면 EL2)에서 돕니다. EL3는 secure monitor(BL31) 전용. 숫자가 클수록 권한이 높다는 점도 직관과 반대라 헷갈리기 쉽습니다.</p></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">reset vector</div>
+    <h2>RVBAR — CPU가 깨어나 첫 명령을 가져오는 곳</h2>
+    <div class="spec"><p style="margin:6px 0">코어가 reset에서 풀리면 PC를 <strong class="hl"><code>RVBAR_ELx</code>(Reset Vector Base Address Register)</strong> 값으로 세팅하고 그 주소에서 첫 명령을 fetch한다. 구현된 최고 EL에 맞춰 <code>RVBAR_EL3</code>/<code>RVBAR_EL2</code>/<code>RVBAR_EL1</code>이 존재. AArch64에서 이 주소는 보통 <strong>on-chip BootROM</strong>(BL1)을 가리킨다.</p></div>
+    <div class="grid2 mt">
+      <div>
+        <pre class="code sm"><code><span class="cmt">// Armv8-A: reset 직후 코어가 하는 일(개념)</span>
+<span class="kw">if</span> (cold_reset) {
+    PC      = <span class="fn">RVBAR_EL3</span>;   <span class="cmt">// 최고 EL의 reset vector</span>
+    SCR_EL3 = reset_default;  <span class="cmt">// NS=0 → Secure 세계</span>
+    SP, MMU = off;            <span class="cmt">// MMU off, 캐시 무효</span>
+}                             <span class="cmt">// → BL1(BootROM) 첫 명령 실행</span></code></pre>
+        <div class="codecap">RVBAR는 read-only(또는 pin/eFuse strap으로 고정). 멀티코어는 보통 primary 코어만 부팅하고 나머지는 WFI/WFE로 park.</div>
+      </div>
+      <div class="deepnote"><p style="margin:6px 0"><strong>x86 비교:</strong> x86은 reset 시 <code>0xFFFFFFF0</code>(reset vector)에서 시작하고 16바이트 뒤에 BIOS로 점프. ARM은 그게 <code>RVBAR_ELx</code> 레지스터 값으로 <strong>유연하게 지정</strong>된다는 점이 다릅니다. 개발자 직관: "엔트리포인트 주소를 하드코딩한 레지스터"입니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">하드웨어 bring-up</div>
+    <h2>클럭/PLL lock → DDR 트레이닝 순서</h2>
+    <p>BootROM/BL2가 코드를 돌리기 전, <strong class="hl">물리 블록을 살려야</strong> 한다. 순서가 틀리면 그냥 멈춘다.</p>
+    <table class="sig">
+      <tr><th>단계</th><th>무엇을</th><th>왜 / 디테일</th></tr>
+      <tr><td>1</td><td>전원 레일 안정 (PMIC)</td><td>코어/IO/DDR 전압이 규정 범위·순서로 인가</td></tr>
+      <tr><td>2</td><td>레퍼런스 클럭 → <strong>PLL lock</strong></td><td>PLL 설정 후 <strong class="hl">lock 비트가 1 될 때까지 폴링</strong>. lock 전 클럭 전환 금지</td></tr>
+      <tr><td>3</td><td>클럭 분주·게이팅 해제</td><td>코어/버스/DDR 컨트롤러에 클럭 공급</td></tr>
+      <tr><td>4</td><td>DDR 컨트롤러 init</td><td>JEDEC init 시퀀스, mode register 설정</td></tr>
+      <tr><td>5</td><td><strong>DDR PHY 트레이닝</strong></td><td>write leveling, read/write DQ-DQS 지연 캘리브레이션</td></tr>
+    </table>
+    <div class="deepnote mt"><p style="margin:6px 0"><strong>DDR PHY 트레이닝</strong>이 면접 핵심: 고속 DDR(예: DDR4/LPDDR4)은 보드마다 트레이스 길이가 달라 데이터-스트로브(DQ-DQS) 타이밍이 미세하게 다르다. 그래서 부팅 시 <strong>PHY가 패턴을 써보고 읽어 최적 지연(딜레이 라인)을 자동 탐색</strong>한다. 이 결과는 보드·온도에 따라 매번 조금씩 달라질 수 있다.</p></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">불변 설정</div>
+    <h2>eFuse / OTP — 한 번 굽고 못 바꾼다</h2>
+    <div class="grid2">
+      <div>
+        <p><strong>eFuse / OTP(One-Time Programmable)</strong>는 칩에 <strong class="hl">물리적으로 한 번만 굽는</strong> 비트들. 보안 부팅의 신뢰 뿌리가 여기 박힌다.</p>
+        <ul>
+          <li><strong>RoT 공개키 해시</strong>(또는 키) — 서명검증의 앵커</li>
+          <li><strong>Secure boot enable</strong> 비트 — 한 번 켜면 영구</li>
+          <li><strong>anti-rollback 카운터</strong>(monotonic) — 구버전 거부</li>
+          <li>JTAG disable, 칩 고유 ID/키, 부트 소스 strap</li>
+        </ul>
+      </div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>되돌릴 수 없다.</strong> secure-boot enable fuse나 잘못된 키 해시를 굽으면 <strong>그 칩은 영구히 그 상태</strong>. 양산 라인에서 fuse 프로그래밍 버그는 곧 칩 폐기다. 그래서 검증에서 fuse 모델을 정확히 만들어 "굽기 전/후" 부팅 경로를 모두 시뮬한다.</p></div>
+    </div>
+    <div class="spec mt"><p style="margin:6px 0"><strong>OTP 특성:</strong> 비트는 0→1(또는 1→0) <strong>한 방향만</strong> 변경 가능. 그래서 anti-rollback은 "이미 구운 비트 수 = 최소 허용 버전" 식의 monotonic 카운터로 구현한다.</p></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">Root of Trust</div>
+    <h2>Secure Boot 체인 — 단계마다 다음을 서명검증</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 250" font-family="var(--mono)">
+        <!-- anchor -->
+        <rect x="20" y="40" width="150" height="60" rx="10" fill="#172236" stroke="#ff7ac0" stroke-width="2"/>
+        <text x="95" y="66" fill="#ff7ac0" font-size="13" text-anchor="middle" font-weight="bold">RoT 키해시</text>
+        <text x="95" y="84" fill="#9fb0c7" font-size="11" text-anchor="middle">eFuse/OTP (불변)</text>
+        <!-- BL1 -->
+        <rect x="210" y="40" width="120" height="60" rx="10" fill="#172236" stroke="#b388ff" stroke-width="2"/>
+        <text x="270" y="66" fill="#e8eef7" font-size="13" text-anchor="middle" font-weight="bold">BL1 BootROM</text>
+        <text x="270" y="84" fill="#9fb0c7" font-size="11" text-anchor="middle">불변 ROM</text>
+        <!-- BL2 -->
+        <rect x="360" y="40" width="100" height="60" rx="10" fill="#172236" stroke="#5b9cff" stroke-width="2"/>
+        <text x="410" y="74" fill="#e8eef7" font-size="13" text-anchor="middle" font-weight="bold">BL2</text>
+        <!-- BL31 -->
+        <rect x="490" y="40" width="100" height="60" rx="10" fill="#172236" stroke="#5b9cff" stroke-width="2"/>
+        <text x="540" y="74" fill="#e8eef7" font-size="13" text-anchor="middle" font-weight="bold">BL31</text>
+        <!-- BL33 -->
+        <rect x="620" y="40" width="80" height="60" rx="10" fill="#172236" stroke="#38e1c6" stroke-width="2"/>
+        <text x="660" y="74" fill="#e8eef7" font-size="13" text-anchor="middle" font-weight="bold">BL33</text>
+        <!-- arrows verify -->
+        <g stroke="#ffce6b" stroke-width="2" fill="none" marker-mid="">
+          <line x1="170" y1="70" x2="208" y2="70"/>
+          <line x1="330" y1="70" x2="358" y2="70"/>
+          <line x1="460" y1="70" x2="488" y2="70"/>
+          <line x1="590" y1="70" x2="618" y2="70"/>
+        </g>
+        <g fill="#ffce6b" font-size="10" text-anchor="middle">
+          <text x="189" y="34">앵커</text>
+          <text x="344" y="34">검증</text>
+          <text x="474" y="34">검증</text>
+          <text x="604" y="34">검증</text>
+        </g>
+        <text x="360" y="150" fill="#9fb0c7" font-size="12">각 단계는 다음 이미지의 서명을 <tspan fill="#ffce6b">RoT에서 파생된 공개키</tspan>로 검증한 뒤에만 점프</text>
+        <text x="360" y="176" fill="#9fb0c7" font-size="12">검증 실패 → <tspan fill="#ff7ac0">부팅 중단(brick) 또는 복구모드</tspan></text>
+        <text x="360" y="208" fill="#6c7c95" font-size="11">신뢰는 "불변 앵커(ROM+fuse)"에서 시작해 한 단계씩 확장된다 = chain of trust</text>
+      </svg>
+    </div>
+    <div class="spec mt"><p style="margin:6px 0">전형 알고리즘: 이미지 해시 <strong>SHA-256/384</strong> → <strong>RSA-2048/4096</strong> 또는 <strong>ECDSA(P-256/P-384)</strong> 서명. TF-A는 인증 체인을 <strong>X.509 인증서</strong>(CoT, Chain of Trust)로 표현하고 BL2가 이를 파싱·검증한다.</p></div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">서명검증 + anti-rollback</div>
+    <h2>"왜 안 부팅되나"의 두 갈래</h2>
+    <div class="grid2">
+      <div>
+        <pre class="code sm"><code><span class="cmt">// BL1/BL2의 이미지 인증(의사코드)</span>
+<span class="fn">load</span>(img, sig, cert);
+h = <span class="fn">sha256</span>(img);
+<span class="kw">if</span> (!<span class="fn">rsa_verify</span>(h, sig, pubkey_from_RoT))
+    <span class="fn">panic</span>(<span class="str">"BAD_SIGNATURE"</span>); <span class="cmt">// 위변조/엉뚱한 키</span>
+
+ver = cert.version;
+<span class="kw">if</span> (ver &lt; <span class="fn">otp_min_version</span>())
+    <span class="fn">panic</span>(<span class="str">"ROLLBACK"</span>);     <span class="cmt">// 구버전 거부</span>
+
+<span class="fn">jump</span>(img.entry);          <span class="cmt">// 통과해야 다음 단계</span></code></pre>
+        <div class="codecap">서명검증 = "이 이미지를 우리가 만들었나". anti-rollback = "취약했던 구버전으로 되돌리지 못하게".</div>
+      </div>
+      <div>
+        <div class="dev-bridge"><p style="margin:6px 0">개발자 비유: <strong>서명검증</strong>은 패키지의 GPG/코드서명 확인, <strong>anti-rollback</strong>은 <code>npm install pkg@&lt;취약버전&gt;</code>을 막는 minimum-version 락. 차이는 <strong>키 앵커가 소프트웨어가 아니라 칩 안 fuse</strong>라 공격자가 못 바꾼다는 점.</p></div>
+        <div class="pitfall mt"><p style="margin:6px 0"><strong>함정:</strong> 서명검증만 있고 anti-rollback이 없으면, 공격자가 <strong>정상 서명된 옛 취약 펌웨어</strong>를 다시 올려 우회한다. 그래서 monotonic 카운터(OTP)가 필수.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">전원 상태</div>
+    <h2>Warm vs Cold boot — 무엇을 다시 하나</h2>
+    <table class="compare">
+      <tr><th></th><th>Cold boot</th><th>Warm boot</th></tr>
+      <tr><td>트리거</td><td>전원 인가 / POR(Power-On Reset)</td><td>리셋·웨이크업(전원 유지)</td></tr>
+      <tr><td>시작점</td><td><strong class="hl">RVBAR → BL1 처음부터</strong></td><td>플랫폼이 정한 <strong>warm reset entrypoint</strong></td></tr>
+      <tr><td>DDR</td><td>init + <strong>full PHY 트레이닝</strong></td><td>self-refresh 유지 → <strong class="hl">트레이닝 생략/단축</strong> 가능</td></tr>
+      <tr><td>속도</td><td>느림(전체 bring-up)</td><td>빠름(상태 보존)</td></tr>
+      <tr><td>용도</td><td>최초 부팅, 전원 차단 후</td><td>suspend/resume, CPU 핫플러그, PSCI</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0">ARM에서 전원/리셋은 <strong>PSCI</strong>(Power State Coordination Interface)로 표준화 — <code>CPU_ON</code>, <code>CPU_OFF</code>, <code>SYSTEM_SUSPEND</code> 등을 <strong>SMC</strong>로 호출하면 <strong>EL3의 BL31</strong>이 처리. warm boot 진입점도 BL31이 관리.</p></div>
+      <div class="pitfall"><p style="margin:6px 0">warm boot에서 DDR을 self-refresh로 보존했다 가정했는데 실제 전원이 빠지면 <strong>메모리 깨짐</strong>. 전원 시퀀싱(레일 on/off 순서·타이밍) 검증이 중요한 이유.</p></div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">디버그 진입</div>
+    <h2>JTAG halt — 부팅을 멈춰 세워 들여다본다</h2>
+    <div class="grid2">
+      <div>
+        <p>bring-up에서 코어가 어디서 죽었는지 보려면 <strong class="hl">JTAG/디버거로 코어를 halt</strong>시키고 PC·레지스터·메모리를 읽는다.</p>
+        <ul>
+          <li><strong>halt-on-reset</strong>: reset 직후(첫 명령 전) 멈춰 BootROM부터 step</li>
+          <li>CoreSight DAP를 통해 메모리/레지스터 access</li>
+          <li>DDR·클럭이 죽었으면 그 전에 멈춰야 원인 파악 가능</li>
+        </ul>
+      </div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>보안의 벽:</strong> 양산 secure 칩은 <strong>eFuse로 JTAG가 잠겨</strong> 있어 임의 halt가 안 된다(키 인증된 디버그만 허용). 그래서 secure-boot 칩의 bring-up 디버깅이 어렵고, <strong>사전 실리콘 단계(시뮬/에뮬)에서</strong> 부팅을 최대한 검증해 둬야 한다.</p></div>
+    </div>
+    <div class="note mt">JTAG halt는 실리콘에서의 무기이고, RTL 단계에선 시뮬레이터의 <code>$stop</code>·force·waveform이 같은 역할을 합니다.</div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>부팅을 어떻게 검증하나 (pre-silicon)</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🧩</span> 무엇으로</h3>
+        <ul>
+          <li><strong>RTL 시뮬</strong>에 <strong>BootROM 모델</strong>(실제 BL1 코드 또는 C/behavioral 모델)을 ROM에 백도어 로드</li>
+          <li><strong>에뮬레이션(Palladium/Veloce/Protium)</strong>로 수백만 사이클의 <strong>full 부팅</strong>을 실속도 근처로</li>
+          <li><strong>C-test bring-up</strong>: 코어에서 도는 작은 C 프로그램으로 PLL/DDR/주변장치를 단계별로 초기화·확인</li>
+          <li><strong>fuse/OTP 모델</strong>: 굽기 전/후, secure-on/off 경로를 모두 자극</li>
+        </ul>
+      </div>
+      <div class="card"><h3><span class="ico">🎯</span> 무엇을 (커버리지/체크)</h3>
+        <ul>
+          <li>cold/warm 양쪽 reset 경로, RVBAR 점프 정확성</li>
+          <li>PLL lock 폴링·타임아웃, 클럭 게이팅 시퀀스</li>
+          <li>secure boot: 정상서명/위변조/rollback 3케이스 모두 → 통과·panic 확인</li>
+          <li><strong>SVA assertion</strong>: reset 중 버스 quiescent, EL 전이 순서, 전원 레일 순서</li>
+          <li>전원 시퀀싱 코너(레일 글리치, 늦은 PLL)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>DDR 트레이닝 비결정성:</strong> 실제 PHY 트레이닝은 아날로그 지연 캘리브레이션이라 RTL 시뮬에서 그대로 돌리면 <strong>수억 사이클·비결정적</strong>이라 매우 느리다. 그래서 보통 <strong>트레이닝을 skip/단축하는 fast-model 모드</strong>나 결정적 시드를 써서 부팅을 통과시키고, 실제 트레이닝 알고리즘은 별도 PHY 검증환경에서 본다. "부팅 sim이 DDR 트레이닝에서 멈췄다"는 단골 이슈.</p></div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "bring-up 해봤다"로 보인다</h2>
+    <div class="qa"><div class="q">TF-A의 BL 단계와 각 EL을 말해보세요.</div><div class="a">BL1은 AP Trusted ROM(BootROM)으로 EL3에서 시작해 RoT 앵커가 됩니다. BL2는 Trusted Boot Firmware로 나머지 이미지를 로드·검증하고 DDR을 올립니다. BL31은 EL3 런타임 secure monitor로 부팅 후에도 DRAM에 상주하며 SMC·PSCI를 처리합니다. BL32는 선택적 S-EL1 TEE(OP-TEE 등), BL33은 non-secure 펌웨어(U-Boot/UEFI)로 EL2/EL1에서 커널을 부팅합니다.</div></div>
+    <div class="qa"><div class="q">RVBAR가 뭐고 reset 시 어떻게 쓰이나요?</div><div class="a">RVBAR_ELx(Reset Vector Base Address Register)는 코어가 reset에서 풀린 직후 PC를 세팅할 주소를 담은 레지스터입니다. 구현된 최고 EL에 맞춰 RVBAR_EL3 등이 있고, 보통 on-chip BootROM(BL1)을 가리켜 거기서 첫 명령을 fetch합니다. read-only이며 strap/eFuse로 고정됩니다.</div></div>
+    <div class="qa"><div class="q">secure boot 체인과 anti-rollback을 설명해 주세요.</div><div class="a">불변 앵커(BootROM + eFuse의 RoT 키해시)에서 시작해, 각 단계가 다음 이미지의 서명을 SHA-256+RSA/ECDSA로 검증한 뒤에만 점프하는 chain of trust입니다. 통과 못 하면 부팅을 중단합니다. anti-rollback은 OTP의 monotonic 카운터로 정상 서명된 구버전(취약 펌웨어)을 거부하는 메커니즘입니다.</div></div>
+    <div class="qa"><div class="q">warm boot와 cold boot의 핵심 차이는?</div><div class="a">cold는 전원 인가/POR로 RVBAR→BL1부터 전체 bring-up과 full DDR PHY 트레이닝을 합니다. warm은 전원이 유지된 채 리셋·resume으로, DDR을 self-refresh로 보존했다면 트레이닝을 생략/단축하고 플랫폼이 정한 warm reset entrypoint로 빠르게 복귀합니다. PSCI/BL31이 이를 관리합니다.</div></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>SoC 부팅 정밀 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li>체인: <code>reset→BL1(EL3,ROM)→BL2→BL31(EL3 monitor,상주)→BL33(U-Boot)→kernel(EL1)</code></li>
+        <li>EL은 EL3→EL2→EL1로 권한이 내려감, 전환은 <code>ERET</code></li>
+        <li><code>RVBAR_ELx</code> = reset vector, 보통 BootROM</li>
+        <li>bring-up: 전원→<strong>PLL lock 폴링</strong>→클럭→DDR init→<strong>PHY 트레이닝</strong></li>
+        <li>RoT = BootROM+eFuse 앵커, 단계마다 서명검증 + anti-rollback(OTP)</li>
+        <li>warm은 DDR self-refresh로 트레이닝 단축, PSCI/BL31이 관리</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"부팅은 EL3 불변 앵커(BootROM+fuse)에서 시작해 단계마다 다음을 <strong class="hl">서명검증</strong>하며 권한을 낮춰 커널까지 내려가는 chain of trust입니다. 검증은 BootROM 모델·에뮬 full 부팅·C-test·전원/클럭 assertion으로 하고, DDR 트레이닝 비결정성은 fast-model로 우회합니다."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>5-2 PSCI · 전원관리 정밀</strong>: SMC 호출 규약, CPU idle/suspend 상태머신, OSPM과 BL31의 협조.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 0-2 · 디지털 타이밍·CDC 정밀</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 0 · 0-2 디지털 회로 정밀">
+<div class="track-switch"><a href="../../chapters/ch0-2.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">디지털 타이밍·CDC, 부등식 레벨까지</h1>
+    <p class="hook">개념판에서 "클럭에 맞춰 동작한다"를 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">setup/hold 부등식, 메타스테이빌리티 MTBF, 2-FF 동기화기, CDC 해저드, 리셋 동기화</strong>까지 신호·코드·숫자로 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"안다"에서 "타이밍 식으로 증명한다"로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li>FF가 클럭 엣지에 값을 잡는다</li><li>조합/순차 회로의 구분</li><li>비동기 입력은 "위험하다"는 직관</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li>setup/hold <strong>부등식</strong>과 타이밍 마진</li><li>메타스테이빌리티 <strong>MTBF</strong> 정량화</li><li><code>always</code>로 보는 latch 추론·CDC 코드</li><li>리셋 동기화·FSM 인코딩(one-hot)</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준: <strong>동기 설계(synchronous design)</strong> 원칙. 면접에서 "RTL 좀 봤다"는 사람과 "타이밍을 닫아봤다(timing closure)"는 사람을 가르는 건 이 부등식과 CDC 디테일입니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">FF의 시간 규칙</div>
+    <h2>setup / hold — 데이터가 안정해야 하는 창</h2>
+    <div class="grid2">
+      <div>
+        <p>FF는 클럭 엣지를 <strong>점</strong>이 아니라 <strong>창(window)</strong>으로 봅니다. 엣지 <strong class="hl">직전 Tsu</strong>부터 <strong class="hl">직후 Th</strong>까지 D가 흔들리면 출력이 보장되지 않습니다.</p>
+        <ul>
+          <li><strong>Tsetup</strong>: 엣지 <em>전</em> 데이터가 고정돼 있어야 하는 시간</li>
+          <li><strong>Thold</strong>: 엣지 <em>후</em> 데이터가 유지돼야 하는 시간</li>
+          <li><strong>Tcq</strong>(clk→Q): 엣지 후 출력이 바뀌는 지연</li>
+        </ul>
+      </div>
+      <div class="diagram">
+        <svg viewBox="0 0 360 200" font-family="var(--mono)">
+          <text x="6" y="24" fill="#9fb0c7" font-size="12">CLK</text>
+          <polyline fill="none" stroke="#6c7c95" stroke-width="1.5" points="55,40 175,40 175,16 195,16 195,40 315,40"/>
+          <line x1="185" y1="12" x2="185" y2="180" stroke="#ffce6b" stroke-dasharray="3 3"/>
+          <text x="185" y="196" fill="#ffce6b" font-size="10" text-anchor="middle">↑ edge</text>
+          <text x="6" y="84" fill="#b388ff" font-size="12">D</text>
+          <rect x="120" y="66" width="130" height="22" fill="rgba(91,156,255,.12)" stroke="#5b9cff"/>
+          <text x="185" y="81" fill="#cfe0f5" font-size="10" text-anchor="middle">stable</text>
+          <rect x="120" y="60" width="65" height="34" fill="rgba(56,225,198,.10)" stroke="none"/>
+          <rect x="185" y="60" width="40" height="34" fill="rgba(255,122,133,.12)" stroke="none"/>
+          <text x="152" y="108" fill="#38e1c6" font-size="10" text-anchor="middle">Tsu</text>
+          <text x="205" y="108" fill="#ff7ac0" font-size="10" text-anchor="middle">Th</text>
+          <text x="6" y="148" fill="#5ee6a0" font-size="12">Q</text>
+          <polyline fill="none" stroke="#5ee6a0" stroke-width="2" points="55,160 205,160 205,136 315,136"/>
+          <text x="225" y="132" fill="#5ee6a0" font-size="9">Tcq 후 변화</text>
+        </svg>
+      </div>
+    </div>
+    <div class="note mt">setup 위반 → 데이터가 <strong>너무 늦게</strong> 도착(주기가 짧음). hold 위반 → 데이터가 <strong>너무 빨리</strong> 바뀜(엣지 직후). 둘은 서로 다른 원인의 위반입니다.</div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">타이밍의 두 부등식</div>
+    <h2>setup·hold 식 — 면접 핵심 공식</h2>
+    <div class="grid2">
+      <div class="spec">
+        <h3 style="color:var(--accent2)">Setup (max-delay)</h3>
+        <p style="margin:6px 0;font-size:17px"><code>Tclk ≥ Tcq + Tcomb<sub>max</sub> + Tsetup + Tskew</code></p>
+        <p class="dim" style="margin:4px 0">가장 <strong>느린</strong> 경로가 한 주기 안에 도착해야 함. 어기면 → 주기를 늘리거나(주파수↓) 경로를 줄인다.</p>
+      </div>
+      <div class="spec">
+        <h3 style="color:var(--accent2)">Hold (min-delay)</h3>
+        <p style="margin:6px 0;font-size:17px"><code>Tcq + Tcomb<sub>min</sub> ≥ Thold + Tskew</code></p>
+        <p class="dim" style="margin:4px 0">가장 <strong>빠른</strong> 경로가 너무 일찍 도착하면 안 됨. <strong class="hl">주파수와 무관</strong> — 느려도 못 고침. 버퍼를 넣어 지연을 늘린다.</p>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>흔한 오답:</strong> "hold 위반은 클럭을 늦추면 풀린다" ❌. hold는 같은 엣지 기준 min-delay 문제라 주기와 무관합니다. 또 setup slack = <code>Tclk − (Tcq+Tcomb+Tsu+Tskew)</code>가 양수여야 timing closure. <strong>음수 slack = 위반</strong>.</p></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">FF vs Latch</div>
+    <h2>엣지 트리거 vs 레벨 센서티브(투명성)</h2>
+    <table class="compare">
+      <tr><th>특성</th><th>Flip-Flop (DFF)</th><th>Latch</th></tr>
+      <tr><td>민감도</td><td>클럭 <strong>엣지</strong>(edge)</td><td>클럭/enable <strong>레벨</strong>(level)</td></tr>
+      <tr><td>투명성</td><td>없음 — 엣지에만 캡처</td><td><strong class="hl">투명(transparent)</strong> — enable=1 동안 D가 그대로 통과</td></tr>
+      <tr><td>타이밍 분석</td><td>표준 STA로 깔끔</td><td>time-borrowing 등 <strong>분석 어려움</strong></td></tr>
+      <tr><td>면적/전력</td><td>큼</td><td>작음(트랜지스터 적음)</td></tr>
+      <tr><td>RTL에서</td><td>의도적으로 추론</td><td><strong class="hl2">대개 사고로 추론됨(위험)</strong></td></tr>
+    </table>
+    <div class="deepnote mt"><p style="margin:6px 0">FPGA/ASIC 동기 설계에선 기본적으로 <strong>FF</strong>만 씁니다. latch는 STA를 복잡하게 하고 글리치에 취약해 합성 리포트에서 "inferred latch" 경고가 뜨면 <strong>거의 항상 버그</strong>로 봅니다.</p></div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">실제 코드 ①</div>
+    <h2>비동기 리셋 DFF — 정석 템플릿</h2>
+    <pre class="code"><code><span class="cmt">// 비동기 active-low 리셋, 동기 enable DFF</span>
+<span class="kw">module</span> <span class="fn">dff_ar</span> (<span class="kw">input</span> clk, rst_n, en, d, <span class="kw">output reg</span> q);
+  <span class="kw">always</span> @(<span class="kw">posedge</span> clk <span class="kw">or negedge</span> rst_n) <span class="kw">begin</span>
+    <span class="kw">if</span> (!rst_n)      q <= <span class="str">1'b0</span>;   <span class="cmt">// 리셋이 sensitivity에 있어야 비동기</span>
+    <span class="kw">else if</span> (en)     q <= d;
+    <span class="cmt">// else 생략 OK: q는 자기값 유지(FF라 latch 아님)</span>
+  <span class="kw">end</span>
+<span class="kw">endmodule</span></code></pre>
+    <p class="codecap">posedge clk <span class="kw">or</span> negedge rst_n → 리셋은 클럭과 무관하게 즉시 걸림(asynchronous assert).</p>
+    <div class="pitfall"><p style="margin:6px 0"><strong>함정:</strong> 리셋을 sensitivity list에서 빼면(<code>@(posedge clk)</code>만) <strong>동기 리셋</strong>이 됩니다 — 둘은 다른 회로. 또 <code>=</code>(blocking) 대신 순차 로직엔 반드시 <code>&lt;=</code>(non-blocking)를 써야 시뮬↔합성 불일치를 막습니다.</p></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">실제 코드 ②</div>
+    <h2>불완전 if/case → latch 추론 함정</h2>
+    <div class="grid2">
+      <div>
+        <pre class="code sm"><code><span class="cmt">// ❌ latch 추론됨</span>
+<span class="kw">always</span> @(*) <span class="kw">begin</span>
+  <span class="kw">if</span> (sel) y = a;
+  <span class="cmt">// else 없음 → sel=0일 때</span>
+  <span class="cmt">// y가 "이전 값 유지" = latch!</span>
+<span class="kw">end</span></code></pre>
+        <pre class="code sm"><code><span class="cmt">// ✅ 완전 분기 → 순수 조합</span>
+<span class="kw">always</span> @(*) <span class="kw">begin</span>
+  y = b;        <span class="cmt">// 기본값 먼저</span>
+  <span class="kw">if</span> (sel) y = a;
+<span class="kw">end</span></code></pre>
+      </div>
+      <div>
+        <div class="spec"><p style="margin:6px 0">조합 블록(<code>always @(*)</code>)에서 <strong>모든 경로에 출력이 대입</strong>되지 않으면 합성기는 "값 유지"를 위해 <strong class="hl">latch</strong>를 만듭니다.</p></div>
+        <div class="pitfall"><p style="margin:6px 0">예방 3종: ① <strong>기본값</strong>을 블록 맨 위에 대입 ② <code>if</code>엔 <strong>else</strong>, <code>case</code>엔 <strong>default</strong> ③ <code>case</code>는 모든 출력을 매 분기 대입. 리포트의 "Inferred latch" 경고를 절대 무시하지 마세요.</p></div>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>조합 루프(combinational loop):</strong> <code>assign a = b; assign b = a;</code>처럼 조합 출력이 자기 입력으로 되돌면 발진/X. 합성도 STA도 깨집니다. 모든 피드백은 <strong>반드시 FF를 거쳐야</strong> 합니다.</p></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">위험의 정체</div>
+    <h2>메타스테이빌리티 — 0도 1도 아닌 상태</h2>
+    <div class="grid2">
+      <div>
+        <p>비동기 신호가 setup/hold 창을 어기면 FF 출력이 <strong class="hl">중간 전압에서 머뭇</strong>거리다 임의 시점에 0 또는 1로 떨어집니다. 이게 메타스테이빌리티.</p>
+        <ul>
+          <li>출력이 정해질 때까지 <strong>해결 시간(resolution time)</strong>이 걸림</li>
+          <li>그 사이 다운스트림이 값을 읽으면 <strong>다른 FF가 0, 다른 FF가 1</strong>로 봄 → 시스템 불일치</li>
+          <li>확률적 현상이라 "완전 제거"는 불가, <strong>발생률을 낮춤</strong></li>
+        </ul>
+      </div>
+      <div class="diagram">
+        <svg viewBox="0 0 360 200" font-family="var(--mono)">
+          <line x1="40" y1="20" x2="40" y2="170" stroke="#22304a"/>
+          <line x1="40" y1="170" x2="340" y2="170" stroke="#22304a"/>
+          <text x="8" y="40" fill="#9fb0c7" font-size="10">1</text>
+          <text x="8" y="168" fill="#9fb0c7" font-size="10">0</text>
+          <text x="300" y="188" fill="#9fb0c7" font-size="10">time →</text>
+          <line x1="40" y1="95" x2="340" y2="95" stroke="#6c7c95" stroke-dasharray="2 3"/>
+          <text x="300" y="92" fill="#6c7c95" font-size="9">Vmeta</text>
+          <!-- meta wobble then resolve high -->
+          <polyline fill="none" stroke="#ff7ac0" stroke-width="2" points="40,160 90,100 110,90 130,98 150,88 170,95 190,80 210,60 240,38 340,35"/>
+          <!-- alt resolve low (ghost) -->
+          <polyline fill="none" stroke="#5b9cff" stroke-width="1.6" stroke-dasharray="4 3" points="190,80 210,108 240,140 340,162"/>
+          <rect x="90" y="20" width="120" height="150" fill="rgba(255,122,133,.07)" stroke="none"/>
+          <text x="150" y="34" fill="#ff7ac0" font-size="10" text-anchor="middle">metastable</text>
+          <text x="280" y="28" fill="#ff7ac0" font-size="9">→1?</text>
+          <text x="280" y="156" fill="#5b9cff" font-size="9">→0?</text>
+        </svg>
+      </div>
+    </div>
+    <div class="note mt">핵심: 결과가 <strong>0인지 1인지, 언제 정해질지 예측 불가</strong>. 그래서 비동기 입력은 "한 박자 늦더라도 안정될 시간을 준 뒤" 쓴다 — 이게 동기화기의 발상.</div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">정량화</div>
+    <h2>MTBF — 메타 안정성을 숫자로</h2>
+    <div class="spec">
+      <p style="margin:6px 0;font-size:17px"><code>MTBF = e^(t<sub>r</sub>/τ) / (T<sub>0</sub> · f<sub>clk</sub> · f<sub>data</sub>)</code></p>
+      <ul style="margin:8px 0">
+        <li><code>t<sub>r</sub></code>: 해결에 허용된 시간(동기화 FF 사이 여유) — <strong>지수</strong>로 들어가 가장 강력</li>
+        <li><code>τ</code>: FF의 시정수(metastability resolution time constant, 기술 의존)</li>
+        <li><code>T<sub>0</sub></code>: 메타 진입 윈도 폭, <code>f<sub>clk</sub></code>: 샘플 클럭, <code>f<sub>data</sub></code>: 비동기 토글 빈도</li>
+      </ul>
+    </div>
+    <div class="grid2 mt">
+      <div class="deepnote"><p style="margin:6px 0"><code>t<sub>r</sub></code>가 분모가 아닌 <strong>지수</strong>라 한 박자(FF 하나)만 더 줘도 MTBF가 <strong class="hl">수십~수백만 배</strong> 좋아집니다. 그래서 동기화 FF를 1단 더 쌓는 게 효과적.</p></div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>오답:</strong> "동기화기를 쓰면 메타가 사라진다" ❌. 첫 FF는 여전히 메타에 빠질 수 있습니다. 동기화기는 <strong>해결 시간을 벌어</strong> 두 번째 FF가 안정값을 잡을 확률을 키울 뿐 — 확률을 0이 아닌 충분히 낮은 MTBF로 만듭니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">실제 코드 ③</div>
+    <h2>2-FF 동기화기 — 1비트 CDC의 표준</h2>
+    <div class="grid2">
+      <div>
+        <pre class="code"><code><span class="cmt">// 비동기 1비트 → clk 도메인 동기화</span>
+<span class="kw">module</span> <span class="fn">sync2</span> (<span class="kw">input</span> clk, rst_n, async_in,
+              <span class="kw">output</span> sync_out);
+  <span class="kw">reg</span> ff1, ff2;
+  <span class="kw">always</span> @(<span class="kw">posedge</span> clk <span class="kw">or negedge</span> rst_n)
+    <span class="kw">if</span> (!rst_n) {ff2, ff1} <= <span class="str">2'b0</span>;
+    <span class="kw">else</span>       {ff2, ff1} <= {ff1, async_in};
+  <span class="kw">assign</span> sync_out = ff2;   <span class="cmt">// 2단 뒤 안정값</span>
+<span class="kw">endmodule</span></code></pre>
+        <p class="codecap">ff1은 메타 가능 → ff2가 한 박자 더 기다려 안정값만 내보냄.</p>
+      </div>
+      <div>
+        <div class="diagram">
+          <svg viewBox="0 0 320 120" font-family="var(--mono)">
+            <text x="6" y="20" fill="#9fb0c7" font-size="10">async_in</text>
+            <line x1="60" y1="55" x2="90" y2="55" stroke="#5b9cff" stroke-width="2"/>
+            <rect x="90" y="35" width="55" height="45" fill="#172236" stroke="#ff7ac0"/>
+            <text x="117" y="60" fill="#ff7ac0" font-size="11" text-anchor="middle">FF1</text>
+            <text x="117" y="98" fill="#ff7ac0" font-size="8" text-anchor="middle">meta!</text>
+            <line x1="145" y1="55" x2="175" y2="55" stroke="#5b9cff" stroke-width="2"/>
+            <rect x="175" y="35" width="55" height="45" fill="#172236" stroke="#5ee6a0"/>
+            <text x="202" y="60" fill="#5ee6a0" font-size="11" text-anchor="middle">FF2</text>
+            <text x="202" y="98" fill="#5ee6a0" font-size="8" text-anchor="middle">stable</text>
+            <line x1="230" y1="55" x2="265" y2="55" stroke="#5ee6a0" stroke-width="2"/>
+            <text x="268" y="58" fill="#9fb0c7" font-size="10">out</text>
+            <line x1="117" y1="105" x2="202" y2="105" stroke="#6c7c95"/>
+            <text x="160" y="118" fill="#6c7c95" font-size="9" text-anchor="middle">clk</text>
+          </svg>
+        </div>
+        <div class="pitfall"><p style="margin:6px 0"><strong>single-FF CDC는 금지.</strong> FF 1단만 쓰면 메타가 그대로 로직으로 전파됩니다. 또 2-FF 동기화기는 <strong class="hl">1비트(단일 제어 비트)에만</strong> 유효 — 다비트 버스엔 못 씀(다음 장).</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">CDC와 해저드</div>
+    <h2>다비트는 왜 2-FF로 안 되나</h2>
+    <div class="grid2">
+      <div>
+        <p>여러 비트를 각자 2-FF로 넘기면, 비트마다 <strong class="hl">메타 해결 시점이 달라</strong> 같은 엣지에 일부는 새 값, 일부는 옛 값으로 잡힙니다 → <strong>비트 불일치(data incoherency)</strong>.</p>
+        <p style="margin:8px 0">예) <code>3'b011 → 3'b100</code> 전이가 한 비트씩 어긋나면 <code>111</code>이나 <code>000</code> 같은 <strong>없던 값</strong>이 한 박자 보임.</p>
+      </div>
+      <div class="spec">
+        <h3 style="color:var(--accent2)">다비트 CDC 처방</h3>
+        <ul style="margin:8px 0">
+          <li><strong>그레이 코드</strong> 카운터: 전이마다 <strong class="hl">딱 1비트</strong>만 바뀜 → 어긋나도 ±1 (FIFO 포인터의 정석)</li>
+          <li><strong>핸드셰이크</strong>(req/ack): 데이터 안정 후 1비트 req만 동기화</li>
+          <li><strong>비동기 FIFO</strong>: 듀얼 클럭, 그레이 포인터로 full/empty 판정</li>
+        </ul>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>면접 함정:</strong> "버스도 각 비트에 2-FF 박으면 되죠?" ❌. 그건 비트 정합성을 깨뜨립니다. 다비트 데이터는 <strong>한 비트만 변하게(그레이) 만들거나, 데이터를 고정한 뒤 1비트 제어로 넘기는</strong> 방식이어야 합니다.</p></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">리셋 설계</div>
+    <h2>리셋 동기화 — async assert, sync deassert</h2>
+    <div class="grid2">
+      <div>
+        <p>리셋도 비동기로 <strong>풀면(deassert)</strong> 위험합니다. 풀리는 순간이 클럭 엣지의 <strong class="hl">recovery/removal 창</strong>을 어기면 FF가 메타에 빠집니다.</p>
+        <ul>
+          <li><strong>Assert는 비동기</strong>: 전원/사고 시 즉시·확실히 리셋</li>
+          <li><strong>Deassert는 동기</strong>: 클럭에 맞춰 한꺼번에 풀어 메타·부분리셋 방지</li>
+        </ul>
+        <div class="spec"><p style="margin:6px 0"><strong>recovery</strong>=리셋 deassert 후 다음 엣지까지 setup 격, <strong>removal</strong>=hold 격. 이 둘을 만족시키려 deassert를 동기화합니다.</p></div>
+      </div>
+      <div>
+        <pre class="code sm"><code><span class="cmt">// 리셋 동기화기: 비동기 인가, 동기 해제</span>
+<span class="kw">module</span> <span class="fn">rst_sync</span>(<span class="kw">input</span> clk, arst_n,
+                <span class="kw">output</span> rst_n);
+  <span class="kw">reg</span> r1, r2;
+  <span class="kw">always</span> @(<span class="kw">posedge</span> clk <span class="kw">or negedge</span> arst_n)
+    <span class="kw">if</span> (!arst_n) {r2,r1} <= <span class="str">2'b0</span>; <span class="cmt">// async 인가</span>
+    <span class="kw">else</span>        {r2,r1} <= {r1,<span class="str">1'b1</span>};<span class="cmt">// sync 해제</span>
+  <span class="kw">assign</span> rst_n = r2;
+<span class="kw">endmodule</span></code></pre>
+        <div class="pitfall"><p style="margin:6px 0">리셋 트리를 동기화 없이 한 큰 net으로 분배하면, 칩 곳곳에서 <strong>서로 다른 클럭 박자</strong>에 풀려 일부 FF만 리셋된 상태로 출발 → 재현 안 되는 버그.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">FSM 인코딩</div>
+    <h2>Moore vs Mealy · one-hot vs binary</h2>
+    <table class="compare">
+      <tr><th>구분</th><th>선택지 A</th><th>선택지 B</th></tr>
+      <tr><td>출력 의존</td><td><strong>Moore</strong>: 출력 = f(현재 상태)만</td><td><strong>Mealy</strong>: 출력 = f(상태, <strong class="hl">입력</strong>)</td></tr>
+      <tr><td>타이밍</td><td>입력→출력에 FF 한 단(글리치 적음, 1싸이클 지연)</td><td>입력이 출력에 <strong>즉시(조합)</strong> 반영(빠름, 글리치·CDC 위험)</td></tr>
+      <tr><td>상태 수</td><td>같은 기능에 보통 더 많음</td><td>더 적게 표현 가능</td></tr>
+      <tr><td colspan="3" style="text-align:center;color:var(--dim);font-size:13px">— 인코딩 —</td></tr>
+      <tr><td>one-hot</td><td colspan="2">상태당 FF 1개(N상태=NFF). <strong>디코드 로직 작고 빠름</strong>, FPGA 선호. 다음상태=단순 OR.</td></tr>
+      <tr><td>binary</td><td colspan="2">log₂N FF로 <strong>FF 절약</strong>. 디코드 조합로직 큼. 미사용 코드(illegal state) 처리 필요.</td></tr>
+    </table>
+    <div class="deepnote mt"><p style="margin:6px 0"><strong>one-hot 함정:</strong> N상태면 정상 코드는 N개뿐인데 2^N 패턴이 가능 → <strong>illegal state(2비트 이상 hot)</strong>가 SEU 등으로 생기면 복구 불가일 수 있어 <code>default</code>로 안전상태 복귀를 넣습니다. <code>full_case/parallel_case</code> 프라그마는 시뮬↔합성 불일치를 부르므로 <strong class="hl2">남용 금지</strong>.</p></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>타이밍·CDC를 어떻게 검증하나</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🧩</span> 무엇으로</h3>
+        <ul>
+          <li><strong>STA</strong>(PrimeTime 등): setup/hold slack을 정적 분석 — 시뮬 아님</li>
+          <li><strong>CDC 툴</strong>(SpyGlass-CDC, Conformal/Questa-CDC): 동기화 누락·재수렴(reconvergence) 자동 검출</li>
+          <li><strong>SVA assertion</strong>: one-hot 불변식·핸드셰이크 규칙 검사</li>
+          <li>게이트 시뮬에 <strong>SDF back-annotation</strong>으로 실제 지연 반영</li>
+        </ul>
+      </div>
+      <div>
+        <pre class="code sm"><code><span class="cmt">// FSM one-hot 불변식 assertion</span>
+<span class="kw">assert property</span> (@(<span class="kw">posedge</span> clk) <span class="kw">disable iff</span>(!rst_n)
+   $onehot(state));   <span class="cmt">// 항상 정확히 1비트 hot</span>
+
+<span class="cmt">// 메타 모델링: 시뮬에서 동기화 FF에</span>
+<span class="cmt">// 랜덤 1싸이클 지연 주입 → CDC 견고성 확인</span></code></pre>
+        <div class="deepnote"><p style="margin:6px 0">CDC 버그는 <strong>RTL 시뮬에서 안 보이는 경우</strong>가 많습니다(0-지연 모델). 그래서 정적 CDC 툴 + 메타 주입(metastability injection)을 함께 돌립니다.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "타이밍을 닫아본 사람"</h2>
+    <div class="qa"><div class="q">setup과 hold 부등식을 써보세요. hold 위반은 클럭을 늦추면 풀리나요?</div><div class="a">setup: Tclk ≥ Tcq + Tcomb_max + Tsetup + Tskew. hold: Tcq + Tcomb_min ≥ Thold + Tskew. hold는 같은 엣지 기준 min-delay 문제라 <strong>주기와 무관</strong> — 클럭을 늦춰도 안 풀립니다. 빠른 경로에 버퍼를 넣어 지연을 늘려야 합니다.</div></div>
+    <div class="qa"><div class="q">메타스테이빌리티가 뭐고, 2-FF 동기화기가 왜 효과적인가요? 완전히 없앨 수 있나요?</div><div class="a">비동기 입력이 setup/hold를 어겨 FF 출력이 중간 전압에 머무는 현상입니다. MTBF에서 해결시간 t_r이 <strong>지수</strong>로 들어가, FF 한 단을 더 줘 t_r을 늘리면 MTBF가 기하급수적으로 커집니다. 다만 확률적 현상이라 0으로는 못 만들고, <strong>충분히 낮은 발생률</strong>로 줄이는 것입니다.</div></div>
+    <div class="qa"><div class="q">다비트 버스를 다른 클럭 도메인으로 넘기려면? 그리고 리셋은 왜 동기화하나요?</div><div class="a">버스는 각 비트에 2-FF를 박으면 비트 불일치가 생기므로 <strong>그레이 코드</strong>(전이당 1비트)나 <strong>핸드셰이크/비동기 FIFO</strong>를 씁니다. 리셋은 비동기 deassert가 recovery/removal을 어겨 메타·부분리셋을 일으키므로, <strong>async assert·sync deassert</strong> 방식으로 동기화합니다.</div></div>
+  </section>
+
+  <!-- 16 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>타이밍·CDC 정밀 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li>setup: <code>Tclk ≥ Tcq+Tcomb+Tsu+Tskew</code> / hold: <code>Tcq+Tcomb ≥ Th+Tskew</code></li>
+        <li>hold는 주기 무관(min-delay), slack≥0이어야 closure</li>
+        <li>FF=엣지, latch=레벨(투명)·사고추론 위험</li>
+        <li>메타→MTBF의 <code>t<sub>r</sub></code>은 지수: 2-FF로 해결시간 확보</li>
+        <li>1비트=2-FF, 다비트=그레이/핸드셰이크/async FIFO</li>
+        <li>리셋: async assert · sync deassert</li>
+        <li>FSM: Moore(상태) vs Mealy(상태+입력), one-hot vs binary</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"동기 설계는 <strong class="hl">setup/hold 부등식</strong>으로 타이밍을 닫고, 비동기 경계는 <strong class="hl">메타스테이빌리티 MTBF</strong>를 충분히 키우는 동기화로 다룹니다. 검증은 시뮬이 아니라 <strong>STA·CDC 정적 분석 + assertion</strong>으로 합니다."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>0-3 RTL→게이트 합성 정밀</strong>: 합성 제약(SDC), 로직 최적화, 스캔/DFT 삽입.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 4-3 · GLS·SDF·타이밍체크 정밀</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 4 · 4-3 GLS·타이밍 정밀">
+<div class="track-switch"><a href="../../chapters/ch4-3.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">GLS · SDF · 타이밍체크, 게이트 레벨까지</h1>
+    <p class="hook">개념판에서 "합성 후 네트리스트를 시뮬레이션한다"를 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">$sdf_annotate, specify 블록의 $setuphold, min/typ/max 코너, X-pessimism, 리셋 도달</strong>까지 정확히 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"GLS 돌린다"에서 "타이밍을 신호로 설명한다"로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li>RTL → 합성 → 게이트 네트리스트의 흐름</li><li>GLS가 "실제 게이트로 시뮬"이라는 직관</li><li>STA가 타이밍을 본다는 큰 그림</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li><code>$sdf_annotate</code>로 지연을 <strong>주입</strong>하는 법</li><li><code>specify</code> 블록의 <code>$setup/$hold/$setuphold/$width/$recovery/$removal</code> 메커니즘</li><li><strong>min/typ/max</strong> 코너, <code>notifier</code>, X 전파</li><li>리셋 초기화(<code>force/release</code>), STA vs GLS</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준 스펙: <strong>IEEE 1364 (Verilog, specify·타이밍체크)</strong> + <strong>IEEE 1497 (SDF, Standard Delay Format)</strong>. GLS는 post-synth와 post-PnR 두 단계에서 돌리며, 후자는 <strong>실제 배선 지연(SDF)</strong>을 어노테이트합니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">언제·왜 돌리나</div>
+    <h2>GLS의 3가지 모드</h2>
+    <table class="sig">
+      <tr><th>모드</th><th>지연</th><th>SDF</th><th>주로 잡는 것</th></tr>
+      <tr><td>zero-delay</td><td>0 (functional)</td><td>없음</td><td>합성 후 <strong>기능 동치</strong>, 리셋/초기화, X 전파</td></tr>
+      <tr><td>unit-delay</td><td>게이트당 1 단위</td><td>없음</td><td>이벤트 순서·간이 레이스 확인</td></tr>
+      <tr><td>full-timing</td><td>SDF 실제값</td><td><strong class="hl">있음</strong></td><td>타이밍 위반·glitch·async 경로·DFT 시프트</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="note">실무 순서: 보통 <strong>post-synth zero-delay</strong>로 기능·리셋부터 깔끔히 잡고 → <strong>post-PnR full-timing(SDF)</strong>로 넘어갑니다.</div>
+      <div class="spec"><p style="margin:6px 0">full-timing GLS는 느립니다(이벤트 폭증). 그래서 전체 회귀가 아니라 <strong>리셋·모드전환·DFT·async FIFO</strong> 같은 핵심 시퀀스만 돌리는 게 일반적입니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">지연을 주입한다</div>
+    <h2>$sdf_annotate — SDF를 네트리스트에 입히기</h2>
+    <pre class="code"><code><span class="cmt">// testbench 또는 wrapper의 initial 블록에서 호출</span>
+<span class="kw">initial</span> <span class="kw">begin</span>
+  <span class="fn">$sdf_annotate</span>(
+    <span class="str">"./sdf/cpu_top.max.sdf"</span>,  <span class="cmt">// ① SDF 파일</span>
+    dut,                       <span class="cmt">// ② 어노테이트할 스코프(인스턴스)</span>
+    ,                          <span class="cmt">// ③ config file (보통 생략)</span>
+    <span class="str">"sdf_anno.log"</span>,           <span class="cmt">// ④ 로그 파일</span>
+    <span class="str">"MAXIMUM"</span>,                  <span class="cmt">// ⑤ 코너: MIN|TYP|MAX 중 하나 선택</span>
+    ,                          <span class="cmt">// ⑥ scale_factors "1.0:1.0:1.0"</span>
+    <span class="str">"FROM_MTM"</span>                  <span class="cmt">// ⑦ scale_type</span>
+  );
+<span class="kw">end</span></code></pre>
+    <p class="codecap">SDF 한 항목 예: <code>(IOPATH A Y (0.21:0.34:0.51) (0.19:0.30:0.47))</code> → (min:typ:max), 앞=rise, 뒤=fall.</p>
+    <div class="grid2">
+      <div class="deepnote"><p style="margin:6px 0">⑤에서 <strong>MAXIMUM</strong>을 고르면 SDF의 세 값 중 <strong>max만</strong> 골라 setup 위반에 민감하게, <strong>MINIMUM</strong>은 빠른 경로(hold 위반)에 민감하게 시뮬합니다.</p></div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>SDF 어노테이트 누락</strong>이 1순위 함정: 호출이 빠지거나 인스턴스 경로가 틀리면 전 경로가 <strong>zero-delay</strong>가 되어 race가 사라지고 "통과"로 위장됩니다. 반드시 <code>sdf_anno.log</code>에서 <strong>annotated count</strong>를 확인하세요.</p></div>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">코너의 정확한 의미</div>
+    <h2>min / typ / max — 세 숫자가 말하는 것</h2>
+    <div class="spec"><p style="margin:6px 0">SDF의 모든 지연은 <code>(min:typ:max)</code> 삼중값입니다. 이는 PVT(Process·Voltage·Temperature) 코너의 산포를 담습니다.</p></div>
+    <table class="sig mt">
+      <tr><th>코너</th><th>대략 조건</th><th>지연</th><th>주로 위반</th></tr>
+      <tr><td>MIN (fast)</td><td>fast-process, 고전압, 저온</td><td>가장 짧음</td><td><strong class="hl2">hold</strong>(데이터가 너무 빨리 옴)</td></tr>
+      <tr><td>TYP</td><td>nominal</td><td>중간</td><td>참고용</td></tr>
+      <tr><td>MAX (slow)</td><td>slow-process, 저전압, 고온</td><td>가장 김</td><td><strong class="hl">setup</strong>(데이터가 너무 늦게 옴)</td></tr>
+    </table>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>흔한 오해:</strong> "max 코너만 돌리면 된다" ❌. <strong>hold 위반은 min(fast) 코너</strong>에서 드러나고, 게다가 hold는 전압을 낮춰도 잘 안 풀려 <strong>전압 무관(VT-invariant)</strong>에 가깝습니다. setup은 MAX, hold는 MIN으로 <strong>둘 다</strong> 봐야 합니다.</p></div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">타이밍체크의 심장</div>
+    <h2>specify 블록 — $setuphold 실제 문법</h2>
+    <pre class="code"><code><span class="kw">module</span> DFF (Q, D, CK, RN);   <span class="cmt">// 라이브러리 셀의 timing 모델(.v)</span>
+  ...
+  <span class="kw">specify</span>
+    <span class="cmt">// (조건 ?=> ) 데이터 경로 지연: CK↑ → Q</span>
+    (CK => Q) = (0.12:0.18:0.27);
+
+    <span class="cmt">// setup/hold를 한 번에: ref=CK↑, data=D</span>
+    <span class="fn">$setuphold</span>(<span class="kw">posedge</span> CK, D, 0.05, 0.03, notifier);
+    <span class="cmt">//           ref        data tSU   tH   ↑위반시 토글</span>
+
+    <span class="cmt">// 비동기 리셋 해제 타이밍</span>
+    <span class="fn">$recovery</span>(<span class="kw">posedge</span> RN, <span class="kw">posedge</span> CK, 0.06, notifier);
+    <span class="fn">$removal</span> (<span class="kw">posedge</span> RN, <span class="kw">posedge</span> CK, 0.04, notifier);
+
+    <span class="cmt">// 최소 펄스폭</span>
+    <span class="fn">$width</span>(<span class="kw">posedge</span> CK, 0.20, 0, notifier);
+  <span class="kw">endspecify</span>
+<span class="kw">endmodule</span></code></pre>
+    <p class="codecap">SDF의 <code>(TIMINGCHECK (SETUPHOLD ...))</code> 값이 위 <code>0.05/0.03</code> 자리에 어노테이트되어 덮어쓰입니다.</p>
+    <div class="note">데이터 경로 지연(<code>=></code>)과 타이밍체크(<code>$...</code>)는 <strong>같은 specify 블록</strong> 안에 함께 산다 — 둘 다 SDF가 채웁니다.</div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">setup / hold 윈도우</div>
+    <h2>체크 메커니즘 — 클럭엣지 기준 한 점이 아닌 "창"</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 260" font-family="var(--mono)">
+        <!-- CLK -->
+        <text x="6" y="40" fill="#9fb0c7" font-size="13">CLK</text>
+        <polyline fill="none" stroke="#6c7c95" stroke-width="1.5" points="60,46 360,46 360,22 380,22 380,46 700,46"/>
+        <line x1="370" y1="14" x2="370" y2="240" stroke="#ffce6b" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text x="370" y="14" fill="#ffce6b" font-size="11" text-anchor="middle">CK↑ (ref)</text>
+        <!-- setup / hold window -->
+        <rect x="300" y="60" width="70" height="170" fill="rgba(91,156,255,.12)" stroke="none"/>
+        <rect x="370" y="60" width="48" height="170" fill="rgba(255,122,133,.12)" stroke="none"/>
+        <line x1="300" y1="60" x2="300" y2="232" stroke="#5b9cff" stroke-dasharray="3 3"/>
+        <line x1="418" y1="60" x2="418" y2="232" stroke="#ff7a85" stroke-dasharray="3 3"/>
+        <text x="335" y="76" fill="#5b9cff" font-size="11" text-anchor="middle">tSU=0.05</text>
+        <text x="394" y="76" fill="#ff7a85" font-size="11" text-anchor="middle">tH=0.03</text>
+        <!-- DATA good -->
+        <text x="6" y="130" fill="#5ee6a0" font-size="13">D (정상)</text>
+        <polyline fill="none" stroke="#5ee6a0" stroke-width="2" points="60,138 230,138 240,114 700,114"/>
+        <text x="250" y="108" fill="#5ee6a0" font-size="10">윈도우 전에 안정 → OK</text>
+        <!-- DATA violate -->
+        <text x="6" y="200" fill="#ff7a85" font-size="13">D (위반)</text>
+        <polyline fill="none" stroke="#ff7a85" stroke-width="2" points="60,208 332,208 342,184 700,184"/>
+        <text x="346" y="225" fill="#ff7a85" font-size="10">윈도우 안에서 변함 → notifier 토글 → Q=X</text>
+      </svg>
+    </div>
+    <div class="spec mt"><p style="margin:6px 0"><strong>메커니즘:</strong> 시뮬레이터는 ref 엣지(CK↑) 시각을 기준으로 <code>[-tSU, +tH]</code> 윈도우를 잡고, 그 구간에 <strong>data 신호 변화가 있으면 위반</strong>으로 판정합니다. 위반 시 <code>notifier</code> 레지스터가 토글되고, 셀 모델은 이를 보고 <code>Q</code>를 <strong>X로 강제</strong>합니다(보수적 처리).</p></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">async 전용 체크</div>
+    <h2>$recovery / $removal — 리셋 해제 타이밍</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">⏪</span> $recovery</h3><p>비동기 리셋이 <strong>해제(deassert)된 뒤</strong> 다음 클럭 엣지까지 최소 시간. setup의 async 버전 — <strong>"너무 늦게 풀리면"</strong> 안 됨.</p></div>
+      <div class="card"><h3><span class="ico">⏩</span> $removal</h3><p>클럭 엣지 <strong>이후</strong> 리셋이 유지돼야 하는 최소 시간. hold의 async 버전 — <strong>"너무 일찍 풀리면"</strong> 안 됨.</p></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">리셋을 비동기로 걸되 <strong>동기로 해제</strong>하는 reset synchronizer가 필요한 이유가 바로 이 두 체크입니다. 해제 시점이 클럭 엣지와 겹치면 플롭이 <strong>metastable</strong>해질 수 있습니다. GLS full-timing은 <code>$recovery/$removal</code> 위반으로 이를 잡아냅니다.</p></div>
+    <div class="pitfall"><p style="margin:6px 0">$width 위반(클럭/리셋 펄스가 SDF 최소폭보다 짧음)은 <strong>클럭 게이팅 셀(ICG)</strong> 주변에서 자주 터집니다 — 게이팅 enable이 늦게 떠 클럭 펄스가 깎이는 케이스.</p></div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">GLS 1순위 골칫거리</div>
+    <h2>X-pessimism vs X-optimism</h2>
+    <table class="compare">
+      <tr><th>구분</th><th>X-pessimism (비관)</th><th>X-optimism (낙관)</th></tr>
+      <tr><td>방향</td><td>실제론 결정될 값을 <strong class="hl">X로 과하게 전파</strong></td><td>실제 X여야 할 곳을 <strong class="hl3">0/1로 덮어버림</strong></td></tr>
+      <tr><td>원인</td><td>같은 X 소스가 양 입력에 들어가도 시뮬은 모름 (<code>X & ~X → X</code>)</td><td>RTL의 <code>case</code>/3항/우선순위가 X를 0·1로 매핑</td></tr>
+      <tr><td>위험도</td><td>가짜 X 범람 → 디버그 시간 낭비</td><td><strong>버그 은폐</strong> → 실리콘에서 터짐(더 위험)</td></tr>
+    </table>
+    <div class="grid2 mt">
+      <div class="pitfall"><p style="margin:6px 0"><strong>X-pessimism 범람:</strong> 리셋 안 된 플롭 하나의 X가 트리 전체로 번져 화면이 X 바다가 됩니다. 진짜 원인 한 곳을 찾기 어려워짐 → <strong>리셋 커버리지</strong>와 <code>$display</code> 트레이스로 소스부터 차단.</p></div>
+      <div class="spec"><p style="margin:6px 0">대응: 게이트 GLS는 X-pessimism, RTL은 X-optimism 경향. 그래서 <strong>RTL에서 통과한 X가 GLS에서 터지는</strong> 게 정상이며, 이를 위해 GLS를 돕니다. <code>$assertoff</code>가 아니라 X-prop 모드(시뮬레이터의 <strong>Xprop</strong>)를 켜 RTL의 낙관도 줄입니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">리셋·초기화의 함정</div>
+    <h2>RTL엔 있던 initial이 게이트엔 없다</h2>
+    <p>RTL의 <code>initial</code>/변수 초기값은 <strong class="hl">합성되지 않습니다</strong>. 게이트 네트리스트의 모든 플롭은 시작 시 <code>X</code>이고, <strong>리셋이 실제로 모든 플롭에 도달</strong>해야만 값이 정해집니다.</p>
+    <pre class="code sm"><code><span class="cmt">// 리셋이 없는 플롭(자유 실행 카운터 등)을 GLS에서 깨우는 흔한 기법</span>
+<span class="kw">initial</span> <span class="kw">begin</span>
+  <span class="fn">$display</span>(<span class="str">"force init at t=%0t"</span>, $time);
+  <span class="kw">force</span> dut.cnt_reg.Q = 1'b0;   <span class="cmt">// X를 0으로 강제</span>
+  #5 <span class="kw">release</span> dut.cnt_reg.Q;       <span class="cmt">// 이후 정상 동작에 맡김</span>
+<span class="kw">end</span></code></pre>
+    <div class="pitfall"><p style="margin:6px 0"><strong>리셋 미도달</strong>이 GLS 3순위 함정: RTL에선 변수 초기값 덕에 멀쩡했는데, 게이트에선 그 플롭이 X로 남아 다운스트림이 전부 X. "RTL은 통과인데 GLS만 X"의 90%는 <strong>리셋 누락 + initial 비합성</strong> 조합입니다.</p></div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">정적 vs 동적</div>
+    <h2>STA vs GLS — 무엇을 커버하나</h2>
+    <table class="compare">
+      <tr><th>축</th><th>STA (정적 타이밍 분석)</th><th>GLS (게이트 시뮬)</th></tr>
+      <tr><td>방식</td><td>자극 없이 <strong class="hl">모든 경로</strong> 수식 계산</td><td><strong class="hl2">자극(테스트)</strong>으로 실제 토글시켜 관찰</td></tr>
+      <tr><td>커버리지</td><td>경로는 전부, 단 <strong>자극받은 값 무관</strong></td><td>자극이 닿은 경로·시퀀스만</td></tr>
+      <tr><td>강점</td><td>setup/hold 슬랙을 전수, 빠름</td><td>기능+타이밍 동시, X 전파, 동적 동작</td></tr>
+      <tr><td>약점</td><td>기능·X·리셋·async를 못 봄, false path 수동 처리</td><td>느림, 자극 안 닿으면 못 봄</td></tr>
+      <tr><td>대표 잡이</td><td>경로 지연, 슬랙, 클럭 스큐</td><td>리셋, DFT 시프트, async FIFO, glitch, X</td></tr>
+    </table>
+    <div class="deepnote mt"><p style="margin:6px 0"><strong>핵심:</strong> 둘은 경쟁이 아니라 <strong>상보(complementary)</strong>입니다. STA는 "모든 경로의 타이밍 마진"을, GLS는 "실제 자극에서의 기능+타이밍 동작"을 봅니다. STA가 못 보는 <strong>multicycle/false path의 진짜 동작</strong>, X 전파, 리셋 도달, 비동기 도메인 교차를 GLS가 메웁니다.</p></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">DFT 동작 확인</div>
+    <h2>GLS에서 scan / DFT 패턴 검증</h2>
+    <div class="grid2">
+      <div>
+        <p>스캔 체인은 RTL에 없고 <strong>합성·삽입(DFT) 후에야</strong> 생깁니다. 그래서 ATPG 패턴의 동작은 <strong class="hl">게이트 레벨에서만</strong> 검증할 수 있습니다.</p>
+        <ul>
+          <li><strong>scan shift</strong>: <code>scan_en=1</code>로 체인을 통해 패턴 시프트인/아웃 — 체인 연결·순서 확인</li>
+          <li><strong>capture</strong>: <code>scan_en=0</code> 한 클럭, 조합 응답을 캡처</li>
+          <li><strong>at-speed(transition)</strong>: 캡처 구간만 빠른 클럭 → full-timing GLS로 타이밍까지 확인</li>
+        </ul>
+      </div>
+      <div class="spec"><p style="margin:6px 0">ATPG가 만든 패턴을 <strong>실제 SDF 지연으로 GLS 재현</strong>해 "시뮬-실리콘 불일치"를 사전에 잡습니다. 특히 <strong>at-speed 패턴</strong>은 capture 윈도우의 setup이 빡빡해 full-timing이 필수입니다.</p></div>
+    </div>
+    <div class="pitfall"><p style="margin:6px 0">scan shift는 보통 <strong>저속</strong>인데 SDF max로 돌리면 hold 위반이 보일 수 있음 — DFT는 shift 시 hold-safe로 설계하므로, GLS에서 위반이 뜨면 <strong>설계 미스</strong> 신호입니다.</p></div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>GLS를 어떻게 검증·운용하나</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🧩</span> 환경·자극</h3>
+        <ul><li>RTL 시뮬과 <strong>동일 TB</strong> 재사용(UVM도 게이트 DUT에 붙임)</li><li><code>$sdf_annotate</code> + Xprop 모드 ON</li><li>리셋·모드전환·DFT·async 시퀀스를 <strong>핀포인트</strong> 자극</li></ul></div>
+      <div class="card"><h3><span class="ico">🎯</span> 무엇을 체크</h3>
+        <ul><li>SDF <strong>annotated count</strong>가 기대치인지(누락 0)</li><li>타이밍 위반(<code>$setuphold</code> 등) 로그 0건</li><li>X 잔존 0 — 리셋 후 모든 관측점 비-X</li><li>RTL vs 게이트 <strong>출력 비교</strong>(동치성)</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">SVA assertion은 게이트에서도 동작합니다. 단 <strong>$setuphold 같은 셀 내부 체크는 라이브러리 모델이</strong> 하고, <strong>프로토콜·기능 체크는 TB의 SVA</strong>가 합니다. 회귀는 "위반 0 + X 0 + 동치 PASS"를 게이트로 통과해야 sign-off에 가깝습니다.</p></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "실무자"로 보인다</h2>
+    <div class="qa"><div class="q">SDF의 코너(min:typ:max)가 뭐고, setup/hold 검증과 어떻게 연결되나요?</div><div class="a">SDF의 모든 지연은 (min:typ:max) 삼중값으로 PVT 산포를 담습니다. <code>$sdf_annotate</code>에서 MAX(slow)를 고르면 경로가 길어져 <strong>setup 위반</strong>에, MIN(fast)을 고르면 데이터가 빨라져 <strong>hold 위반</strong>에 민감합니다. 그래서 setup은 MAX, hold는 MIN으로 둘 다 돌립니다. hold는 전압을 낮춰도 잘 안 풀려 별도 코너가 필요합니다.</div></div>
+    <div class="qa"><div class="q">게이트 시뮬에서 setup/hold 위반은 어떻게 검출·표현되나요?</div><div class="a">라이브러리 셀의 <code>specify</code> 블록에 <code>$setuphold(posedge CK, D, tSU, tH, notifier)</code>가 있고, 시뮬레이터가 CK 엣지 기준 <code>[-tSU,+tH]</code> 윈도우 안에서 D 변화를 감지하면 위반으로 판정합니다. 위반 시 <code>notifier</code> 레지스터가 토글되고 셀 모델이 출력 Q를 <strong>X로 강제</strong>해 보수적으로 전파합니다.</div></div>
+    <div class="qa"><div class="q">STA를 다 했는데 왜 또 GLS를 돌리나요? X-pessimism은요?</div><div class="a">STA는 자극 없이 모든 경로의 타이밍 마진은 보지만, <strong>기능·X 전파·리셋 도달·비동기 교차·DFT 동작·initial 비합성</strong> 문제는 못 봅니다. GLS는 실제 자극으로 그걸 메웁니다. X-pessimism은 같은 X 소스가 상쇄될 경로도 시뮬이 X로 과하게 전파하는 비관적 현상으로, 리셋 누락 한 곳이 X 바다를 만들곤 합니다. 반대로 X-optimism은 X를 0/1로 덮어 <strong>버그를 은폐</strong>하므로 더 위험하며, Xprop 모드로 줄입니다.</div></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>GLS·SDF·타이밍 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li>GLS 모드: zero / unit / full-timing(SDF). 기능은 zero, 타이밍은 full</li>
+        <li><code>$sdf_annotate(file, scope, …, "MAXIMUM"/"MINIMUM", …)</code></li>
+        <li>SDF = <code>(min:typ:max)</code>; setup↔MAX, hold↔MIN</li>
+        <li><code>specify</code>: <code>$setuphold/$width/$recovery/$removal</code> + <code>notifier</code> → Q=X</li>
+        <li>X-pessimism(과전파) vs X-optimism(은폐, 더 위험)</li>
+        <li>RTL <code>initial</code> 비합성 → 리셋 도달 필수, <code>force/release</code></li>
+        <li>STA=전경로 정적, GLS=자극 동적 — 상보</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"GLS는 <strong class="hl">SDF로 실제 지연을 입힌 게이트 네트리스트</strong>를 자극해, STA가 못 보는 <strong>리셋·X 전파·async·DFT</strong>를 잡습니다. setup은 MAX, hold는 MIN 코너로 돌리고, 위반은 <code>notifier</code>가 Q를 X로 만들어 알립니다."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>4-4 CDC·RDC 정밀</strong>: 2-flop 동기화기 MTBF, gray code, async FIFO 포인터, glitch 합성.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

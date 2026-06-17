@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 2-1 · UVM 정밀(코드·phase·factory)</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 2 · 2-1 UVM 정밀">
+<div class="track-switch"><a href="../../chapters/ch2-1.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">UVM, 코드 레벨까지</h1>
+    <p class="hook">개념판에서 "agent·sequence·scoreboard"의 큰 그림을 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">실제 컴포넌트 스켈레톤, phase 순서, objection, config_db, factory override</strong>까지 정확히 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"안다"에서 "코드로 쓴다"로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li>env / agent(driver·monitor·sequencer)의 역할</li><li>sequence가 자극을 만든다는 직관</li><li>scoreboard / coverage의 존재</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li><code>run_phase</code> 안 <strong>get_next_item / item_done</strong> 루프</li><li>phasing 순서 + <strong>objection</strong> 메커니즘</li><li><code>uvm_config_db</code>로 virtual interface 전달</li><li><strong>factory</strong>: <code>type_id::create</code> + override 종류</li><li>TLM analysis_port, field 매크로, RAL 개요</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준 스펙: <strong>Accellera UVM(IEEE 1800.2-2020)</strong>, 언어는 <strong>SystemVerilog(IEEE 1800)</strong>. "UVM 써봤다"와 "UVM 구조를 손으로 그린다"를 가르는 건 아래 디테일입니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">컴포넌트 계층</div>
+    <h2>testbench 트리 — 누가 누구를 만드나</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 300" font-family="var(--mono)" font-size="12">
+        <!-- nodes -->
+        <g fill="#172236" stroke="#22304a">
+          <rect x="280" y="14" width="160" height="34" rx="7" stroke="#b388ff"/>
+          <rect x="280" y="74" width="160" height="34" rx="7" stroke="#5b9cff"/>
+          <rect x="280" y="134" width="160" height="34" rx="7" stroke="#38e1c6"/>
+          <rect x="90"  y="208" width="150" height="34" rx="7"/>
+          <rect x="285" y="208" width="150" height="34" rx="7"/>
+          <rect x="480" y="208" width="150" height="34" rx="7"/>
+          <rect x="285" y="262" width="150" height="30" rx="7" stroke="#ff7ac0"/>
+        </g>
+        <g fill="#e8eef7" text-anchor="middle">
+          <text x="360" y="36">uvm_test</text>
+          <text x="360" y="96">uvm_env</text>
+          <text x="360" y="156">uvm_agent</text>
+          <text x="165" y="230">sequencer</text>
+          <text x="360" y="230">driver</text>
+          <text x="555" y="230">monitor</text>
+          <text x="360" y="282" fill="#ff7ac0">scoreboard / cov</text>
+        </g>
+        <!-- edges -->
+        <g stroke="#6c7c95" fill="none">
+          <line x1="360" y1="48" x2="360" y2="74"/>
+          <line x1="360" y1="108" x2="360" y2="134"/>
+          <path d="M300,168 V190 H165 V208"/>
+          <line x1="360" y1="168" x2="360" y2="208"/>
+          <path d="M420,168 V190 H555 V208"/>
+          <path d="M440,150 H560 V262 H435"/>
+        </g>
+        <!-- handshake / analysis arrows -->
+        <line x1="240" y1="225" x2="285" y2="225" stroke="#ffce6b" stroke-width="2" marker-end="url(#a)"/>
+        <text x="262" y="218" fill="#ffce6b" font-size="9" text-anchor="middle">seq item</text>
+        <path d="M555,242 V282 H435" stroke="#38e1c6" stroke-width="2" fill="none" marker-end="url(#b)"/>
+        <text x="560" y="262" fill="#38e1c6" font-size="9">analysis</text>
+        <defs>
+          <marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ffce6b"/></marker>
+          <marker id="b" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#38e1c6"/></marker>
+        </defs>
+      </svg>
+    </div>
+    <div class="grid2 mt">
+      <div class="note">트리는 <strong>build_phase</strong>에서 위→아래로 만들어지고(top-down), <strong>connect_phase</strong>에서 포트가 연결됩니다(bottom-up 완료 후).</div>
+      <div class="note">노란 화살표 = sequencer↔driver <strong>핸드셰이크</strong>, 청록 = monitor의 <strong>analysis port</strong> → scoreboard/coverage.</div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">phasing</div>
+    <h2>phase 순서 — 언제 무엇을 하나</h2>
+    <div class="flow" style="margin-bottom:18px">
+      <div class="box">build</div><span class="arrow">→</span>
+      <div class="box">connect</div><span class="arrow">→</span>
+      <div class="box">end_of_<br>elaboration</div><span class="arrow">→</span>
+      <div class="box">start_of_<br>simulation</div><span class="arrow">→</span>
+      <div class="box on">run</div><span class="arrow">→</span>
+      <div class="box">extract/<br>check/report</div>
+    </div>
+    <table class="sig">
+      <tr><th>phase</th><th>특징</th><th>여기서 하는 일</th></tr>
+      <tr><td>build_phase</td><td>top-down, function(0시간)</td><td><code>create()</code>로 자식 생성, config_db <code>get</code></td></tr>
+      <tr><td>connect_phase</td><td>bottom-up, function</td><td>TLM port ↔ export 연결</td></tr>
+      <tr><td>end_of_elaboration</td><td>function</td><td>구조 확정, 트리 출력/점검</td></tr>
+      <tr><td><strong class="hl">run_phase</strong></td><td><strong>task</strong>(시간 소모), 병렬</td><td>실제 자극·구동·관찰 — <strong>objection</strong>으로 길이 제어</td></tr>
+      <tr><td>extract/check/report</td><td>function</td><td>결과 수집·판정·리포트</td></tr>
+    </table>
+    <div class="pitfall mt"><p style="margin:6px 0"><code>build/connect</code>는 <strong>function</strong>이라 시간을 못 쓰고, <code>run_phase</code>만 <strong>task</strong>입니다. run_phase 안에 12개 reset/main/shutdown 등 <strong>run-time 하위 phase</strong>가 더 있습니다(UVM의 reset_phase, main_phase…).</p></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">핵심 코드 ①</div>
+    <h2>driver — get_next_item / item_done 루프</h2>
+    <pre class="code"><code><span class="kw">class</span> <span class="fn">my_driver</span> <span class="kw">extends</span> uvm_driver<span class="cmt">#(my_item)</span>;
+  `uvm_component_utils(my_driver)        <span class="cmt">// factory 등록</span>
+  <span class="kw">virtual</span> my_if vif;                       <span class="cmt">// DUT 핀과 연결</span>
+
+  <span class="kw">function</span> <span class="kw">new</span>(string name, uvm_component parent);
+    <span class="kw">super</span>.new(name, parent);
+  <span class="kw">endfunction</span>
+
+  <span class="kw">function</span> <span class="kw">void</span> <span class="fn">build_phase</span>(uvm_phase phase);
+    <span class="kw">super</span>.build_phase(phase);
+    <span class="cmt">// config_db에서 virtual if 받기 (못 받으면 fatal)</span>
+    <span class="kw">if</span> (!uvm_config_db<span class="cmt">#(virtual my_if)</span>::get(<span class="kw">this</span>, <span class="str">""</span>, <span class="str">"vif"</span>, vif))
+      `uvm_fatal(<span class="str">"NOVIF"</span>, <span class="str">"virtual interface not set"</span>)
+  <span class="kw">endfunction</span>
+
+  <span class="kw">task</span> <span class="fn">run_phase</span>(uvm_phase phase);
+    <span class="kw">forever begin</span>
+      seq_item_port.<span class="fn">get_next_item</span>(req);   <span class="cmt">// ① sequencer에 다음 item 요청(blocking)</span>
+      drive_item(req);                  <span class="cmt">// ② 핀 토글로 DUT 구동</span>
+      seq_item_port.<span class="fn">item_done</span>();        <span class="cmt">// ③ 완료 통지 → finish_item 해제</span>
+    <span class="kw">end</span>
+  <span class="kw">endtask</span>
+<span class="kw">endclass</span></code></pre>
+    <div class="codecap">// get_next_item ↔ item_done 가 1:1. 사이에 응답을 채우면 item_done(rsp)로 돌려줄 수도 있음.</div>
+    <div class="spec"><p style="margin:6px 0">대안: <code>get(req)</code>(blocking get, 내부적으로 get_next_item+item_done 묶음) / 파이프라인엔 <code>get_next_item</code>+<code>item_done</code> 분리가 표준. driver는 절대 <code>req</code>를 스스로 <code>randomize</code>하지 않습니다 — 자극 생성은 <strong>sequence의 책임</strong>.</p></div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">핵심 코드 ②</div>
+    <h2>sequence & monitor — 자극 만들기 / 관찰 내보내기</h2>
+    <div class="grid2">
+      <div>
+        <pre class="code sm"><code><span class="kw">class</span> <span class="fn">my_seq</span> <span class="kw">extends</span> uvm_sequence<span class="cmt">#(my_item)</span>;
+  `uvm_object_utils(my_seq)
+  <span class="kw">task</span> <span class="fn">body</span>();
+    my_item tr;
+    <span class="kw">repeat</span>(10) <span class="kw">begin</span>
+      tr = my_item::type_id::<span class="fn">create</span>(<span class="str">"tr"</span>);
+      <span class="fn">start_item</span>(tr);              <span class="cmt">// 슬롯 요청</span>
+      <span class="kw">assert</span>(tr.randomize());     <span class="cmt">// 자극 랜덤화</span>
+      <span class="fn">finish_item</span>(tr);             <span class="cmt">// driver의 item_done까지 block</span>
+    <span class="kw">end</span>
+  <span class="kw">endtask</span>
+<span class="kw">endclass</span></code></pre>
+        <div class="codecap">// sequence는 component가 아닌 object → uvm_object_utils</div>
+      </div>
+      <div>
+        <pre class="code sm"><code><span class="kw">class</span> <span class="fn">my_monitor</span> <span class="kw">extends</span> uvm_monitor;
+  `uvm_component_utils(my_monitor)
+  uvm_analysis_port<span class="cmt">#(my_item)</span> ap;   <span class="cmt">// 관찰 출구</span>
+  <span class="kw">virtual</span> my_if vif;
+
+  <span class="kw">function</span> <span class="kw">void</span> <span class="fn">build_phase</span>(uvm_phase ph);
+    ap = <span class="kw">new</span>(<span class="str">"ap"</span>, <span class="kw">this</span>);
+  <span class="kw">endfunction</span>
+
+  <span class="kw">task</span> <span class="fn">run_phase</span>(uvm_phase ph);
+    <span class="kw">forever begin</span>
+      my_item t = collect();    <span class="cmt">// 핀에서 복원</span>
+      ap.<span class="fn">write</span>(t);              <span class="cmt">// 구독자 전원에 broadcast</span>
+    <span class="kw">end</span>
+  <span class="kw">endtask</span>
+<span class="kw">endclass</span></code></pre>
+        <div class="codecap">// ap.write → scoreboard/coverage의 imp가 받음</div>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><code>new()</code>로 직접 객체를 만들면 <strong>factory override가 먹지 않습니다.</strong> 반드시 <code>type_id::create()</code>. monitor의 <code>ap</code>는 <strong>analysis_port</strong>(1:N broadcast)라 구독자가 0개여도, N개여도 동작합니다.</p></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">objection 메커니즘</div>
+    <h2>run_phase는 언제 끝나나</h2>
+    <div class="grid2">
+      <div class="spec"><p style="margin:6px 0">run_phase는 <strong>objection 카운터가 0이 되는 순간</strong> 종료됩니다.</p>
+        <ul style="margin:8px 0">
+          <li>자극 시작 전 <code>phase.raise_objection(this)</code> → 카운터 +1</li>
+          <li>자극이 끝나면 <code>phase.drop_objection(this)</code> → 카운터 −1</li>
+          <li>모든 컴포넌트의 objection이 <strong>0</strong>이 되면 phase가 끝나고 다음 phase로</li>
+          <li><code>set_drain_time</code>으로 drop 후 여유 시간을 줄 수 있음</li>
+        </ul>
+      </div>
+      <div>
+        <pre class="code sm"><code><span class="kw">task</span> <span class="fn">run_phase</span>(uvm_phase phase);
+  phase.<span class="fn">raise_objection</span>(<span class="kw">this</span>);  <span class="cmt">// "아직 끝내지 마"</span>
+  seq.start(env.agt.sqr);          <span class="cmt">// 자극 실행(block)</span>
+  phase.<span class="fn">drop_objection</span>(<span class="kw">this</span>);   <span class="cmt">// "이제 끝나도 됨"</span>
+<span class="kw">endtask</span></code></pre>
+        <div class="codecap">// raise/drop 짝이 안 맞으면 sim이 안 끝나거나 조기 종료</div>
+        <div class="dev-bridge"><p style="margin:6px 0">개발자 직관: <strong>참조 카운트</strong>(RC)와 같습니다. raise=retain, drop=release. 0이 되면 GC(=phase 종료)가 일어납니다.</p></div>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>objection 누락이 1순위 함정:</strong> raise를 안 하면 자극이 돌기도 전에 <strong>run_phase가 0시간에 끝나</strong> 테스트가 "그냥 통과"합니다. 반대로 drop을 빠뜨리면 <code>timeout</code>까지 매달려 hang.</p></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">의존성 주입</div>
+    <h2>uvm_config_db — virtual interface 전달</h2>
+    <p>DUT의 핀(<code>interface</code>)을 클래스 세계(TB)로 넘기는 표준 통로. <strong class="hl">top에서 set, 컴포넌트에서 get.</strong></p>
+    <pre class="code"><code><span class="cmt">// ── top module (정적 세계) ──────────────────────────</span>
+<span class="kw">module</span> tb_top;
+  my_if dut_if(.clk(clk));                       <span class="cmt">// SystemVerilog interface 인스턴스</span>
+  dut u_dut(.i(dut_if));
+
+  <span class="kw">initial begin</span>
+    <span class="cmt">// 트리 어디서든 "vif"로 받을 수 있게 등록 (scope: 전역 "*")</span>
+    uvm_config_db<span class="cmt">#(virtual my_if)</span>::<span class="fn">set</span>(<span class="kw">null</span>, <span class="str">"*"</span>, <span class="str">"vif"</span>, dut_if);
+    run_test(<span class="str">"my_test"</span>);                          <span class="cmt">// +UVM_TESTNAME으로 덮어쓰기 가능</span>
+  <span class="kw">end</span>
+<span class="kw">endmodule</span>
+
+<span class="cmt">// ── driver build_phase (동적 세계) ─────────────────</span>
+<span class="kw">if</span> (!uvm_config_db<span class="cmt">#(virtual my_if)</span>::<span class="fn">get</span>(<span class="kw">this</span>, <span class="str">""</span>, <span class="str">"vif"</span>, vif))
+  `uvm_fatal(<span class="str">"NOVIF"</span>, <span class="str">"vif not set for"</span>)        <span class="cmt">// get 실패 시 즉시 중단</span></code></pre>
+    <div class="codecap">// set(context, instance_name, field, value) / get(this, "", field, var) · 타입 #(virtual my_if)가 정확히 일치해야 함</div>
+    <div class="grid2 mt">
+      <div class="spec"><p style="margin:6px 0">scope 매칭은 <strong>full hierarchical path + 와일드카드(*)</strong>로 동작. 더 구체적인 path가 우선합니다.</p></div>
+      <div class="pitfall"><p style="margin:6px 0"><strong>vif를 config_db로 안 넘기면</strong> driver/monitor의 vif가 <code>null</code> → 핀 접근 시 <strong>null handle</strong> 런타임 에러. set/get의 <strong>타입과 키 문자열</strong>이 한 글자라도 다르면 get이 조용히 실패합니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">factory</div>
+    <h2>type_id::create 와 override 종류</h2>
+    <p><code>`uvm_*_utils` 매크로</code>가 클래스를 factory에 등록 → <code>create()</code>로 만들면 <strong class="hl">코드 수정 없이 타입을 갈아끼울</strong> 수 있습니다.</p>
+    <pre class="code sm"><code><span class="cmt">// 1) 타입 전역 교체: 트리의 모든 my_driver를 err_driver로</span>
+set_type_override_by_type(my_driver::get_type(), err_driver::get_type());
+
+<span class="cmt">// 2) 인스턴스 한정 교체: 이 path의 driver만 교체</span>
+set_inst_override_by_type(<span class="str">"env.agt.drv"</span>, my_driver::get_type(), err_driver::get_type());
+
+<span class="cmt">// 3) 문자열 기반(이름으로)</span>
+factory.set_type_override_by_name(<span class="str">"my_driver"</span>, <span class="str">"err_driver"</span>);
+
+<span class="cmt">// 적용 조건: err_driver 는 반드시 my_driver를 extends 해야 함(LSP)</span></code></pre>
+    <div class="codecap">// override는 build_phase의 create() 시점에 적용 → test의 build에서 미리 등록해야 함</div>
+    <table class="sig">
+      <tr><th>메서드</th><th>범위</th><th>전형적 용도</th></tr>
+      <tr><td>set_type_override</td><td>해당 타입 <strong>전부</strong></td><td>error injection driver, 변형 transaction</td></tr>
+      <tr><td>set_inst_override</td><td>특정 <strong>인스턴스 path</strong></td><td>한 agent만 다른 동작 주입</td></tr>
+    </table>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>override가 안 먹는 3대 이유:</strong> ① 객체를 <code>new()</code>로 만듦(create 아님) ② override를 <strong>create 이후</strong>에 등록 ③ 자식이 부모를 <code>extends</code> 안 함(타입 비호환).</p></div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">TLM & field 자동화</div>
+    <h2>analysis_port·fifo / field 매크로</h2>
+    <div class="grid2">
+      <div>
+        <h3 style="color:var(--accent2)">TLM 연결</h3>
+        <table class="sig" style="font-size:13.5px">
+          <tr><th>요소</th><th>의미</th></tr>
+          <tr><td>analysis_port</td><td>1:N <strong>broadcast</strong> (write())</td></tr>
+          <tr><td>analysis_imp</td><td>수신측 — <code>write()</code> 구현 보유</td></tr>
+          <tr><td>uvm_tlm_fifo</td><td>producer/consumer 사이 버퍼(put/get)</td></tr>
+          <tr><td>blocking_put_port</td><td>1:1, get까지 block</td></tr>
+        </table>
+        <pre class="code sm"><code><span class="cmt">// connect_phase</span>
+mon.ap.<span class="fn">connect</span>(sb.analysis_export);
+mon.ap.<span class="fn">connect</span>(cov.analysis_export);</code></pre>
+        <div class="codecap">// 한 ap가 scoreboard + coverage 동시 연결(1:N)</div>
+      </div>
+      <div>
+        <h3 style="color:var(--accent2)">field 자동화</h3>
+        <pre class="code sm"><code><span class="kw">class</span> <span class="fn">my_item</span> <span class="kw">extends</span> uvm_sequence_item;
+  <span class="kw">rand bit</span> [31:0] addr, data;
+  `uvm_object_utils_begin(my_item)
+    `uvm_field_int(addr, UVM_ALL_ON)
+    `uvm_field_int(data, UVM_ALL_ON)
+  `uvm_object_utils_end
+<span class="kw">endclass</span></code></pre>
+        <div class="codecap">// 매크로가 copy/compare/print/pack을 자동 생성</div>
+        <div class="spec"><p style="margin:6px 0">성능이 중요하면 매크로 대신 <code>do_copy</code>/<code>do_compare</code>를 <strong>직접 오버라이드</strong>(매크로는 편하지만 무겁다). <code>UVM_ALL_ON</code>은 비교/프린트/팩 전부 on, <code>UVM_NOCOMPARE</code> 등으로 끌 수 있음.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">레지스터 추상화</div>
+    <h2>RAL — 주소가 아니라 이름으로</h2>
+    <div class="grid2">
+      <div>
+        <p><strong>RAL(Register Abstraction Layer)</strong>은 DUT 레지스터를 <strong class="hl">클래스 모델</strong>로 들고, 주소·필드를 추상화합니다.</p>
+        <ul>
+          <li><code>uvm_reg</code> / <code>uvm_reg_field</code> / <code>uvm_reg_block</code> 계층</li>
+          <li><code>read()/write()</code>가 내부에서 버스 트랜잭션(adapter)로 변환</li>
+          <li><strong>mirror</strong>(예측값) vs <strong>desired</strong> vs <strong>actual</strong> 값 추적</li>
+          <li>예측: explicit(monitor) / implicit prediction</li>
+        </ul>
+      </div>
+      <div>
+        <pre class="code sm"><code><span class="cmt">// 주소를 몰라도 이름으로 접근</span>
+ral.ctrl_reg.<span class="fn">write</span>(status, 32'h1, .map(map));
+ral.ctrl_reg.<span class="fn">read</span>(status, rdata, .map(map));
+
+<span class="cmt">// 필드 단위 비교/체크</span>
+ral.ctrl_reg.<span class="fn">mirror</span>(status, UVM_CHECK);</code></pre>
+        <div class="codecap">// adapter가 uvm_reg_bus_op ↔ AXI/APB 트랜잭션 변환</div>
+        <div class="deepnote"><p style="margin:6px 0">RAL이면 자동 시퀀스 <code>uvm_reg_hw_reset_seq</code>, <code>uvm_reg_bit_bash_seq</code> 등으로 <strong>리셋값·R/W 비트</strong>를 한 번에 점검할 수 있습니다.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">실행 제어</div>
+    <h2>+UVM_TESTNAME · verbosity — 컴파일 없이 바꾼다</h2>
+    <table class="sig">
+      <tr><th>플래그/매크로</th><th>효과</th></tr>
+      <tr><td>+UVM_TESTNAME=my_test</td><td><code>run_test()</code>가 factory로 그 test를 생성(재컴파일 X)</td></tr>
+      <tr><td>+UVM_VERBOSITY=UVM_HIGH</td><td>로그 상세도 전역 설정</td></tr>
+      <tr><td>`uvm_info(ID, MSG, UVM_MEDIUM)</td><td>verbosity ≤ 임계일 때만 출력</td></tr>
+      <tr><td>+uvm_set_config_int=...</td><td>커맨드라인에서 config 값 주입</td></tr>
+    </table>
+    <div class="spec mt"><p style="margin:6px 0">verbosity 단계: <code>UVM_NONE &lt; LOW &lt; MEDIUM &lt; HIGH &lt; FULL &lt; DEBUG</code>. <code>uvm_info</code>는 임계 이하만 출력하고, <code>uvm_warning/error/fatal</code>은 <strong>verbosity와 무관</strong>하게 항상 나오며 <code>fatal</code>은 즉시 종료. error 카운트가 0이면 회귀 PASS로 집계하는 흐름이 일반적입니다.</p></div>
+    <div class="pitfall mt"><p style="margin:6px 0">메시지를 <code>$display</code>로 찍으면 verbosity/카운트 집계 밖이라 회귀 판정에 안 잡힙니다. UVM에선 <strong>반드시 `uvm_info/error</strong>를 쓰세요.</p></div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>이 구조를 어떻게 점검·재사용하나</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🧩</span> 재사용 / 주입</h3>
+        <ul><li><strong>factory override</strong>로 error-injection driver를 코드 변경 없이 끼움</li><li><strong>config_db</strong>로 agent를 active/passive 전환(monitor만 동작)</li><li>VIP/agent를 <strong>그대로 다른 프로젝트</strong>에 재사용</li></ul></div>
+      <div class="card"><h3><span class="ico">🎯</span> 점검 포인트</h3>
+        <ul><li><strong>SVA assertion</strong>으로 핸드셰이크·프로토콜 위반 즉시 검출</li><li><strong>covergroup</strong>을 monitor의 write에 sample</li><li>scoreboard에서 <code>compare</code>로 기대 vs 실제</li><li>objection drain/timeout으로 hang 조기 검출</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">UVM의 가치는 "동작"보다 <strong>재사용·제어 가능성</strong>입니다. factory + config_db + phase가 그 세 축이라, 면접에서 이 셋을 코드로 설명할 수 있으면 강합니다.</p></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "실무자"로 보인다</h2>
+    <div class="qa"><div class="q">objection 메커니즘을 설명해보세요.</div><div class="a">run_phase는 raise/drop objection으로 만든 카운터가 0이 되면 종료됩니다. 자극 시작 전 <code>phase.raise_objection(this)</code>로 +1, 끝나면 <code>drop_objection</code>으로 −1, 모든 컴포넌트 합이 0이면 다음 phase로 넘어갑니다. raise를 빼면 0시간에 끝나 테스트가 헛통과하고, drop을 빼면 timeout까지 hang합니다.</div></div>
+    <div class="qa"><div class="q">sequencer–driver 핸드셰이크는?</div><div class="a">driver가 <code>seq_item_port.get_next_item(req)</code>로 다음 아이템을 요청(blocking), 구동 후 <code>item_done()</code>으로 완료 통지합니다. sequence 쪽은 <code>start_item</code>/<code>finish_item</code>이 짝이고, finish_item은 driver의 item_done까지 블록됩니다. 1:1 핸드셰이크라 백프레셔처럼 자연스럽게 속도가 맞춰집니다.</div></div>
+    <div class="qa"><div class="q">config_db와 factory override는 각각 무엇이고, override 종류는?</div><div class="a">config_db는 virtual interface나 설정값을 트리에 주입하는 통로로 top에서 set, 컴포넌트 build에서 get합니다. factory는 <code>type_id::create</code>로 만든 객체의 타입을 교체하는 메커니즘으로, 전역 교체 <code>set_type_override_by_type</code>과 인스턴스 한정 <code>set_inst_override_by_type</code>(+이름 기반)이 있습니다. 자식이 부모를 extends해야 적용됩니다. RAL은 레지스터를 <code>uvm_reg</code> 클래스 모델로 추상화해 주소 대신 이름으로 read/write·mirror하는 계층입니다.</div></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>UVM 정밀 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li>driver: <code>get_next_item → drive → item_done</code> forever 루프</li>
+        <li>sequence: <code>start_item / randomize / finish_item</code></li>
+        <li>monitor: <code>ap.write()</code>로 1:N analysis broadcast</li>
+        <li>phase: build(top-down)→connect→...→run(task)</li>
+        <li>objection: raise/drop 카운터=0 → run 종료</li>
+        <li>config_db로 vif 주입, factory <code>create</code>+override로 교체</li>
+        <li>field 매크로 / RAL / +UVM_TESTNAME · verbosity</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"UVM은 <strong class="hl">phase로 생명주기를, objection으로 종료를, config_db·factory로 재사용·주입</strong>을 표준화한 검증 프레임워크입니다. driver–sequencer는 get_next_item/item_done 핸드셰이크로 묶입니다."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>2-2 Constrained-Random & Coverage 정밀</strong>: constraint solver·dist·soft, covergroup·bins·cross와 coverage closure.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

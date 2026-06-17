@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 3-1 · APB 정밀(신호·상태·파형)</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 3 · 3-1 APB 정밀">
+<div class="track-switch"><a href="../../chapters/ch3-1.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1. Title -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">APB 정밀<br>신호·상태·파형까지 내려가기</h1>
+    <p class="hook">개념판에서 "동기 블로킹 호출"이라는 큰 그림을 잡았다면, 이제 면접관이 파고드는 곳 — SETUP/ACCESS의 정확한 신호 값, PREADY로 만드는 wait state, PSLVERR이 유효한 단 한 박자, 그리고 APB2/3/4 차이까지 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기</div>
+  </section>
+
+  <!-- 2. 개념판 vs 심화 + 기준 스펙 -->
+  <section class="slide">
+    <div class="kicker">이번 챕터의 좌표</div>
+    <h2>개념판에서 한 것 <span class="dim">vs</span> 심화에서 더할 것</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3><span class="ico">🗺️</span> 개념판에서 잡은 것</h3>
+        <ul>
+          <li>APB = AMBA의 가장 단순·저속·저전력 버스</li>
+          <li>신호 9개의 "역할" 수준 매핑</li>
+          <li>IDLE → SETUP → ACCESS 흐름 감각</li>
+          <li>비파이프라인 = 한 번에 하나</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🔬</span> 심화에서 더할 것</h3>
+        <ul>
+          <li>각 상태의 <strong class="hl">PSEL/PENABLE 정확한 비트값</strong></li>
+          <li>PREADY로 만드는 <strong>wait state</strong> 파형</li>
+          <li>PSLVERR이 유효한 <strong class="hl">단 한 클럭</strong></li>
+          <li><strong>PSTRB / PPROT</strong> 인코딩 (APB4)</li>
+          <li>합성 가능한 slave FSM Verilog</li>
+        </ul>
+      </div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준 스펙: 본 챕터는 ARM <strong>AMBA APB Protocol Specification</strong>을 따릅니다. 버전 표기는 흔히 <strong class="hl">APB2 / APB3(AMBA 3 APB) / APB4(AMBA 4 APB)</strong>로 부릅니다. 핵심 변화: <strong>PREADY·PSLVERR은 APB3부터</strong>, <strong>PSTRB·PPROT은 APB4부터</strong>입니다. 이 경계가 면접 단골입니다.</p></div>
+  </section>
+
+  <!-- 3. 전체 신호 표 -->
+  <section class="slide">
+    <div class="kicker">전체 신호 · 방향 · 도입 버전</div>
+    <h2>APB 신호 전수표 — 방향과 폭까지</h2>
+    <p>버스는 <strong>전선 묶음 + 약속</strong>입니다. "M→S"는 마스터(보통 브리지)가 구동, "S→M"은 슬레이브가 구동. 폭 <code>n</code>은 데이터 버스 바이트 수(예: 32비트면 n=4).</p>
+    <table class="sig">
+      <tr><th>신호</th><th>방향</th><th>폭</th><th>의미</th><th>도입</th></tr>
+      <tr><td>PCLK</td><td>—</td><td>1</td><td>버스 클럭. 모든 신호는 PCLK 상승엣지 기준.</td><td>APB2</td></tr>
+      <tr><td>PRESETn</td><td>—</td><td>1</td><td>리셋, <strong class="hl">active-low</strong>(0일 때 리셋).</td><td>APB2</td></tr>
+      <tr><td>PADDR</td><td>M→S</td><td>≤32</td><td>주소(바이트 주소).</td><td>APB2</td></tr>
+      <tr><td>PSEL</td><td>M→S</td><td>1</td><td>이 슬레이브 선택. 디코더가 주소로 생성.</td><td>APB2</td></tr>
+      <tr><td>PENABLE</td><td>M→S</td><td>1</td><td>ACCESS 페이즈 표시(2번째 클럭부터 1).</td><td>APB2</td></tr>
+      <tr><td>PWRITE</td><td>M→S</td><td>1</td><td>1=쓰기, 0=읽기.</td><td>APB2</td></tr>
+      <tr><td>PWDATA</td><td>M→S</td><td>8/16/32</td><td>쓰기 데이터(PWRITE=1일 때 유효).</td><td>APB2</td></tr>
+      <tr><td>PRDATA</td><td>S→M</td><td>8/16/32</td><td>읽기 데이터(PWRITE=0, PREADY=1일 때 유효).</td><td>APB2</td></tr>
+      <tr><td>PREADY</td><td>S→M</td><td>1</td><td>슬레이브 준비/완료. 0이면 <strong class="hl">wait state</strong>.</td><td><span class="pill blue">APB3</span></td></tr>
+      <tr><td>PSLVERR</td><td>S→M</td><td>1</td><td>에러 응답. 전송 완료 클럭에만 유효.</td><td><span class="pill blue">APB3</span></td></tr>
+      <tr><td>PSTRB</td><td>M→S</td><td>n</td><td>바이트 strobe. PSTRB[k]=1이면 그 바이트 기록.</td><td><span class="pill violet">APB4</span></td></tr>
+      <tr><td>PPROT</td><td>M→S</td><td>3</td><td>보호 속성(권한/보안/명령-데이터).</td><td><span class="pill violet">APB4</span></td></tr>
+    </table>
+    <div class="note mt">접두사 <strong>P</strong>는 "Peripheral 버스 신호"라는 표식입니다. 예: <code>PSLVERR</code> = P + SLV(Slave) + ERR. <code>PRESETn</code>의 <strong>n</strong>은 active-<strong>n</strong>egative(저레벨 활성)을 뜻합니다.</div>
+  </section>
+
+  <!-- 4. 상태머신 정확한 값 -->
+  <section class="slide">
+    <div class="kicker">상태머신 · 정확한 비트값</div>
+    <h2>IDLE / SETUP / ACCESS — PSEL·PENABLE을 숫자로</h2>
+    <p>개념판에선 "흐름"을, 여기선 <strong class="hl">각 상태에서 두 신호의 정확한 값</strong>을 외웁니다. 면접에서 가장 자주 빗나가는 지점입니다.</p>
+    <table class="compare mt">
+      <tr><th>상태</th><th>PSEL</th><th>PENABLE</th><th>지속</th><th>이 클럭에 하는 일</th></tr>
+      <tr><td>IDLE</td><td><code>0</code></td><td><code>0</code></td><td>가변</td><td>대기. 버스 비선택.</td></tr>
+      <tr><td>SETUP</td><td><strong class="hl">1</strong></td><td><strong class="hl">0</strong></td><td><strong>정확히 1클럭</strong></td><td>PADDR/PWRITE/PWDATA(+PSTRB/PPROT) 구동, 슬레이브 깨움.</td></tr>
+      <tr><td>ACCESS</td><td><strong class="hl">1</strong></td><td><strong class="hl">1</strong></td><td>1클럭 이상</td><td>실제 전송. PREADY=1 될 때까지 유지.</td></tr>
+    </table>
+    <div class="spec mt"><p style="margin:6px 0"><strong>SETUP</strong>: <code>PSEL=1, PENABLE=0</code> — 무조건 1클럭만 머뭅니다. <strong>ACCESS</strong>: <code>PSEL=1, PENABLE=1</code> — <code>PREADY</code>가 1로 샘플될 때까지 머뭅니다. 즉 <strong class="hl">PENABLE은 "거래의 두 번째 클럭"이 됐다는 신호</strong>이며, SETUP에서 ACCESS로 갈 때 0→1로 정확히 한 번 토글합니다.</p></div>
+    <div class="pitfall mt"><p style="margin:6px 0">흔한 오답: "SETUP에서 PENABLE=1". 실제 <strong>SETUP은 PENABLE=0</strong>이고, ACCESS에서 비로소 1이 됩니다. 또 "PENABLE이 여러 클럭 깜빡인다" — 아닙니다. ACCESS 동안 <strong>PENABLE은 계속 1로 유지</strong>되고, 전송이 끝나면(=PREADY=1) 다음 거래의 SETUP 또는 IDLE로 갑니다.</p></div>
+  </section>
+
+  <!-- 5. 타이밍 파형 SVG -->
+  <section class="slide">
+    <div class="kicker">타이밍 파형 · 읽기/쓰기 + wait state</div>
+    <h2>파형으로 박자 맞추기</h2>
+    <p>아래는 <strong>SETUP 1클럭 → ACCESS</strong>에서 <code>PREADY=0</code>으로 <strong class="hl">wait state 1회</strong>가 삽입된 트랜잭션입니다. 쓰기/읽기 데이터가 유효한 창과 PSLVERR 샘플 지점을 표시했습니다.</p>
+    <div class="diagram mt">
+      <svg viewBox="0 0 880 360" width="880" font-family="monospace">
+        <!-- phase bands: T1 SETUP, T2..T3 ACCESS(wait+complete) -->
+        <rect x="160" y="20" width="120" height="300" fill="#5b9cff" opacity="0.08"/>
+        <rect x="280" y="20" width="240" height="300" fill="#b388ff" opacity="0.08"/>
+        <text x="220" y="36" fill="#5b9cff" font-size="12" text-anchor="middle">T1 · SETUP</text>
+        <text x="400" y="36" fill="#b388ff" font-size="12" text-anchor="middle">T2~T3 · ACCESS (wait → 완료)</text>
+        <!-- cycle ticks T1..T4 -->
+        <g stroke="#22304a" stroke-dasharray="3 4">
+          <line x1="160" y1="44" x2="160" y2="340"/>
+          <line x1="280" y1="44" x2="280" y2="340"/>
+          <line x1="400" y1="44" x2="400" y2="340"/>
+          <line x1="520" y1="44" x2="520" y2="340"/>
+          <line x1="640" y1="44" x2="640" y2="340"/>
+        </g>
+        <text x="185" y="58" fill="#6c7c95" font-size="10" text-anchor="middle">T1</text>
+        <text x="340" y="58" fill="#6c7c95" font-size="10" text-anchor="middle">T2</text>
+        <text x="460" y="58" fill="#6c7c95" font-size="10" text-anchor="middle">T3</text>
+        <text x="580" y="58" fill="#6c7c95" font-size="10" text-anchor="middle">T4</text>
+        <!-- PCLK -->
+        <text x="92" y="86" fill="#9fb0c7" font-size="13">PCLK</text>
+        <polyline fill="none" stroke="#ffce6b" stroke-width="2" points="160,94 160,74 220,74 220,94 280,94 280,74 340,74 340,94 400,94 400,74 460,74 460,94 520,94 520,74 580,74 580,94 640,94 640,74 700,74 700,94 760,94"/>
+        <!-- PSEL -->
+        <text x="92" y="126" fill="#9fb0c7" font-size="13">PSEL</text>
+        <polyline fill="none" stroke="#38e1c6" stroke-width="2" points="160,128 160,108 640,108 640,128 760,128"/>
+        <!-- PENABLE -->
+        <text x="80" y="166" fill="#9fb0c7" font-size="13">PENABLE</text>
+        <polyline fill="none" stroke="#b388ff" stroke-width="2" points="160,168 280,168 280,148 640,148 640,168 760,168"/>
+        <text x="400" y="143" fill="#b388ff" font-size="10" text-anchor="middle">ACCESS 내내 1 유지</text>
+        <!-- PADDR valid -->
+        <text x="80" y="206" fill="#9fb0c7" font-size="13">PADDR</text>
+        <polyline fill="none" stroke="#5b9cff" stroke-width="2" points="160,208 175,188 625,188 640,208 760,208"/>
+        <polyline fill="none" stroke="#5b9cff" stroke-width="2" points="160,188 175,208 625,208 640,188"/>
+        <text x="400" y="203" fill="#e8eef7" font-size="11" text-anchor="middle">addr 유효 (SETUP~완료)</text>
+        <!-- PWDATA / PRDATA -->
+        <text x="74" y="246" fill="#9fb0c7" font-size="13">P*DATA</text>
+        <polyline fill="none" stroke="#5b9cff" stroke-width="2" points="160,248 175,228 625,228 640,248 760,248"/>
+        <polyline fill="none" stroke="#5b9cff" stroke-width="2" points="160,228 175,248 625,248 640,228"/>
+        <text x="400" y="243" fill="#e8eef7" font-size="11" text-anchor="middle">data 유효</text>
+        <!-- PREADY -->
+        <text x="84" y="286" fill="#9fb0c7" font-size="13">PREADY</text>
+        <polyline fill="none" stroke="#5ee6a0" stroke-width="2" points="160,288 520,288 520,268 640,268 640,288 760,288"/>
+        <text x="400" y="308" fill="#ff7a85" font-size="11" text-anchor="middle">T2: PREADY=0 → wait state 1회</text>
+        <text x="585" y="262" fill="#5ee6a0" font-size="11" text-anchor="middle">T3: PREADY=1 → 전송 완료</text>
+        <!-- PSLVERR sample marker -->
+        <line x1="580" y1="64" x2="580" y2="330" stroke="#ff7ac0" stroke-width="1.5" stroke-dasharray="2 3"/>
+        <text x="700" y="330" fill="#ff7ac0" font-size="11" text-anchor="middle">↑ 여기서만 PSLVERR/PRDATA 샘플</text>
+      </svg>
+    </div>
+    <div class="spec mt"><p style="margin:6px 0">읽는 법: <strong>T1(SETUP)</strong> PENABLE=0으로 주소/데이터 세팅 → <strong>T2(ACCESS 시작)</strong> PENABLE=1, 그러나 PREADY=0이라 멈춤(wait) → <strong>T3</strong> PREADY=1로 전송 완료. <strong class="hl">읽기에서는 이 T3 클럭의 PRDATA만 유효</strong>하고, 쓰기/읽기 모두 PSLVERR도 T3에서만 의미가 있습니다.</p></div>
+  </section>
+
+  <!-- 6. PSLVERR + PSTRB + PPROT 인코딩 -->
+  <section class="slide">
+    <div class="kicker">에러·바이트·보호 신호 정밀</div>
+    <h2>PSLVERR · PSTRB · PPROT을 비트로</h2>
+    <div class="grid2">
+      <div>
+        <p><strong class="hl">PSLVERR (APB3~)</strong>: 에러 응답. <strong>샘플 유효 조건은 단 하나</strong> — <code>PSEL=1 && PENABLE=1 && PREADY=1</code>인 클럭(=전송이 실제로 완료되는 박자). 그 외 클럭의 PSLVERR 값은 의미 없음(don't-care). 1이면 그 트랜잭션 실패(잘못된 주소, 권한 위반, 읽기 전용에 쓰기 등). 에러여도 트랜잭션 자체는 그 클럭에 "완료"됩니다.</p>
+        <p><strong class="hl3">PPROT[2:0] (APB4~)</strong> 보호 속성:</p>
+        <table class="sig">
+          <tr><th>비트</th><th>0</th><th>1</th></tr>
+          <tr><td>PPROT[0]</td><td>Normal</td><td>Privileged</td></tr>
+          <tr><td>PPROT[1]</td><td>Secure</td><td>Non-secure</td></tr>
+          <tr><td>PPROT[2]</td><td>Data</td><td>Instruction</td></tr>
+        </table>
+      </div>
+      <div>
+        <p><strong class="hl3">PSTRB (APB4~)</strong>: 쓰기 바이트 strobe. 폭은 데이터 바이트 수 <code>n</code>. <code>PSTRB[k]=1</code>이면 <code>PWDATA[8k+7:8k]</code> 바이트를 기록, 0이면 그 바이트는 무시. 부분 쓰기(예: 32비트 워드 중 하위 1바이트만)에 사용합니다.</p>
+        <pre class="code sm"><code><span class="cmt">// 32-bit, n=4. 하위 2바이트만 기록</span>
+PWDATA  = <span class="str">32'hDEAD_BEEF</span>;
+PSTRB   = <span class="str">4'b0011</span>;  <span class="cmt">// [0],[1]=1</span>
+<span class="cmt">// 결과: mem[1:0] &lt;= BEEF, [3:2] 보존</span></code></pre>
+        <div class="spec"><p style="margin:6px 0"><strong>규칙</strong>: PSTRB는 <strong class="hl">쓰기에서만(PWRITE=1)</strong> 유효. 읽기(PWRITE=0)에서는 모든 PSTRB 비트를 <strong>0</strong>으로 두어야 합니다.</p></div>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0">함정: "PSLVERR=1이면 데이터가 안 들어온다"가 아니라 — <strong>전송은 완료되되 에러로 표시</strong>됩니다(읽기면 PRDATA는 보통 무의미). 또 "PPROT[1]=1이 Secure"는 오답: <strong class="hl">PPROT[1]=1은 Non-secure</strong>입니다(AXI의 AxPROT과 동일한 반전 규칙).</p></div>
+  </section>
+
+  <!-- 7. Slave FSM Verilog -->
+  <section class="slide">
+    <div class="kicker">합성 가능한 슬레이브 FSM</div>
+    <h2>APB Slave를 Verilog로 — 핵심만</h2>
+    <p>슬레이브 관점에서 본 최소 구현입니다. 포인트는 <strong class="hl">setup_phase / access_phase 판별</strong>과 <strong>PREADY로 wait state 만들기</strong>입니다.</p>
+    <pre class="code"><code><span class="kw">module</span> apb_slave <span class="cmt">// 32-bit data, APB4</span> (
+  <span class="kw">input</span>             PCLK, PRESETn,
+  <span class="kw">input</span>             PSEL, PENABLE, PWRITE,
+  <span class="kw">input</span>      [11:0] PADDR,
+  <span class="kw">input</span>      [31:0] PWDATA,
+  <span class="kw">input</span>      [ 3:0] PSTRB,
+  <span class="kw">output</span> <span class="kw">reg</span> [31:0] PRDATA,
+  <span class="kw">output</span>            PREADY,
+  <span class="kw">output</span>            PSLVERR
+);
+  <span class="cmt">// access 페이즈 = 선택됐고 PENABLE=1인 클럭</span>
+  <span class="kw">wire</span> access = PSEL &amp; PENABLE;
+  <span class="kw">wire</span> wr_en  = access &amp; PWRITE &amp; PREADY;
+  <span class="kw">wire</span> rd_en  = access &amp; ~PWRITE;
+
+  <span class="kw">reg</span> [31:0] regfile [0:15];
+
+  <span class="cmt">// 이 예: 항상 1클럭에 완료 → wait state 없음</span>
+  <span class="kw">assign</span> PREADY  = <span class="str">1'b1</span>;
+  <span class="cmt">// 주소가 범위를 벗어나면 에러 (전송 완료 클럭에만 평가됨)</span>
+  <span class="kw">assign</span> PSLVERR = access &amp; PREADY &amp; (PADDR[11:6] != <span class="str">6'd0</span>);
+
+  <span class="kw">integer</span> b;
+  <span class="kw">always</span> @(<span class="kw">posedge</span> PCLK) <span class="kw">if</span> (wr_en)
+    <span class="kw">for</span> (b=<span class="str">0</span>; b&lt;<span class="str">4</span>; b=b+<span class="str">1</span>)
+      <span class="kw">if</span> (PSTRB[b])                    <span class="cmt">// 바이트 strobe 반영</span>
+        regfile[PADDR[5:2]][8*b +: <span class="str">8</span>] &lt;= PWDATA[8*b +: <span class="str">8</span>];
+
+  <span class="kw">always</span> @(*) PRDATA = rd_en ? regfile[PADDR[5:2]] : <span class="str">32'h0</span>;
+<span class="kw">endmodule</span></code></pre>
+    <div class="codecap">// access = PSEL &amp; PENABLE 가 ACCESS 페이즈 판별식. wait state가 필요하면 PREADY를 카운터로 몇 클럭 0으로 유지하면 됩니다.</div>
+    <div class="pitfall"><p style="margin:6px 0">함정: 쓰기 인에이블을 <code>access &amp; PWRITE</code>로만 만들면 <strong class="hl">wait state 동안 같은 데이터를 여러 번 기록</strong>합니다. 반드시 <code>&amp; PREADY</code>를 곱해 "완료되는 클럭에 한 번만" 써야 합니다.</p></div>
+  </section>
+
+  <!-- 8. APB2/3/4 차이 -->
+  <section class="slide">
+    <div class="kicker">버전 경계 · 면접 단골</div>
+    <h2>APB2 → APB3 → APB4, 무엇이 추가됐나</h2>
+    <p>APB는 시간이 지나며 <strong>신호가 추가</strong>됐을 뿐, 기본 골격(2페이즈·비파이프라인·무버스트)은 그대로입니다. 무엇이 어느 버전에 들어왔는지 정확히 구분하세요.</p>
+    <table class="compare mt">
+      <tr><th>버전</th><th>대표 추가</th><th>의미</th></tr>
+      <tr><td>APB2</td><td>기본 신호 일체</td><td>PSEL/PENABLE/PADDR/PWRITE/PWDATA/PRDATA. <strong class="hl">고정 2클럭</strong> 전송(wait 불가).</td></tr>
+      <tr><td>APB3</td><td><strong class="hl2">PREADY · PSLVERR</strong></td><td>wait state(가변 길이 전송)와 에러 응답 도입. "느린 슬레이브"가 비로소 표현 가능.</td></tr>
+      <tr><td>APB4</td><td><strong class="hl3">PSTRB · PPROT</strong></td><td>바이트 단위 부분 쓰기와 보호 속성(권한/보안/명령) 도입.</td></tr>
+    </table>
+    <div class="deepnote mt"><p style="margin:6px 0">정리 한 줄: <strong class="hl">PREADY/PSLVERR이 보이면 최소 APB3, PSTRB/PPROT이 보이면 APB4</strong>. 반대로 어떤 IP가 "PREADY가 없다"면 APB2 슬레이브이며, 항상 정확히 2클럭에 끝납니다(브리지가 wait를 줄 수 없음).</p></div>
+    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: APB2는 <strong>타임아웃 없는 동기 호출</strong>(서버가 무조건 정해진 시간에 답한다고 가정), APB3의 PREADY는 <strong class="hl">서버가 "처리 중, 잠깐만요"라고 backpressure</strong>를 거는 것, PSLVERR은 <strong>HTTP 5xx 상태코드</strong>, PSTRB는 <strong>PATCH의 부분 필드 업데이트</strong>에 가깝습니다.</p></div>
+  </section>
+
+  <!-- 9. 비파이프라인 / 무버스트 + 브리지 -->
+  <section class="slide">
+    <div class="kicker">구조적 한계 · 브리지</div>
+    <h2>비파이프라인·무버스트, 그래서 브리지가 필요하다</h2>
+    <div class="grid2">
+      <div>
+        <p>APB는 한 트랜잭션이 <strong>완전히 끝나야</strong> 다음이 시작됩니다(겹침 없음). 버스트도 없어 <strong>한 번에 1워드</strong>만 옮깁니다. 그래서 고속 버스(AXI/AHB)의 요청을 <strong class="hl">브리지</strong>가 APB 2페이즈 핸드셰이크로 변환해 느린 주변장치에 전달합니다.</p>
+        <ul>
+          <li><strong>비파이프라인</strong>: outstanding 거래 항상 1개</li>
+          <li><strong>무버스트</strong>: AxLEN 같은 길이 개념 없음</li>
+          <li><strong>단일 채널</strong>: 주소·데이터 분리 채널 없음</li>
+        </ul>
+      </div>
+      <div class="diagram">
+        <div class="flow" style="flex-direction:column">
+          <div class="box on" style="border-color:var(--accent2)">AXI/AHB Master<br><span class="dim" style="font-size:12px">고속·파이프라인·버스트</span></div>
+          <span class="arrow" style="transform:rotate(90deg)">→</span>
+          <div class="box on" style="border-color:var(--accent)">APB Bridge<br><span class="hl" style="font-size:12px">SETUP/ACCESS 생성<br>버스트→단일 워드 분해</span></div>
+          <span class="arrow" style="transform:rotate(90deg)">→</span>
+          <div class="box">APB Slaves<br><span class="dim" style="font-size:12px">UART · 타이머 · GPIO</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="spec mt"><p style="margin:6px 0">브리지 역할: ① 상위 버스의 버스트를 <strong>여러 개의 단일 APB 전송으로 분해</strong>, ② 매 전송마다 SETUP(1클럭)+ACCESS(PREADY 대기) 시퀀스 구동, ③ APB의 <strong class="hl">PSLVERR을 상위 버스의 응답코드(예: AXI RRESP/BRESP의 SLVERR)로 변환</strong>.</p></div>
+  </section>
+
+  <!-- 10. 검증 엔지니어의 시선 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>이 프로토콜, 어떻게 검증하나</h2>
+    <p>APB는 단순해서 <strong>프로토콜 체크 = 어서션, 정확성 = 스코어보드, 빈틈 = 커버리지</strong>로 깔끔히 나뉩니다. UVM APB VIP(agent: driver/monitor/sequencer)가 표준 접근입니다.</p>
+    <div class="grid2">
+      <div>
+        <pre class="code sm"><code><span class="cmt">// SVA: SETUP 다음 클럭은 반드시 ACCESS</span>
+property p_setup_to_access;
+  @(<span class="kw">posedge</span> PCLK) <span class="kw">disable iff</span>(!PRESETn)
+  (PSEL &amp;&amp; !PENABLE)
+     |=&gt; (PSEL &amp;&amp; PENABLE);
+<span class="kw">endproperty</span>
+<span class="fn">a_s2a</span>: <span class="kw">assert property</span>(p_setup_to_access);
+
+<span class="cmt">// PADDR은 ACCESS 동안 안정(변하면 안 됨)</span>
+<span class="fn">a_addr_stable</span>: <span class="kw">assert property</span>(@(<span class="kw">posedge</span> PCLK)
+  (PSEL &amp;&amp; PENABLE &amp;&amp; !PREADY)
+     |=&gt; <span class="fn">$stable</span>(PADDR));</code></pre>
+      </div>
+      <div>
+        <ul>
+          <li><strong class="hl">어서션</strong>: SETUP→ACCESS 전이, ACCESS 중 PADDR/PWDATA/PWRITE <code>$stable</code>, PENABLE은 SETUP에서 0.</li>
+          <li><strong class="hl">스코어보드</strong>: 쓰기 후 같은 주소 읽기 = mirror 비교(PSTRB 반영).</li>
+          <li><strong class="hl">커버리지 코너</strong>: PREADY=0 wait 0/1/N클럭, PSLVERR=1, 읽기와 쓰기, PSTRB 전 패턴(0000~1111), back-to-back 전송.</li>
+          <li><strong>리셋 중</strong> PSEL/PENABLE=0 확인.</li>
+        </ul>
+        <div class="deepnote"><p style="margin:6px 0">VIP 모니터는 <strong>PREADY=1 클럭에만 PRDATA/PSLVERR을 캡처</strong>해야 합니다 — 그 외 클럭 값은 don't-care이므로 비교하면 거짓 실패가 납니다.</p></div>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0">검증 함정: wait state 커버리지를 빼먹으면 <strong class="hl">PREADY=0 경로가 한 번도 안 돌아</strong> 슬레이브의 멈춤 로직 버그를 놓칩니다. 또 어서션을 <code>disable iff(!PRESETn)</code>로 감싸지 않으면 리셋 직후 거짓 위반이 쏟아집니다.</p></div>
+  </section>
+
+  <!-- 11. 면접 심화 Q&A -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 실무자로 보인다</h2>
+    <div class="qa">
+      <div class="q">SETUP과 ACCESS에서 PSEL·PENABLE 값을 정확히 말해보세요.</div>
+      <div class="a"><strong>SETUP</strong>: <code>PSEL=1, PENABLE=0</code> — 항상 정확히 1클럭이며 이때 PADDR/PWRITE/PWDATA(APB4면 PSTRB/PPROT)를 구동합니다. <strong>ACCESS</strong>: <code>PSEL=1, PENABLE=1</code> — PREADY=1로 샘플될 때까지 PENABLE을 1로 유지합니다. IDLE은 <code>PSEL=0, PENABLE=0</code>. PENABLE은 SETUP→ACCESS에서 0→1로 한 번만 토글합니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">PREADY로 wait state는 어떻게 만들고, 몇 클럭까지 가능합니까?</div>
+      <div class="a">ACCESS 페이즈에서 슬레이브가 <code>PREADY=0</code>으로 두면 마스터가 그 클럭에 전송을 끝내지 못하고 <strong class="hl">PENABLE=1을 유지한 채 대기</strong>합니다(wait state). 슬레이브가 준비되면 <code>PREADY=1</code>을 띄우고 그 클럭에 전송 완료. 클럭 수 상한은 프로토콜상 정해져 있지 않으며 슬레이브가 임의로 늘릴 수 있습니다(실무에선 watchdog/timeout으로 보호). PREADY는 <strong>APB3부터</strong> 존재하고, APB2는 항상 고정 2클럭이라 wait가 불가능합니다.</div>
+    </div>
+    <div class="qa">
+      <div class="q">PSLVERR은 언제 유효하고, PSTRB와 함께 APB 버전 차이를 설명하면?</div>
+      <div class="a"><code>PSLVERR</code>은 <strong class="hl">PSEL=1·PENABLE=1·PREADY=1이 모두 성립하는 전송 완료 클럭에만 유효</strong>하며, 그 외 클럭 값은 don't-care입니다. 1이면 해당 트랜잭션 실패(잘못된 주소·권한 위반 등). PSLVERR과 PREADY는 <strong>APB3</strong>에서 도입됐고, <strong>PSTRB</strong>(쓰기 바이트 strobe, PSTRB[k]→PWDATA의 k번째 바이트)와 <strong>PPROT</strong>(보호 속성)는 <strong>APB4</strong>에서 추가됐습니다. PSTRB는 PWRITE=1에서만 유효하고 읽기 땐 0으로 둡니다.</div>
+    </div>
+  </section>
+
+  <!-- 12. 요약 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>이 심화 챕터, 숫자로 한 손에</h2>
+    <div class="grid2">
+      <div>
+        <ul>
+          <li><strong>IDLE</strong> PSEL=0/PEN=0 · <strong class="hl">SETUP</strong> PSEL=1/PEN=<strong>0</strong>(1클럭) · <strong class="hl">ACCESS</strong> PSEL=1/PEN=1(PREADY까지)</li>
+          <li><strong>wait state</strong> = ACCESS 중 PREADY=0 유지, 길이 무제한</li>
+          <li><strong>PSLVERR</strong>은 PSEL·PENABLE·PREADY=1인 <strong class="hl">단 한 클럭</strong>만 유효</li>
+          <li>버전: <strong class="hl2">PREADY/PSLVERR=APB3</strong>, <strong class="hl3">PSTRB/PPROT=APB4</strong></li>
+          <li><strong>PPROT[1]=1=Non-secure</strong>(반전 주의), PSTRB는 쓰기 전용</li>
+          <li>비파이프라인·무버스트 → AXI/AHB→APB <strong>브리지</strong>로 연결</li>
+        </ul>
+      </div>
+      <div class="takeaway">
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"APB는 SETUP(PEN=0)·ACCESS(PEN=1) 2페이즈 동기 버스로, <strong class="hl">PREADY로 wait state</strong>를, <strong class="hl">전송 완료 클럭의 PSLVERR</strong>로 에러를 표현합니다. PREADY/PSLVERR은 APB3, PSTRB/PPROT은 APB4 추가."</p>
+        <p class="dim" style="margin-bottom:6px">— 숫자·버전 경계까지 말하면 실무자 신호.</p>
+      </div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>심화 3-2 AXI 신호 레벨</strong>: AxLEN/AxSIZE 버스트 인코딩, VALID/READY 핸드셰이크의 데드락 규칙, outstanding/out-of-order(ID), 5채널의 정확한 동작. APB의 정반대, 동시성의 세계로.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

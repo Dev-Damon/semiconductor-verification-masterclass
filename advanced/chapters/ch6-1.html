@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>심화 6-1 · TAP·1149.1·1687·DAP 정밀</title>
+<link rel="stylesheet" href="../../assets/style.css">
+<link rel="stylesheet" href="../../assets/advanced.css">
+</head>
+<body data-title="심화 · Part 6 · 6-1 JTAG/iJTAG 정밀">
+<div class="track-switch"><a href="../../chapters/ch6-1.html">↩ 개념판으로</a></div>
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="deep-badge">🔬 Deep Dive · 실무 디테일</div>
+    <h1 style="margin-top:18px">JTAG, 16-상태 TAP에서 DAP까지</h1>
+    <p class="hook">개념판에서 "디버그 포트"를 잡았다면, 이제 면접관이 파고드는 곳 — <strong class="hl">TAP 16-상태 FSM, TMS로 한 비트씩 이동, BYPASS/IDCODE/EXTEST 인코딩, 1687 SIB 재구성, JTAG2APB·CoreSight DAP 트랜잭션</strong>까지 정확히 내려갑니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> · 우상단에서 개념판과 비교 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">이 챕터의 목표</div>
+    <h2>"4핀 디버그 포트"에서 "신호·인코딩·트랜잭션"으로</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">✅</span> 개념판에서 한 것</h3>
+        <ul><li>JTAG = 칩 안을 들여다보는 직렬 디버그 인터페이스</li><li>4개 핀(TCK/TMS/TDI/TDO)으로 스캔체인 접근</li><li>BYPASS/IDCODE 같은 명령이 있다는 큰 그림</li><li>boundary scan으로 핀을 외부에서 흔든다</li></ul></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🎯</span> 심화판에서 더할 것</h3>
+        <ul><li><strong>TAP 16-상태 FSM</strong> 정확한 전이(TMS 0/1로 이동)</li><li>명령 인코딩: <code>BYPASS=전부 1</code>, IDCODE, SAMPLE/PRELOAD, <code>EXTEST</code>, INTEST</li><li><strong>IR/DR</strong> 길이·boundary cell 동작</li><li>iJTAG <strong>1687</strong>: SIB·ICL/PDL·instrument 네트워크 재구성</li><li><strong>JTAG2APB / CoreSight DAP</strong>: DPACC·APACC, SWD 대안</li></ul></div>
+    </div>
+    <div class="deepnote mt"><p style="margin:6px 0">기준 스펙: <strong>IEEE 1149.1</strong>(boundary scan / TAP) · <strong>IEEE 1687-2014</strong>(iJTAG, embedded instrument 접근) · <strong>Arm CoreSight DAP</strong>(ADIv5/ADIv6, DP/AP). 면접에서 "JTAG 안다"와 "다뤄봤다"를 가르는 건 <strong class="hl">TAP 상태 시퀀스를 손으로 그릴 수 있는가</strong>입니다.</p></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">물리 신호</div>
+    <h2>TCK · TMS · TDI · TDO (+ TRST) — 4(+1)핀</h2>
+    <table class="sig">
+      <tr><th>신호</th><th>방향</th><th>역할</th></tr>
+      <tr><td>TCK</td><td>입력</td><td>Test Clock — 모든 동작의 기준 클럭. TMS/TDI는 <strong>상승엣지</strong>에 샘플, TDO는 <strong>하강엣지</strong>에 출력(스큐 회피)</td></tr>
+      <tr><td>TMS</td><td>입력</td><td>Test Mode Select — <strong class="hl">TAP FSM을 움직이는 단 하나의 제어선</strong>. 매 TCK마다 0/1로 상태 전이</td></tr>
+      <tr><td>TDI</td><td>입력</td><td>Test Data In — 선택된 레지스터(IR 또는 DR)로 직렬 입력</td></tr>
+      <tr><td>TDO</td><td>출력</td><td>Test Data Out — 레지스터에서 직렬 출력. Shift 상태에서만 구동(그 외 Hi-Z)</td></tr>
+      <tr><td>TRST</td><td>입력(옵션)</td><td>Test Reset — 비동기 active-low 리셋. <strong>옵션 핀</strong>(없어도 됨)</td></tr>
+    </table>
+    <div class="spec mt"><p style="margin:6px 0">TRST가 없어도 리셋 가능: <strong class="hl2">TMS=1을 5 TCK 연속</strong> 인가하면 어떤 상태에서든 <code>Test-Logic-Reset</code>로 들어갑니다(FSM 구조가 이를 보장). 그래서 TRST는 1149.1에서 <strong>선택 핀</strong>입니다.</p></div>
+    <div class="pitfall"><p style="margin:6px 0"><strong>흔한 오답:</strong> "TDO도 매 클럭 데이터를 낸다" ❌ → TDO는 <code>Shift-IR/Shift-DR</code> 상태에서만 active, 나머지 상태에선 <strong>Hi-Z(고임피던스)</strong>라 여러 TAP를 체인으로 묶을 수 있습니다.</p></div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">★ 면접 핵심 ★</div>
+    <h2>TAP 상태머신 — 정확히 16 상태</h2>
+    <p>좌측 <strong>리셋/유휴</strong> 2칸 + <strong>DR 열</strong> 7칸 + <strong>IR 열</strong> 7칸 = <strong class="hl">16 상태</strong>. 두 열은 <strong>구조가 똑같고</strong>, 분기점이 <code>Select-DR</code>/<code>Select-IR</code>입니다.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 760 320" font-family="var(--mono)" font-size="10.5">
+        <!-- helper styles via attributes -->
+        <!-- TLR & RTI -->
+        <rect x="20" y="18" width="150" height="30" rx="7" fill="#172236" stroke="#ff7ac0" stroke-width="1.6"/>
+        <text x="95" y="37" fill="#ff7ac0" text-anchor="middle">Test-Logic-Reset</text>
+        <rect x="20" y="150" width="150" height="30" rx="7" fill="#172236" stroke="#ffce6b" stroke-width="1.4"/>
+        <text x="95" y="169" fill="#ffce6b" text-anchor="middle">Run-Test/Idle</text>
+        <!-- TLR self loop TMS=1 -->
+        <path d="M150 22 q40 -16 20 12" fill="none" stroke="#22304a" stroke-width="1.4"/>
+        <text x="182" y="14" fill="#9fb0c7">1</text>
+        <!-- TLR -> RTI (TMS=0) -->
+        <line x1="95" y1="48" x2="95" y2="150" stroke="#5b9cff" stroke-width="1.6"/>
+        <text x="101" y="100" fill="#5b9cff">0</text>
+        <!-- RTI self loop TMS=0 -->
+        <path d="M20 165 q-16 -10 0 -20" fill="none" stroke="#22304a" stroke-width="1.4"/>
+        <text x="2" y="142" fill="#9fb0c7">0</text>
+
+        <!-- DR column -->
+        <g>
+          <rect x="300" y="18" width="120" height="26" rx="6" fill="#172236" stroke="#38e1c6" stroke-width="1.4"/>
+          <text x="360" y="35" fill="#38e1c6" text-anchor="middle">Select-DR</text>
+          <rect x="300" y="62" width="120" height="26" rx="6" fill="#172236" stroke="#22304a"/>
+          <text x="360" y="79" fill="#e8eef7" text-anchor="middle">Capture-DR</text>
+          <rect x="300" y="106" width="120" height="26" rx="6" fill="#172236" stroke="#22304a"/>
+          <text x="360" y="123" fill="#e8eef7" text-anchor="middle">Shift-DR</text>
+          <rect x="300" y="150" width="120" height="26" rx="6" fill="#172236" stroke="#22304a"/>
+          <text x="360" y="167" fill="#e8eef7" text-anchor="middle">Exit1-DR</text>
+          <rect x="300" y="194" width="120" height="26" rx="6" fill="#172236" stroke="#22304a"/>
+          <text x="360" y="211" fill="#e8eef7" text-anchor="middle">Pause-DR</text>
+          <rect x="300" y="238" width="120" height="26" rx="6" fill="#172236" stroke="#22304a"/>
+          <text x="360" y="255" fill="#e8eef7" text-anchor="middle">Exit2-DR</text>
+          <rect x="300" y="282" width="120" height="26" rx="6" fill="#172236" stroke="#ffce6b" stroke-width="1.4"/>
+          <text x="360" y="299" fill="#ffce6b" text-anchor="middle">Update-DR</text>
+        </g>
+        <!-- IR column -->
+        <g>
+          <rect x="610" y="18" width="120" height="26" rx="6" fill="#172236" stroke="#b388ff" stroke-width="1.4"/>
+          <text x="670" y="35" fill="#b388ff" text-anchor="middle">Select-IR</text>
+          <rect x="610" y="62" width="120" height="26" rx="6" fill="#172236" stroke="#22304a"/>
+          <text x="670" y="79" fill="#e8eef7" text-anchor="middle">Capture-IR</text>
+          <rect x="610" y="106" width="120" height="26" rx="6" fill="#172236" stroke="#22304a"/>
+          <text x="670" y="123" fill="#e8eef7" text-anchor="middle">Shift-IR</text>
+          <rect x="610" y="150" width="120" height="26" rx="6" fill="#172236" stroke="#22304a"/>
+          <text x="670" y="167" fill="#e8eef7" text-anchor="middle">Exit1-IR</text>
+          <rect x="610" y="194" width="120" height="26" rx="6" fill="#172236" stroke="#22304a"/>
+          <text x="670" y="211" fill="#e8eef7" text-anchor="middle">Pause-IR</text>
+          <rect x="610" y="238" width="120" height="26" rx="6" fill="#172236" stroke="#22304a"/>
+          <text x="670" y="255" fill="#e8eef7" text-anchor="middle">Exit2-IR</text>
+          <rect x="610" y="282" width="120" height="26" rx="6" fill="#172236" stroke="#38e1c6" stroke-width="1.4"/>
+          <text x="670" y="299" fill="#38e1c6" text-anchor="middle">Update-IR</text>
+        </g>
+        <!-- RTI -> Select-DR (TMS=1) -->
+        <path d="M170 158 H260 V31 H300" fill="none" stroke="#5b9cff" stroke-width="1.5"/>
+        <text x="262" y="95" fill="#5b9cff">1</text>
+        <!-- Select-DR -> Select-IR (TMS=1) -->
+        <line x1="420" y1="31" x2="610" y2="31" stroke="#22304a" stroke-width="1.5"/>
+        <text x="510" y="24" fill="#9fb0c7">1</text>
+        <!-- Select-IR -> TLR (TMS=1) -->
+        <path d="M730 22 V8 H95 V18" fill="none" stroke="#22304a" stroke-width="1.4"/>
+        <text x="500" y="6" fill="#9fb0c7">1</text>
+        <!-- DR column vertical TMS=0 -->
+        <line x1="360" y1="44" x2="360" y2="62" stroke="#38e1c6" stroke-width="1.4"/>
+        <line x1="360" y1="88" x2="360" y2="106" stroke="#38e1c6" stroke-width="1.4"/>
+        <text x="368" y="100" fill="#38e1c6">0</text>
+        <!-- shift self loop -->
+        <path d="M300 119 q-18 -8 0 -16" fill="none" stroke="#22304a" stroke-width="1.3"/>
+        <text x="280" y="100" fill="#9fb0c7">0</text>
+        <line x1="360" y1="132" x2="360" y2="150" stroke="#22304a" stroke-width="1.3"/>
+        <text x="368" y="146" fill="#9fb0c7">1</text>
+        <line x1="360" y1="176" x2="360" y2="194" stroke="#22304a" stroke-width="1.3"/>
+        <line x1="360" y1="220" x2="360" y2="238" stroke="#22304a" stroke-width="1.3"/>
+        <line x1="360" y1="264" x2="360" y2="282" stroke="#22304a" stroke-width="1.3"/>
+        <text x="368" y="276" fill="#9fb0c7">1</text>
+        <!-- legend -->
+        <text x="455" y="200" fill="#5b9cff" text-anchor="start">— 파란선 = TMS=1 (열 진입)</text>
+        <text x="455" y="216" fill="#38e1c6" text-anchor="start">— 청록선 = TMS=0 (Capture→Shift)</text>
+        <text x="455" y="232" fill="#9fb0c7" text-anchor="start">— 회색선 = 나머지 전이/루프</text>
+      </svg>
+    </div>
+    <div class="note mt">핵심 경로: <code>RTI →(1)→ Select-DR →(0)→ Capture-DR →(0)→ Shift-DR →(여기서 0을 N번 = N비트 시프트)→ Exit1-DR →(1)→ Update-DR</code>. IR 열도 완전히 동일한 형태입니다.</div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">상태를 표로 못박기</div>
+    <h2>Capture · Shift · Exit1 · Pause · Exit2 · Update</h2>
+    <table class="sig">
+      <tr><th>상태</th><th>TMS=0 다음</th><th>TMS=1 다음</th><th>그 상태가 하는 일</th></tr>
+      <tr><td>Capture-DR/IR</td><td>Shift</td><td>Exit1</td><td>레지스터에 <strong>병렬 로드</strong>(IR은 보통 …01 고정 패턴 캡처)</td></tr>
+      <tr><td>Shift-DR/IR</td><td>Shift(루프)</td><td>Exit1</td><td>TDI→레지스터→TDO로 <strong class="hl">1비트/클럭 직렬 시프트</strong></td></tr>
+      <tr><td>Exit1-DR/IR</td><td>Pause</td><td>Update</td><td>시프트 종료 분기점</td></tr>
+      <tr><td>Pause-DR/IR</td><td>Pause(루프)</td><td>Exit2</td><td>시프트 <strong>일시정지</strong>(버퍼 채울 시간 확보)</td></tr>
+      <tr><td>Exit2-DR/IR</td><td>Shift(재개)</td><td>Update</td><td>시프트 재개 or 종료</td></tr>
+      <tr><td>Update-DR/IR</td><td>Run-Test/Idle</td><td>Select-DR</td><td>섀도 래치를 <strong class="hl2">병렬 출력에 적용</strong>(IR Update = 새 명령 발효)</td></tr>
+    </table>
+    <div class="spec mt"><p style="margin:6px 0"><strong class="hl">Shift는 양끝 비트가 깎인다:</strong> Capture→Shift 진입 시 첫 비트가 이미 TDO쪽에 정렬되므로, N비트 레지스터를 완전히 갱신하려면 <code>Shift</code>에서 정확히 <strong>N번</strong> TCK를 인가합니다(마지막 비트 시프트와 동시에 TMS=1로 Exit1).</p></div>
+    <div class="pitfall"><p style="margin:6px 0"><strong>흔한 실수:</strong> "Update 안 거치고 Exit1→RTI로 빠지면 되겠지" ❌ → <code>Update</code>를 안 거치면 <strong>섀도 레지스터가 출력에 적용되지 않습니다</strong>. 명령/데이터를 시프트만 하고 Update를 빠뜨리면 아무 일도 안 일어납니다.</p></div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">★ 면접 핵심 ★</div>
+    <h2>명령(Instruction) — 인코딩을 정확히</h2>
+    <p>IR에 시프트하는 <strong>opcode</strong>가 어떤 DR을 TDI↔TDO에 연결할지 결정합니다. 1149.1 <strong>필수 명령</strong>과 인코딩 규칙:</p>
+    <table class="sig">
+      <tr><th>명령</th><th>선택 DR</th><th>인코딩</th><th>동작</th></tr>
+      <tr><td>BYPASS</td><td>Bypass(1-bit)</td><td><strong class="hl">전부 1 (all-ones)</strong> 필수</td><td>1비트 우회 레지스터만 체인에 — 해당 TAP 건너뛰기</td></tr>
+      <tr><td>IDCODE</td><td>IDCODE(32-bit)</td><td>구현 정의(리셋 후 기본)</td><td>32비트 칩 ID 읽기. LSB=1로 BYPASS와 구분</td></tr>
+      <tr><td>SAMPLE/<br>PRELOAD</td><td>Boundary Scan</td><td>구현 정의</td><td>핀 값 <strong>샘플</strong>(정상동작 방해 없이) + 출력셀 <strong>프리로드</strong></td></tr>
+      <tr><td>EXTEST</td><td>Boundary Scan</td><td>구현 정의(흔히 all-zeros)</td><td>boundary cell이 <strong class="hl2">실제 핀을 구동</strong> — 외부 배선/연결 테스트</td></tr>
+      <tr><td>INTEST</td><td>Boundary Scan</td><td>구현 정의</td><td>boundary cell로 <strong>내부 로직에 자극</strong> 인가(내부 테스트)</td></tr>
+    </table>
+    <div class="spec mt"><p style="margin:6px 0"><strong class="hl">왜 BYPASS=all-ones인가:</strong> 1149.1은 BYPASS를 <strong>"모든 1"로 강제</strong>합니다. 연결 끊김/플로팅(풀업)으로 IR이 전부 1이 되어도 안전하게 BYPASS로 떨어지도록 한 fail-safe입니다. 또 IR Capture의 LSB는 <strong>반드시 1</strong>로 규정돼 정렬 무결성을 검증합니다.</p></div>
+    <div class="pitfall"><p style="margin:6px 0"><strong>흔한 오답:</strong> "리셋하면 BYPASS가 걸린다" ❌ → <code>Test-Logic-Reset</code> 후 기본 명령은 <strong>IDCODE</strong>(IDCODE 미구현 시에만 BYPASS). 그래서 체인에 클럭만 줘도 ID가 먼저 나옵니다.</p></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">데이터 폭 계산</div>
+    <h2>BYPASS 길이 · 체인 정렬 — 비트를 센다</h2>
+    <p>여러 칩이 직렬로 묶인 체인에서 한 칩만 보려면, <strong class="hl">나머지를 BYPASS(각 1비트)</strong>로 두고 비트를 정확히 셉니다.</p>
+    <div class="grid2">
+      <div class="spec"><p style="margin:6px 0"><strong>예:</strong> 4-TAP 체인, 3번 칩의 32비트 IDCODE를 읽기. 3번만 IDCODE, 나머지 3개는 BYPASS. DR 체인 길이 = <code>1 + 1 + 32 + 1 = 35 bit</code>. TDI 쪽 BYPASS 비트들이 먼저 통과하므로 <strong>오프셋만큼 더 시프트</strong>해야 IDCODE가 TDO로 나옵니다.</p></div>
+      <div class="diagram" style="text-align:left">
+<pre class="code sm"><code><span class="cmt">// 체인 정렬: TDI → TAP0 → TAP1 → TAP2 → TAP3 → TDO</span>
+<span class="cmt">// 목표: TAP2(IDCODE), 나머지 BYPASS</span>
+IR 시프트: BYPASS|IDCODE|BYPASS|BYPASS  <span class="cmt">// 칩별 IR 폭만큼</span>
+DR 체인 = [byp][byp][ <span class="kw">IDCODE 32b</span> ][byp]
+        =   1  +  1  +    32     +  1   = 35 bit
+<span class="cmt">// TAP3가 TDO에 가장 가까움 → 마지막에 시프트되어 나옴</span></code></pre>
+        <div class="codecap">각 TAP의 IR 폭은 서로 다를 수 있어 BSDL 파일에서 INSTRUCTION_LENGTH를 확인</div>
+      </div>
+    </div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>현장 함정:</strong> BYPASS 레지스터는 <strong class="hl2">정확히 1비트</strong>지만, 캡처 시 <code>0</code>으로 로드됩니다. 비트 카운트를 한 칸이라도 틀리면 전체 체인이 어긋나(misalignment) IDCODE가 깨져 보입니다 — "ID가 0xFFFF…"면 보통 <strong>플로팅 TDI</strong>나 정렬 오류입니다.</p></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">boundary scan 셀</div>
+    <h2>BSR · BSC — EXTEST가 핀을 흔드는 원리</h2>
+    <p>모든 I/O 핀마다 <strong class="hl">boundary scan cell(BSC)</strong>이 끼워져 있고, 이들이 직렬로 이어진 게 <strong>Boundary Scan Register(BSR)</strong>입니다. 각 셀은 <strong>캡처 플롭 + Update 래치 + 모드 mux</strong> 구조.</p>
+    <div class="grid2">
+      <div class="diagram" style="text-align:left">
+<pre class="code sm"><code><span class="cmt">// boundary scan cell (BC_1 류) 개념 구조</span>
+<span class="kw">always_ff</span> @(<span class="kw">posedge</span> tck) <span class="kw">if</span>(shift) cap &lt;= scan_in;   <span class="cmt">// 직렬 시프트</span>
+                  <span class="kw">else if</span>(capture) cap &lt;= pin_or_core;     <span class="cmt">// 병렬 캡처</span>
+<span class="kw">always_ff</span> @(<span class="kw">posedge</span> tck) <span class="kw">if</span>(update) upd &lt;= cap;      <span class="cmt">// Update-DR에서 래치</span>
+<span class="kw">assign</span> data_out = mode ? upd : core_signal;   <span class="cmt">// EXTEST=mode1 → upd가 핀 구동</span>
+<span class="kw">assign</span> scan_out = cap;                          <span class="cmt">// 다음 셀로 직렬 전달</span></code></pre>
+        <div class="codecap">mode=1(EXTEST): 코어를 끊고 Update 값이 핀을 구동 / mode=0(정상): 코어 신호가 핀으로</div>
+      </div>
+      <div>
+        <div class="spec"><p style="margin:6px 0"><strong>SAMPLE</strong>: mode=0 유지하며 <strong>정상 동작 중</strong> 핀/코어 값을 캡처(스냅샷). <strong>EXTEST</strong>: mode=1로 바꿔 PRELOAD해둔 값으로 <strong class="hl2">실제 핀을 구동</strong>, 옆 칩의 입력 BSC가 그 값을 캡처 → 두 칩 사이 <strong>PCB 배선 단선/단락</strong>을 잡는다.</p></div>
+        <div class="pitfall"><p style="margin:6px 0"><strong>왜 SAMPLE/PRELOAD가 짝인가:</strong> EXTEST로 들어가기 <strong>전에</strong> Update 래치를 안전한 값으로 채워두지 않으면, EXTEST 진입 순간 핀이 쓰레기 값을 구동합니다. PRELOAD가 그 "초기 안전값"을 먼저 적재합니다.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">파형으로 보기</div>
+    <h2>Shift-DR에서 1비트/클럭 — TDO는 하강엣지</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 720 230" font-family="var(--mono)">
+        <!-- TCK -->
+        <text x="6" y="40" fill="#9fb0c7" font-size="12">TCK</text>
+        <polyline fill="none" stroke="#5b9cff" stroke-width="1.8" points="80,52 80,24 130,24 130,52 180,52 180,24 230,24 230,52 280,52 280,24 330,24 330,52 380,52 380,24 430,24 430,52 480,52 480,24 530,24 530,52 580,52 580,24 630,24 630,52 680,52"/>
+        <!-- TMS -->
+        <text x="6" y="98" fill="#ffce6b" font-size="12">TMS</text>
+        <polyline fill="none" stroke="#ffce6b" stroke-width="2" points="80,110 580,110 580,86 680,86"/>
+        <text x="320" y="124" fill="#9fb0c7" font-size="9" text-anchor="middle">TMS=0 (Shift 유지)</text>
+        <text x="630" y="80" fill="#ffce6b" font-size="9" text-anchor="middle">1→Exit1</text>
+        <!-- TDI -->
+        <text x="6" y="152" fill="#38e1c6" font-size="12">TDI</text>
+        <polyline fill="none" stroke="#38e1c6" stroke-width="2" points="80,164 130,164 130,140 230,140 230,164 330,164 330,140 430,140 430,164 530,164 530,140 630,140 630,164 680,164"/>
+        <text x="155" y="178" fill="#9fb0c7" font-size="9">d0</text><text x="255" y="178" fill="#9fb0c7" font-size="9">d1</text>
+        <text x="355" y="178" fill="#9fb0c7" font-size="9">d2</text><text x="455" y="178" fill="#9fb0c7" font-size="9">d3</text>
+        <!-- sample arrows on rising edge -->
+        <line x1="130" y1="20" x2="130" y2="200" stroke="#22304a" stroke-dasharray="3 3"/>
+        <line x1="230" y1="20" x2="230" y2="200" stroke="#22304a" stroke-dasharray="3 3"/>
+        <text x="130" y="14" fill="#5b9cff" font-size="9" text-anchor="middle">↑샘플</text>
+        <!-- TDO -->
+        <text x="6" y="206" fill="#b388ff" font-size="12">TDO</text>
+        <polyline fill="none" stroke="#b388ff" stroke-width="2" points="80,218 105,218 105,194 205,194 205,218 305,218 305,194 405,194 405,218 505,218 505,194 605,194 605,218 680,218"/>
+        <text x="105" y="190" fill="#b388ff" font-size="9" text-anchor="middle">↓출력</text>
+        <text x="130" y="218" fill="#9fb0c7" font-size="9">q0</text>
+      </svg>
+    </div>
+    <div class="note mt"><strong>읽는 법:</strong> <code>Shift-DR</code> 동안 TMS=0을 유지하며 매 TCK <strong class="hl">상승엣지에 TDI를 샘플</strong>해 한 비트씩 밀어넣고, <strong class="hl2">하강엣지에 TDO로</strong> 반대편 비트를 내보냅니다(엣지 분리로 race 회피). 마지막 비트와 동시에 TMS=1을 주어 <code>Exit1-DR</code>로 나갑니다.</div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">iJTAG — IEEE 1687</div>
+    <h2>SIB — 네트워크를 재구성하는 비트</h2>
+    <p>칩 안 수백 개의 embedded instrument(BIST·온도센서·eFuse·트레이스)를 다 고정 길이 체인에 묶으면 너무 깁니다. 1687은 <strong class="hl">SIB(Segment Insertion Bit)</strong>로 필요한 세그먼트만 체인에 <strong>끼웠다 뺐다</strong> 합니다.</p>
+    <div class="grid2">
+      <div class="diagram" style="text-align:left">
+<pre class="code sm"><code><span class="cmt">// SIB = 1비트 게이트. 값에 따라 하위 세그먼트를 체인에 삽입</span>
+SIB=0 :  scan_in ─────────────► scan_out   <span class="cmt">// 닫힘: 1비트만(우회)</span>
+SIB=1 :  scan_in ─► [instrument seg] ─► scan_out  <span class="cmt">// 열림: 세그먼트 삽입</span>
+
+<span class="cmt">// 계층적: SIB 안에 또 SIB → 트리 형태로 동적 확장</span>
+Network = SIB_temp(0) · SIB_mbist(1 → [BIST_ctrl 8b]) · SIB_efuse(0)</code></pre>
+        <div class="codecap">SIB를 0/1로 시프트하면 다음 패스부터 체인 길이/구성이 바뀜 → "retargeting"</div>
+      </div>
+      <div>
+        <div class="spec"><p style="margin:6px 0"><strong class="hl2">retargeting</strong>: 상위 추상 명령("BIST 시작")을 <strong>현재 네트워크 구성</strong>에 맞는 실제 TDI/TDO 비트열로 자동 변환. SIB가 열렸는지에 따라 비트 위치가 달라지므로 툴이 매번 다시 계산합니다.</p></div>
+        <div class="deepnote"><p style="margin:6px 0"><strong>왜 1149.1 위에 얹나:</strong> 1687은 <strong>새 핀을 안 늘립니다</strong>. 기존 TAP의 사용자정의 명령(예 <code>GATEWAY</code>)으로 1687 네트워크에 진입한 뒤, 그 안에서 SIB로 동적 구성. 즉 <strong>물리 인터페이스는 그대로</strong>, 접근만 똑똑해진 것.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">iJTAG 기술 언어</div>
+    <h2>ICL · PDL — 무엇이 있고, 어떻게 접근하나</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🗺️</span> ICL (구조)</h3>
+        <p><strong>Instrument Connectivity Language.</strong> 네트워크의 <strong class="hl">정적 구조</strong>를 기술 — 어떤 SIB/ScanReg/instrument가 어떻게 연결됐는지. "지도(map)"에 해당.</p>
+        <ul><li>레지스터 폭, 계층, SIB 위치</li><li>retargeting 툴의 입력(네트워크 모델)</li></ul>
+      </div>
+      <div class="card"><h3><span class="ico">📜</span> PDL (절차)</h3>
+        <p><strong>Procedural Description Language.</strong> instrument를 <strong class="hl2">어떻게 동작시키는지</strong> 절차로 기술 — "이 레지스터에 값 쓰고, 클럭 N번, 결과 읽어라". "사용설명서"에 해당.</p>
+        <ul><li><code>iWrite</code>/<code>iRead</code>/<code>iApply</code>/<code>iRunLoop</code> 등</li><li>ICL 위에서 동작 → 물리 비트열로 retarget</li></ul>
+      </div>
+    </div>
+    <pre class="code sm mt"><code><span class="cmt"># PDL 예: MBIST instrument 기동 후 결과 확인 (개념 표현)</span>
+<span class="fn">iWrite</span>  mbist.MODE     0b01      <span class="cmt"># 모드 레지스터 설정</span>
+<span class="fn">iWrite</span>  mbist.START    1
+<span class="fn">iApply</span>                          <span class="cmt"># 여기서 ICL을 보고 실제 TDI 비트열로 retarget → TAP에 시프트</span>
+<span class="fn">iRunLoop</span> 2000 tck                <span class="cmt"># BIST 수행 동안 TCK 인가</span>
+<span class="fn">iRead</span>   mbist.DONE     1
+<span class="fn">iRead</span>   mbist.FAIL     0          <span class="cmt"># 기대값 비교(fail이면 mismatch)</span></code></pre>
+    <div class="spec"><p style="margin:6px 0"><strong>핵심:</strong> 엔지니어는 <code>mbist.START=1</code>처럼 <strong>이름</strong>으로 쓰고, 툴이 ICL을 참조해 <strong class="hl">현재 SIB 구성에 맞는 비트 위치</strong>로 변환합니다. 네트워크가 바뀌어도 PDL은 그대로 — 이게 1687의 이식성입니다.</p></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">★ 면접 핵심 ★ — CoreSight DAP</div>
+    <h2>JTAG2APB / DAP — DR이 버스 마스터가 된다</h2>
+    <p>디버거가 칩 <strong>메모리/레지스터를 읽고 쓰려면</strong> 직렬 스캔만으론 부족합니다. <strong class="hl">DAP(Debug Access Port)</strong>는 TAP의 DR 시프트를 <strong>온칩 APB(또는 AHB/AXI) 트랜잭션</strong>으로 변환하는 다리입니다.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 720 200" font-family="var(--mono)" font-size="11">
+        <!-- debugger -->
+        <rect x="10" y="70" width="110" height="50" rx="8" fill="#172236" stroke="#b388ff" stroke-width="1.6"/>
+        <text x="65" y="92" fill="#b388ff" text-anchor="middle">디버거</text>
+        <text x="65" y="108" fill="#9fb0c7" text-anchor="middle" font-size="9">(호스트)</text>
+        <!-- jtag/swd -->
+        <line x1="120" y1="95" x2="180" y2="95" stroke="#5b9cff" stroke-width="1.6"/>
+        <text x="150" y="88" fill="#5b9cff" text-anchor="middle" font-size="9">JTAG/SWD</text>
+        <!-- DP -->
+        <rect x="180" y="60" width="120" height="70" rx="8" fill="#172236" stroke="#38e1c6" stroke-width="1.6"/>
+        <text x="240" y="88" fill="#38e1c6" text-anchor="middle">DP</text>
+        <text x="240" y="104" fill="#9fb0c7" text-anchor="middle" font-size="9">Debug Port</text>
+        <text x="240" y="118" fill="#9fb0c7" text-anchor="middle" font-size="9">(JTAG-DP/SW-DP)</text>
+        <!-- DPACC/APACC -->
+        <line x1="300" y1="95" x2="360" y2="95" stroke="#ffce6b" stroke-width="1.6"/>
+        <text x="330" y="88" fill="#ffce6b" text-anchor="middle" font-size="9">DPACC/APACC</text>
+        <!-- AP -->
+        <rect x="360" y="60" width="120" height="70" rx="8" fill="#172236" stroke="#ffce6b" stroke-width="1.6"/>
+        <text x="420" y="88" fill="#ffce6b" text-anchor="middle">AP (MEM-AP)</text>
+        <text x="420" y="104" fill="#9fb0c7" text-anchor="middle" font-size="9">Access Port</text>
+        <text x="420" y="118" fill="#9fb0c7" text-anchor="middle" font-size="9">CSW/TAR/DRW</text>
+        <!-- APB -->
+        <line x1="480" y1="95" x2="540" y2="95" stroke="#5ee6a0" stroke-width="1.8"/>
+        <text x="510" y="88" fill="#5ee6a0" text-anchor="middle" font-size="9">APB/AHB</text>
+        <!-- system bus -->
+        <rect x="540" y="60" width="160" height="70" rx="8" fill="#172236" stroke="#ff7ac0" stroke-width="1.6"/>
+        <text x="620" y="88" fill="#ff7ac0" text-anchor="middle">시스템 버스</text>
+        <text x="620" y="106" fill="#9fb0c7" text-anchor="middle" font-size="9">메모리·CPU·주변장치</text>
+        <!-- master label -->
+        <text x="360" y="170" fill="#9fb0c7" text-anchor="middle" font-size="10">AP가 온칩 버스의 <tspan fill="#ff7ac0">마스터</tspan>로서 R/W 트랜잭션 발행 → CPU 없이도 메모리 접근</text>
+      </svg>
+    </div>
+    <div class="note mt">경로: <strong>디버거 → (JTAG/SWD) → DP → (DPACC/APACC 레지스터) → AP(MEM-AP) → APB/AHB → 시스템 버스</strong>. JTAG에선 TAP 명령으로 DPACC/APACC DR을 선택해 35비트(예) 패킷을 시프트하면, DP가 이를 디코드해 AP 레지스터에 R/W합니다.</div>
+  </section>
+
+  <!-- 13 -->
+  <section class="slide">
+    <div class="kicker">DAP 트랜잭션 디테일</div>
+    <h2>DPACC · APACC — 한 트랜잭션의 해부</h2>
+    <table class="sig">
+      <tr><th>레지스터</th><th>역할</th></tr>
+      <tr><td>DPACC</td><td><strong>DP 레지스터</strong> 접근(IR 명령). CTRL/STAT, SELECT(어느 AP·어느 뱅크) 등 설정</td></tr>
+      <tr><td>APACC</td><td><strong>AP 레지스터</strong> 접근(IR 명령). MEM-AP의 CSW/TAR/DRW를 R/W</td></tr>
+      <tr><td>CSW</td><td>Control/Status Word — 전송 크기(8/16/32b), 자동증가(addr inc) 설정</td></tr>
+      <tr><td>TAR</td><td>Transfer Address Register — 접근할 <strong class="hl">시스템 주소</strong></td></tr>
+      <tr><td>DRW</td><td>Data Read/Write — TAR 주소의 <strong class="hl2">데이터</strong>. 여기 쓰면 버스에 write, 읽으면 read</td></tr>
+    </table>
+    <pre class="code sm mt"><code><span class="cmt">// 0x2000_0000 번지에 32비트 write (개념 시퀀스)</span>
+IR=DPACC; DR← SELECT = {APSEL, APBANK}      <span class="cmt">// MEM-AP 선택</span>
+IR=APACC; DR← CSW    = SIZE_32 | ADDRINC     <span class="cmt">// 32비트, 자동증가</span>
+IR=APACC; DR← TAR    = 0x2000_0000           <span class="cmt">// 주소</span>
+IR=APACC; DR← DRW    = 0xDEAD_BEEF            <span class="cmt">// → 여기서 APB write 발생!</span>
+<span class="cmt">// 각 DR 시프트는 [RnW:1][A:2][DATA:32] 형태 (=35비트) + ACK 응답</span></code></pre>
+    <div class="spec"><p style="margin:6px 0"><strong>파이프라인:</strong> AP 읽기는 <strong class="hl">한 박자 늦게(posted)</strong> 나옵니다 — 이번 트랜잭션의 ACK/데이터는 <strong>직전</strong> 요청의 결과. 그래서 마지막 값을 얻으려면 RDBUFF(DP)를 한 번 더 읽습니다. ACK 필드의 <code>WAIT</code>는 재시도, <code>FAULT</code>는 에러 처리.</p></div>
+    <div class="pitfall"><p style="margin:6px 0"><strong>흔한 오답:</strong> "AP 읽으면 즉시 그 주소 데이터가 나온다" ❌ → posted read라 <strong>한 트랜잭션 지연</strong>이 있습니다. 이를 모르면 항상 한 칸씩 어긋난 값을 읽습니다.</p></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="slide">
+    <div class="kicker">SWD — JTAG 대안</div>
+    <h2>2핀 SWD vs 4핀 JTAG — 같은 DP, 다른 물리층</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🔌</span> JTAG (JTAG-DP)</h3>
+        <ul><li>4핀: <code>TCK/TMS/TDI/TDO</code>(+TRST)</li><li>TAP FSM 경유, 멀티드롭 <strong>데이지체인</strong> 가능</li><li>boundary scan(1149.1)과 공존</li></ul>
+      </div>
+      <div class="card"><h3><span class="ico">🪡</span> SWD (SW-DP)</h3>
+        <ul><li><strong class="hl">2핀</strong>: <code>SWCLK</code> + 양방향 <code>SWDIO</code></li><li>Arm 전용, 같은 <strong>DP/AP 모델</strong>을 그대로 사용</li><li>핀 절약(MCU에 유리), 패킷에 parity·ACK 내장</li></ul>
+      </div>
+    </div>
+    <div class="spec mt"><p style="margin:6px 0"><strong class="hl2">핵심:</strong> SWD는 <strong>물리 전송층만 교체</strong>한 것 — 위의 <code>DPACC/APACC/CSW/TAR/DRW</code> 추상은 동일합니다. SWJ-DP는 둘을 한 칩에 담아 <strong>특수 시퀀스로 JTAG↔SWD 전환</strong>합니다. 그래서 "SWD 배우면 DAP 모델은 그대로"입니다.</p></div>
+    <div class="pitfall"><p style="margin:6px 0"><strong>오해 주의:</strong> SWD가 "JTAG의 상위호환"은 아닙니다. SWD는 <strong>boundary scan을 못 합니다</strong>(1149.1 체인 접근 불가). 핀 토글 테스트가 필요하면 여전히 JTAG가 있어야 합니다.</p></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="slide">
+    <div class="kicker">검증 엔지니어의 시선</div>
+    <h2>TAP·DAP를 어떻게 검증하나</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🧩</span> 무엇으로</h3>
+        <ul>
+          <li><strong>JTAG VIP</strong>(또는 UVM agent)로 TMS 시퀀스 생성 → 16-상태 FSM 구동</li>
+          <li><strong>SVA</strong>로 FSM 합법성: <code>TMS=1×5 → TLR</code>, Update 없이는 적용 안 됨</li>
+          <li><strong>BSDL</strong> 파일 대조: IR 길이·IDCODE·셀 순서 자동 비교</li>
+          <li>DAP는 <strong>APB/AHB 버스 VIP</strong>로 발생 트랜잭션 체크</li>
+        </ul>
+      </div>
+      <div class="card"><h3><span class="ico">🎯</span> 무엇을(코너)</h3>
+        <ul>
+          <li><strong>IDCODE=리셋 기본</strong> · <strong>BYPASS=all-ones</strong> 단언</li>
+          <li>IR Capture LSB=1, 모든 명령 opcode 커버리지</li>
+          <li>멀티-TAP 체인 비트 정렬, BYPASS 길이=1</li>
+          <li>DPACC/APACC posted-read 1박자 지연, WAIT/FAULT ACK</li>
+          <li>1687: SIB 0/1 모든 조합, retargeting 비트열 일치</li>
+        </ul>
+      </div>
+    </div>
+    <pre class="code sm mt"><code><span class="cmt">// 어떤 상태에서든 TMS=1을 5번이면 Test-Logic-Reset 진입</span>
+ap_tlr: <span class="kw">assert property</span> (@(<span class="kw">posedge</span> tck)
+   (tms [*5]) |=> (tap_state == TEST_LOGIC_RESET) );
+<span class="cmt">// BYPASS 선택 시 DR 체인 기여 길이는 정확히 1비트여야 한다</span>
+ap_byp: <span class="kw">assert property</span> (@(<span class="kw">posedge</span> tck)
+   (ir == BYPASS) |-> (dr_len == 1) );</code></pre>
+    <div class="codecap">SVA로 1149.1 필수 규칙(리셋 보장·BYPASS 길이)을 직접 단언 — 면접에서 "어떻게 검증?"의 모범 답</div>
+  </section>
+
+  <!-- 16 -->
+  <section class="slide">
+    <div class="kicker">면접 심화 질문</div>
+    <h2>여기까지 답하면 "실무자"로 보인다</h2>
+    <div class="qa"><div class="q">TAP 상태머신은 몇 상태고, Test-Logic-Reset에 확실히 들어가려면?</div><div class="a">총 <strong>16 상태</strong>입니다 — Test-Logic-Reset, Run-Test/Idle과, 구조가 동일한 DR열·IR열 각각 7개(Select·Capture·Shift·Exit1·Pause·Exit2·Update). TRST 없이도 <strong>TMS=1을 5 TCK 연속</strong> 인가하면 어느 상태에서든 Test-Logic-Reset로 들어가도록 FSM이 설계돼 있어, TRST는 1149.1에서 옵션 핀입니다.</div></div>
+    <div class="qa"><div class="q">BYPASS와 IDCODE의 인코딩·리셋 후 기본은?</div><div class="a">BYPASS는 IR이 <strong>전부 1(all-ones)</strong>로 강제됩니다 — 연결 끊김으로 IR이 1이 돼도 안전하게 1비트 우회로 떨어지게 한 fail-safe입니다. IDCODE는 32비트 ID를 읽으며 LSB=1로 BYPASS와 구분됩니다. 리셋(Test-Logic-Reset) 후 <strong>기본 명령은 IDCODE</strong>(미구현 시에만 BYPASS)라, 체인에 클럭만 줘도 ID가 먼저 나옵니다.</div></div>
+    <div class="qa"><div class="q">1687 SIB가 무엇이고, JTAG2APB/DAP는 어떻게 동작하나요?</div><div class="a"><strong>SIB(Segment Insertion Bit)</strong>는 1비트 게이트로, 시프트한 값에 따라 하위 instrument 세그먼트를 스캔체인에 끼웠다 뺐다 해 네트워크를 동적 재구성합니다. PDL의 추상 명령을 ICL 모델로 retargeting해 실제 비트열로 변환하죠. <strong>DAP</strong>는 TAP의 DR 시프트를 온칩 버스 트랜잭션으로 바꿉니다 — DPACC로 DP를, APACC로 MEM-AP의 CSW/TAR/DRW를 설정하면 AP가 APB/AHB 마스터로서 메모리를 R/W합니다. AP 읽기는 posted라 한 박자 지연이 있습니다. SWD는 같은 DP/AP 모델을 2핀으로 쓰는 대안입니다.</div></div>
+  </section>
+
+  <!-- 17 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>JTAG/iJTAG 정밀 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li><strong>신호</strong>: TCK/TMS/TDI/TDO(+옵션 TRST). TDI 상승엣지 샘플, TDO 하강엣지 출력</li>
+        <li><strong>16-상태 TAP</strong>: TLR·RTI + DR/IR 7열(Select·Capture·Shift·Exit1·Pause·Exit2·Update). <code>TMS=1×5 → TLR</code></li>
+        <li><strong>명령</strong>: <code>BYPASS=all-ones</code>, IDCODE(리셋 기본), SAMPLE/PRELOAD, EXTEST(핀 구동), INTEST</li>
+        <li><strong>boundary scan</strong>: BSC(capture+update+mode) 직렬 = BSR, EXTEST로 PCB 배선 테스트</li>
+        <li><strong>1687</strong>: SIB로 동적 재구성, ICL(구조)/PDL(절차), retargeting</li>
+        <li><strong>DAP</strong>: DP→AP(MEM-AP), DPACC/APACC·CSW/TAR/DRW, posted read. SWD는 2핀 대안</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"JTAG은 <strong class="hl">TMS로 16-상태 TAP를 움직여</strong> IR로 명령을, DR로 데이터를 시프트합니다. BYPASS=all-ones·IDCODE 기본 같은 인코딩 규칙, 1687 SIB의 동적 네트워크, DAP의 DPACC/APACC 트랜잭션까지 답하면 '다뤄본 사람'입니다. 검증은 JTAG VIP+SVA로 FSM·체인·DAP 규칙을 단언합니다."</p></div>
+    </div>
+    <div class="note mt">다음 심화 → <strong>6-2 Scan·ATPG·MBIST 정밀</strong>: scan chain stitching, stuck-at/transition fault, ATPG 압축(EDT), MBIST March 알고리즘.</div>
+  </section>
+
+</div>
+<script src="../../assets/slides.js"></script>
+</body>
+</html>

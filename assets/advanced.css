@@ -1,0 +1,40 @@
+/* =========================================================
+   심화판(Deep Dive) 전용 스타일 — style.css 위에 덧입힘
+   개념판과 시각적으로 구분: 보라(violet) 프라이머리 + 마젠타 강조
+   ========================================================= */
+:root{
+  --accent:#b388ff;     /* deep track primary = violet */
+  --accent2:#5b9cff;
+  --accent3:#38e1c6;
+  --deep:#ff7ac0;       /* magenta 강조 */
+}
+
+/* 코드블럭을 심화판에선 더 크게/길게 */
+pre.code{font-size:14.5px;line-height:1.65;max-height:none}
+pre.code.sm{font-size:13px}
+.codecap{font-size:12.5px;color:var(--dim);margin:-8px 0 14px;font-family:var(--mono)}
+
+/* 스펙 참조 콜아웃 */
+.spec{border:1px solid rgba(91,156,255,.4);background:linear-gradient(180deg,rgba(91,156,255,.10),rgba(91,156,255,.03));border-radius:var(--radius);padding:18px 20px;position:relative}
+.spec::before{content:"📐 스펙 디테일";position:absolute;top:-12px;left:18px;background:var(--bg2);border:1px solid rgba(91,156,255,.4);color:var(--accent2);font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px}
+
+/* 흔한 실수 / 함정 */
+.pitfall{border:1px solid rgba(255,122,133,.45);background:linear-gradient(180deg,rgba(255,122,133,.10),rgba(255,122,133,.03));border-radius:var(--radius);padding:18px 20px;position:relative}
+.pitfall::before{content:"⚠️ 흔한 실수";position:absolute;top:-12px;left:18px;background:var(--bg2);border:1px solid rgba(255,122,133,.45);color:var(--danger);font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px}
+
+/* 심화 포인트(보라) */
+.deepnote{border:1px solid rgba(179,136,255,.4);background:linear-gradient(180deg,rgba(179,136,255,.10),rgba(179,136,255,.03));border-radius:var(--radius);padding:18px 20px;position:relative}
+.deepnote::before{content:"🔬 심화 포인트";position:absolute;top:-12px;left:18px;background:var(--bg2);border:1px solid rgba(179,136,255,.4);color:var(--accent);font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px}
+
+/* 신호/레지스터 표: 첫 칼럼 모노스페이스 */
+table.sig td:first-child,table.sig th:first-child{font-family:var(--mono)}
+table.sig td:first-child{color:var(--accent3);font-weight:600}
+
+/* 심화 배지 */
+.deep-badge{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--accent);background:rgba(179,136,255,.12);color:var(--accent);font-weight:800;letter-spacing:.12em;font-size:12px;padding:6px 13px;border-radius:30px;text-transform:uppercase}
+
+/* 트랙 전환 링크(코너) */
+.track-switch{position:fixed;top:14px;right:18px;z-index:41;display:flex;gap:8px}
+.track-switch a{color:var(--dim);text-decoration:none;font-size:12.5px;border:1px solid var(--line);background:var(--panel);padding:7px 12px;border-radius:10px;transition:.15s}
+.track-switch a:hover{color:var(--ink);border-color:var(--accent)}
+.track-switch a.on{color:var(--accent);border-color:var(--accent)}
