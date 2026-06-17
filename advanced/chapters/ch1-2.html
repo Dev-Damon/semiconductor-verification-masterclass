@@ -304,7 +304,7 @@ sem.<span class="fn">get</span>(<span class="str">1</span>); ... sem.<span class
   <span class="kw">input</span> <span class="kw">int</span> a, <span class="kw">input</span> <span class="kw">int</span> b);
 <span class="cmt">// SV에서 그냥 호출</span>
 exp = ref_model(x, y);</code></pre>
-        <div class="dev-bridge"><p style="margin:6px 0">mailbox = thread-safe queue, semaphore = counting lock, DPI = SV↔C FFI. 멀티스레드 서버 코드의 채널/뮤텍스/네이티브 바인딩과 1:1 대응.</p></div>
+        <div class="note">mailbox는 한쪽이 넣고 다른 쪽이 꺼내가는 안전한 전달 통로(여러 작업이 동시에 써도 데이터가 꼬이지 않음), semaphore는 동시에 쓸 수 있는 자원 개수를 세어 제한하는 빗장, DPI는 SystemVerilog에서 C로 짠 함수를 불러 쓰는 연결 통로입니다.</div>
       </div>
     </div>
   </section>

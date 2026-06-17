@@ -14,7 +14,7 @@
     <div class="part-badge">Part 4 · 검증 도구 체인</div>
     <h1>Simulator<br>HDL을 "돌려보는" 엔진</h1>
     <p class="hook">설계도(Verilog)를 실제 칩 없이 컴퓨터에서 실행하고, 그 결과를 파형으로 들여다보는 도구.
-      당신의 <code>gcc</code> + <code>gdb</code>가 하드웨어 세계로 넘어오면 어떤 모습인지 보여 드립니다.</p>
+      칩을 만들기 전에 "이 설계가 제대로 도는가"를 확인하는, 검증의 가장 기본 무기입니다.</p>
     <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
   </section>
 
@@ -35,21 +35,19 @@
     </div>
   </section>
 
-  <!-- 3. 개발자 비유 -->
+  <!-- 3. 도구의 역할 분담 -->
   <section class="slide">
-    <div class="kicker">개발자 직관으로 번역</div>
-    <h2>시뮬레이터 = 하드웨어용 <span class="hl2">툴체인 + IDE</span></h2>
-    <div class="dev-bridge">
-      <p style="margin:6px 0">소프트웨어를 만들 때 <code>gcc</code>로 컴파일하고 <code>gdb</code>로 디버깅하죠. 하드웨어 검증의 도구들도 정확히 그 역할을 나눠 가집니다.</p>
-    </div>
+    <div class="kicker">직관적으로 이해하기</div>
+    <h2>검증 도구는 <span class="hl2">역할이 나뉘어</span> 협업한다</h2>
+    <p>시뮬레이션 한 번을 돌리는 데는 여러 도구가 단계별로 손을 거듭니다. "설계를 실행 가능한 형태로 빌드 → 실제로 돌림 → 결과를 들여다봄 → 결과를 파일로 기록"의 4단계로 나뉩니다.</p>
     <table class="compare mt">
-      <tr><th>당신이 아는 것</th><th>하드웨어 검증</th><th>하는 일</th></tr>
-      <tr><td><code>gcc</code> (컴파일+링크)</td><td><strong class="hl">VCS / Xcelium</strong></td><td>HDL을 컴파일·연결(elaborate)해 실행 가능한 시뮬레이션 모델로</td></tr>
-      <tr><td><code>./a.out</code> (실행)</td><td><strong class="hl">simulation 실행</strong></td><td>테스트벤치로 자극을 넣고 시간 순서대로 동작</td></tr>
-      <tr><td><code>gdb</code> (디버거)</td><td><strong class="hl2">Verdi / SimVision</strong></td><td>멈추고, 들여다보고, 신호를 추적 — 단 <strong>파형</strong>으로</td></tr>
-      <tr><td>실행 트레이스 로그</td><td><strong class="hl3">FSDB / VCD</strong></td><td>"언제 어떤 신호가 변했나"를 기록한 파형 덤프 파일</td></tr>
+      <tr><th>단계</th><th>이 일을 하는 것</th><th>하는 일</th></tr>
+      <tr><td>① 빌드</td><td><strong class="hl">VCS / Xcelium</strong></td><td>HDL을 컴파일·연결(elaborate)해 실행 가능한 시뮬레이션 모델로 조립</td></tr>
+      <tr><td>② 실행</td><td><strong class="hl">simulation 실행</strong></td><td>테스트벤치로 자극을 넣고 시간 순서대로 회로를 동작시킴</td></tr>
+      <tr><td>③ 들여다보기</td><td><strong class="hl2">Verdi / SimVision</strong></td><td>멈추고, 신호를 추적하며 디버깅 — 단 <strong>파형</strong>으로</td></tr>
+      <tr><td>④ 기록</td><td><strong class="hl3">FSDB / VCD</strong></td><td>"언제 어떤 신호가 변했나"를 기록한 파형 덤프 파일</td></tr>
     </table>
-    <div class="note mt">핵심: 소프트웨어는 한 줄씩 순차 실행이라 "지금 몇 번째 줄"이 디버깅 단위지만, 하드웨어는 모든 회로가 동시에 도니까 디버깅 단위가 <strong>"시간(클럭)에 따른 신호 값"</strong> = 파형입니다.</div>
+    <div class="note mt">핵심: 하드웨어는 모든 회로가 동시에 돌기 때문에, "지금 몇 번째 줄을 실행 중"이라는 식으로는 디버깅할 수 없습니다. 그래서 디버깅의 단위가 <strong>"시간(클럭)에 따른 신호 값"</strong> = 파형이 됩니다.</div>
   </section>
 
   <!-- 4. 이벤트 기반 엔진이란 -->
@@ -68,7 +66,7 @@
         <div class="box">변화 없으면<br>다음 시각으로<br><span class="dim" style="font-size:12px">시간 점프</span></div>
       </div>
     </div>
-    <div class="analogy mt"><p style="margin:6px 0">엑셀 스프레드시트와 같습니다. 셀 하나를 고치면 <strong>그 셀을 참조하는 수식만</strong> 다시 계산되고, 무관한 셀은 건드리지 않죠. 시뮬레이터도 "바뀐 것 → 영향받는 것"만 연쇄적으로 갱신하는 <strong class="hl">이벤트 큐(event queue)</strong>를 돌립니다.</p></div>
+    <div class="analogy mt"><p style="margin:6px 0">엑셀 스프레드시트와 같습니다. 셀 하나를 고치면 <strong>그 셀을 참조하는 수식만</strong> 다시 계산되고, 무관한 셀은 건드리지 않죠. 시뮬레이터도 "처리해야 할 변화"를 차례로 늘어놓은 <strong class="hl">대기 목록(event queue)</strong>을 두고, "바뀐 것 → 영향받는 것"만 연쇄적으로 갱신해 나갑니다.</p></div>
     <div class="note mt">대안으로 <strong>cycle-based</strong> 시뮬레이션(매 클럭 전체 계산)도 있지만, 상용 검증 시뮬레이터는 정밀한 타이밍·딜레이를 다루기 위해 이벤트 기반이 표준입니다.</div>
   </section>
 
@@ -76,7 +74,7 @@
   <section class="slide">
     <div class="kicker">실행 흐름</div>
     <h2>compile → elaborate → simulate</h2>
-    <p>시뮬레이션은 보통 3단계입니다. 소프트웨어의 <code>compile → link → run</code>과 거의 1:1로 대응합니다.</p>
+    <p>시뮬레이션은 보통 3단계로 진행됩니다. 설계를 문법 검사하고(compile), 모듈을 실제로 조립한 뒤(elaborate), 시간을 진행시키며 돌립니다(simulate).</p>
     <div class="diagram mt" style="text-align:left">
       <div class="flow" style="justify-content:flex-start">
         <div class="box">① Compile<br><span class="dim" style="font-size:12px">문법 분석 (analyze)</span></div>
@@ -89,12 +87,12 @@
     <div class="grid2 mt">
       <div>
         <dl class="kv">
-          <dt>Compile</dt><dd>각 소스 파일의 문법을 검사. <code>gcc -c</code>에 해당.</dd>
-          <dt>Elaborate</dt><dd>모듈 계층을 펼쳐 실제 인스턴스로 "조립". 파라미터·연결을 확정. <strong>링크 단계</strong>에 해당.</dd>
-          <dt>Simulate</dt><dd>조립된 모델을 시간 0부터 굴림. <code>./a.out</code> 실행에 해당.</dd>
+          <dt>Compile</dt><dd>각 소스 파일의 문법을 검사해 내부 형태로 변환.</dd>
+          <dt>Elaborate</dt><dd>모듈 계층을 펼쳐 실제 인스턴스로 "조립". 파라미터·연결을 확정하는 단계.</dd>
+          <dt>Simulate</dt><dd>조립된 모델을 시간 0부터 굴리며 실제로 동작시킴.</dd>
         </dl>
       </div>
-      <div class="dev-bridge">
+      <div>
         <p style="margin:6px 0">요즘은 한 명령으로 세 단계를 묶는 <strong>single-command</strong> 흐름이 흔합니다.</p>
         <pre class="code"><code><span class="cmt"># Xcelium: 한 방에 컴파일+엘라보+실행</span>
 <span class="fn">xrun</span> tb_top.sv dut.v <span class="kw">+access+r</span>
@@ -157,9 +155,9 @@
     </table>
     <div class="grid2 mt">
       <div class="analogy">
-        <p style="margin:6px 0">VCD는 <strong>사람이 읽을 수 있는 텍스트 로그(JSON 같은)</strong>, FSDB는 <strong class="hl">압축된 바이너리 로그(protobuf 같은)</strong>라고 생각하면 정확합니다. 큰 데이터일수록 바이너리가 이깁니다.</p>
+        <p style="margin:6px 0">VCD는 <strong>사람이 그대로 읽을 수 있는 텍스트 기록부</strong>, FSDB는 <strong class="hl">자리를 아끼려고 꽉 눌러 담은 압축 기록부</strong>라고 생각하면 정확합니다. 종이로 치면 전자는 또박또박 풀어 쓴 장부, 후자는 속기로 압축한 장부 — 양이 많아질수록 압축한 쪽이 이깁니다.</p>
       </div>
-      <div class="dev-bridge">
+      <div>
         <pre class="code"><code><span class="cmt">// 테스트벤치에서 파형 덤프 켜기 (VCD)</span>
 <span class="kw">initial</span> <span class="kw">begin</span>
   <span class="fn">$dumpfile</span>(<span class="str">"wave.vcd"</span>);
@@ -203,7 +201,7 @@
         <text x="438" y="62" fill="#ffce6b" font-size="11">커서: 이 순간 값 확인</text>
       </svg>
     </div>
-    <div class="note mt">파형의 각 줄이 신호 하나, 가로축이 시간. <strong class="hl">버그란 결국 "어느 클럭에 어떤 신호가 기대와 다른 값"</strong>이고, Verdi는 그 다른 값을 만든 원인을 신호 → 신호 → 소스로 거슬러 올라가게 해줍니다(trace/backtrace).</div>
+    <div class="note mt">파형의 각 줄이 신호 하나, 가로축이 시간. <strong class="hl">버그란 결국 "어느 클럭에 어떤 신호가 기대와 다른 값"</strong>이고, Verdi는 그 다른 값을 만든 원인을 신호 → 신호 → 소스로 거슬러 올라가게 해줍니다(이를 "역추적"이라고 합니다).</div>
   </section>
 
   <!-- 10. 파형으로 디버깅하는 법 -->
@@ -221,9 +219,9 @@
         </ol>
       </div>
       <div class="card">
-        <h3><span class="ico">🧭</span> 개발자 비유</h3>
-        <p><code>gdb</code>에서 변수가 이상한 값일 때 <strong>그 변수에 watchpoint를 걸고 어디서 바뀌었는지 추적</strong>하죠. Verdi의 신호 역추적이 바로 그 watchpoint·backtrace의 하드웨어 버전입니다.</p>
-        <p class="dim" style="margin:6px 0">차이: 시간을 앞뒤로 자유롭게 오갈 수 있다는 것. 시뮬레이션은 이미 다 기록(FSDB)됐으니까요.</p>
+        <h3><span class="ico">🧭</span> 역추적이란</h3>
+        <p>어떤 신호가 기대와 다른 값일 때, <strong>그 값이 어느 신호 때문에 그렇게 됐는지</strong>를 한 단계씩 거슬러 올라가는 것입니다. "결과 신호 → 그 입력 신호 → 또 그 입력 신호 → … → 원인이 된 RTL 코드"로 추적합니다.</p>
+        <p class="dim" style="margin:6px 0">강점: 시간을 앞뒤로 자유롭게 오갈 수 있다는 것. 시뮬레이션 결과가 이미 다 기록(FSDB)돼 있으니까요.</p>
       </div>
     </div>
     <div class="takeaway mt"><p style="margin:6px 0;font-size:18px;color:var(--ink)">"실패 로그에서 시각을 찾고 → Verdi로 그 시각 파형을 열어 → 잘못된 신호를 원인 신호로 역추적해 RTL/TB 버그를 특정합니다."</p></div>
@@ -248,7 +246,7 @@
         <p>"어디까지 두드렸나"를 누적 기록. 여러 시뮬레이션 결과를 <strong>합쳐(merge)</strong> 커버리지 리포트를 만듦.</p>
       </div>
     </div>
-    <div class="analogy mt"><p style="margin:6px 0">소프트웨어로 치면 UVM은 <strong>JUnit/pytest 프레임워크</strong>, SVA는 코드 곳곳의 <strong class="hl"><code>assert()</code></strong>, Coverage DB는 <strong>코드 커버리지 리포트</strong>입니다. 시뮬레이터는 이 셋을 한 엔진 안에서 동시에 굴립니다.</p></div>
+    <div class="analogy mt"><p style="margin:6px 0">셋의 역할을 한 줄로 정리하면 — UVM은 시험 전체를 짜임새 있게 진행하는 <strong>시험 운영 체계</strong>, SVA는 검사 곳곳에 박아 둔 <strong class="hl">"이 조건은 반드시 지켜져야 한다"는 합격 기준</strong>, Coverage DB는 <strong>"어디까지 검사했는지" 점검 명세서</strong>입니다. 시뮬레이터는 이 셋을 한 엔진 안에서 동시에 굴립니다.</p></div>
   </section>
 
   <!-- 12. Q&A -->
@@ -277,7 +275,7 @@
       <div>
         <ul>
           <li>시뮬레이터 = HDL을 <strong>이벤트 기반</strong>으로 실행하는 엔진</li>
-          <li>흐름: <strong>compile → elaborate → simulate</strong> (gcc→link→run)</li>
+          <li>흐름: <strong>compile → elaborate → simulate</strong> (문법검사 → 조립 → 실행)</li>
           <li>양대 상용: <strong class="hl">VCS</strong>(Synopsys, <code>vcs</code>) · <strong class="hl2">Xcelium</strong>(Cadence, <code>xrun</code>) · 보너스 Questa(Siemens)</li>
           <li>파형 포맷: <strong>VCD</strong>(텍스트 표준) vs <strong>FSDB</strong>(빠른 바이너리)</li>
           <li>디버거: VCS↔<strong class="hl2">Verdi</strong>, Xcelium↔SimVision/Indago</li>
@@ -285,7 +283,7 @@
         </ul>
       </div>
       <div class="takeaway">
-        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"시뮬레이터는 HDL용 <strong class="hl">gcc+gdb</strong>입니다. VCS/Xcelium으로 설계를 실행하고, Verdi로 FSDB 파형을 열어 신호를 역추적하며 버그를 잡습니다."</p>
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"시뮬레이터는 <strong class="hl">HDL을 실행해 보는 엔진</strong>입니다. VCS/Xcelium으로 설계를 실행하고, Verdi로 FSDB 파형을 열어 신호를 역추적하며 버그를 잡습니다."</p>
         <p class="dim" style="margin-bottom:6px">— 이 한 문장이면 도구 질문은 막힘없이 통과합니다.</p>
       </div>
     </div>

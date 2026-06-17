@@ -36,24 +36,13 @@
     <div class="note mt">검증 관점에서 왜 중요한가 → 멀티코어 SoC에서 coherency는 <strong>가장 버그가 잘 숨는 영역</strong>입니다. 타이밍·순서에 따라 어쩌다 한 번 틀리는(corner case) 버그라, 검증 엔지니어가 집중 공략하는 단골 주제입니다.</div>
   </section>
 
-  <!-- 3. 핵심 비유 + 개발자 비유 -->
+  <!-- 3. 핵심 비유 -->
   <section class="slide">
     <div class="kicker">직관부터 잡기</div>
-    <h2>구글 독스 vs 각자 복사본</h2>
-    <div class="grid2">
-      <div class="analogy">
-        <p style="margin-top:6px"><strong>공유 구글 독스(coherent)</strong>: 누군가 한 글자 고치면 모두의 화면에 즉시 최신으로 반영됩니다. 모두가 항상 <strong class="hl">같은 한 진실</strong>을 봅니다.</p>
-        <p class="dim" style="margin-bottom:6px">↔ <strong>각자 파일을 다운로드해 따로 수정(incoherent)</strong>: 내 사본만 고쳤으니 옆 사람은 옛 버전을 봅니다. 합칠 때 충돌·불일치가 터집니다.</p>
-      </div>
-      <div class="dev-bridge">
-        <p style="margin:6px 0">개발자 세계에 이미 같은 문제가 있습니다:</p>
-        <ul>
-          <li><strong>멀티스레드 메모리 가시성</strong>: 한 스레드가 쓴 값을 다른 스레드가 못 보는 문제 → <code>volatile</code> / memory barrier로 강제 동기화</li>
-          <li><strong>분산 캐시 무효화</strong>: Redis에 캐시해둔 값, 원본이 바뀌면 <strong>invalidate</strong>(무효화) 메시지를 쏴서 옛 사본을 버리게 함</li>
-          <li><strong>DB 일관성</strong>: 여러 복제본이 같은 데이터를 보게 맞추는 일</li>
-        </ul>
-        <p class="dim" style="margin:6px 0">Cache coherency = 이걸 <strong>하드웨어가 자동으로</strong> 해주는 것.</p>
-      </div>
+    <h2>공유 칠판 vs 각자 노트</h2>
+    <div class="analogy">
+      <p style="margin-top:6px"><strong>모두가 함께 보는 공유 칠판(coherent)</strong>: 누군가 한 글자 고치면 그 자리에 있는 모두가 즉시 최신으로 봅니다. 모두가 항상 <strong class="hl">같은 한 진실</strong>을 봅니다.</p>
+      <p class="dim" style="margin-bottom:6px">↔ <strong>각자 자기 노트에 베껴 적고 따로 고침(incoherent)</strong>: 내 노트만 고쳤으니 옆 사람은 옛 내용을 봅니다. 나중에 맞춰볼 때 서로 값이 달라 충돌·불일치가 터집니다. Cache coherency는 이 어긋남을 <strong>하드웨어가 자동으로</strong> 정리해 주는 것입니다.</p>
     </div>
   </section>
 
@@ -88,7 +77,7 @@
         <text x="380" y="145" fill="#6c7c95" font-size="12" text-anchor="middle">→ coherency 프로토콜이 해결</text>
       </svg>
     </div>
-    <div class="warnbox mt"><p style="margin:6px 0">이게 그냥 "느려서"가 아니라 <strong>틀린 결과</strong>를 만든다는 게 핵심입니다. 락(lock) 변수, 큐 포인터 같은 공유 데이터가 stale이면 시스템이 통째로 오작동합니다.</p></div>
+    <div class="warnbox mt"><p style="margin:6px 0">이게 그냥 "느려서"가 아니라 <strong>틀린 결과</strong>를 만든다는 게 핵심입니다. 여러 코어가 함께 쓰는 공유 데이터(예: 자원을 누가 차지했는지 표시하는 깃발 값)가 옛값이면 시스템이 통째로 오작동합니다.</p></div>
   </section>
 
   <!-- 5. 해결 원칙 + write-back -->
@@ -110,7 +99,7 @@
         <p>내가 쓴 새 값을 다른 사본들에게 <strong>바로 갱신</strong>해 뿌림. 트래픽이 많아 잘 안 씀.</p>
       </div>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">Write-Invalidate = Redis 캐시 무효화와 똑같은 발상입니다. "값이 바뀌었으니 너희 사본은 <strong>버려라</strong>, 다음에 필요하면 새로 받아가라."</p></div>
+    <div class="note mt"><p style="margin:6px 0">Write-Invalidate의 발상은 한 문장입니다: "값이 바뀌었으니 너희가 들고 있는 사본은 <strong>버려라</strong>, 다음에 필요하면 새로 받아가라." 도서관에서 책 내용이 개정되면 옛 인쇄본을 폐기하고 새 판을 다시 빌려 보게 하는 것과 같습니다.</p></div>
   </section>
 
   <!-- 6. MESI 상태 다이어그램 (필수) -->
@@ -167,7 +156,7 @@
       <tr><td><strong>남이</strong> 그 주소를 씀</td><td>내 라인 → <span class="pill" style="background:rgba(108,124,149,.2);color:var(--muted)">I</span></td><td>내 사본은 이제 옛값, 버림</td></tr>
       <tr><td>남이 그 주소를 읽는데 내가 M이면</td><td>M → S (최신값을 남에게 공급 + 메모리에도 write-back)</td><td>남이 읽기 전 메모리에도 최신값을 다시 적어 둘 다 clean한 S가 됨. (dirty 채로 소유권을 넘기는 건 순수 MESI가 아니라 MOESI의 Owned 상태)</td></tr>
     </table>
-    <div class="dev-bridge mt"><p style="margin:6px 0">상태머신(state machine)으로 보면 친숙하죠? 각 캐시 라인이 작은 FSM이고, "내 코어의 read/write"와 "버스에서 들려온 남의 read/write"가 입력 이벤트입니다. 그 이벤트에 따라 M·E·S·I 사이를 전이합니다.</p></div>
+    <div class="note mt"><p style="margin:6px 0">각 캐시 라인은 <strong>상태도(상태 다이어그램)</strong>를 따라 움직이는 작은 부품이라고 보면 됩니다. "내 코어의 읽기/쓰기"와 "버스에서 들려온 다른 코어의 읽기/쓰기"가 입력 신호이고, 그 신호에 따라 M·E·S·I 네 상태 사이를 정해진 규칙대로 옮겨 다닙니다. 신호등이 정해진 순서로만 색을 바꾸는 것과 같은 구조입니다.</p></div>
   </section>
 
   <!-- 8. snooping vs directory -->
@@ -208,7 +197,7 @@
       <tr><td><span class="pill violet">CHI</span></td><td><strong>Coherent Hub Interface</strong></td><td>중앙 허브 기반, 다수 코어 확장에 유리한 차세대 coherent 인터커넥트</td></tr>
     </table>
     <div class="grid2 mt">
-      <div class="dev-bridge"><p style="margin:6px 0">"버스가 coherency를 지원한다"는 건, HTTP에 <strong>캐시 무효화 규약을 표준으로 박아넣은</strong> 셈입니다. 각 IP가 알아서 처리하는 대신, 프로토콜 레벨에서 snoop 요청·응답을 주고받습니다.</p></div>
+      <div class="note"><p style="margin:6px 0">"버스가 coherency를 지원한다"는 건, 사본을 정리하는 절차를 <strong>버스 규약(약속) 자체에 표준으로 못 박았다</strong>는 뜻입니다. 각 부품(IP)이 제각각 알아서 처리하는 대신, 프로토콜에 정해진 형식으로 "그 주소 가진 사람?" 하고 묻고 답하는 신호(snoop 요청·응답)를 주고받습니다.</p></div>
       <div class="takeaway"><p style="margin:6px 0">검증 관점: ACE/CHI 검증은 "온갖 코어가 동시에 같은 주소를 read/write할 때 MESI 상태가 규약대로 전이하는가"를 두드리는 일. <strong class="hl">corner case가 폭발</strong>하는 고난도 영역입니다.</p></div>
     </div>
   </section>
@@ -231,7 +220,7 @@
       </svg>
     </div>
     <p class="mt">두 코어가 각자 자기 변수만 바쁘게 고쳐도, 같은 라인이라 서로 끊임없이 무효화시켜 <strong class="hl">캐시 핑퐁(ping-pong)</strong>이 발생합니다. 논리적으로는 맞지만 성능이 급락합니다.</p>
-    <div class="dev-bridge"><p style="margin:6px 0">자바 동시성에서 핫한 카운터에 <code>@Contended</code>(패딩)를 붙이거나, 구조체에 패딩을 넣어 변수를 다른 라인으로 떨어뜨리는 기법이 바로 false sharing 회피입니다. 멀티스레드 성능 튜닝 해보셨다면 만난 적 있을 겁니다.</p></div>
+    <div class="note">false sharing을 피하는 방법은 의외로 직관적입니다. 두 코어가 자주 고치는 변수들 <strong>사이에 빈 공간(패딩)을 채워 넣어</strong>, 각 변수가 서로 다른 캐시 라인에 떨어지게 배치하면 됩니다. 한 책상에 둘이 붙어 앉아 팔이 부딪히던 것을, 책상을 따로 두어 해결하는 셈입니다.</div>
   </section>
 
   <!-- 11. Q&A -->
@@ -265,7 +254,7 @@
         <ul>
           <li>캐시 = 느린 메모리의 <strong>빠른 사본</strong> → 코어마다 사본이 따로면 <strong class="hl">stale 위험</strong></li>
           <li>coherency = 모든 코어가 같은 주소에 <strong>같은 최신값</strong>을 보게 보장 (write propagation + serialization)</li>
-          <li><strong>MESI</strong> = 라인 상태 4개: Modified·Exclusive·Shared·Invalid, 작은 FSM</li>
+          <li><strong>MESI</strong> = 라인 상태 4개: Modified·Exclusive·Shared·Invalid, 정해진 규칙대로 전이</li>
           <li>감시 방식: <strong>snooping</strong>(버스 엿듣기, 소수코어) vs <strong>directory</strong>(명부, 대규모 확장)</li>
           <li>AMBA의 coherent 확장 = <strong>ACE</strong>(AXI 확장) / <strong>CHI</strong>(허브 기반)</li>
           <li><strong>false sharing</strong> = 같은 라인에 낀 무관한 변수가 서로 무효화 → 성능 핑퐁</li>
@@ -273,7 +262,7 @@
       </div>
       <div class="takeaway">
         <p style="margin:6px 0;font-size:18px;color:var(--ink)">"멀티코어에서 각 코어의 캐시 사본이 어긋나지 않도록, <strong class="hl">MESI 상태와 snoop/directory</strong>로 일관성을 보장하는 게 cache coherency이고, SoC에선 <strong class="hl">ACE/CHI</strong> 같은 coherent 버스가 이를 책임집니다."</p>
-        <p class="dim" style="margin-bottom:6px">— 가시성·무효화·상태머신, 개발자가 이미 아는 세 개념의 하드웨어판.</p>
+        <p class="dim" style="margin-bottom:6px">— 최신값 공유·옛 사본 버리기·정해진 규칙에 따른 상태 변화, 이 세 가지가 핵심입니다.</p>
       </div>
     </div>
     <div class="note mt">다음 → <strong>3-4 Interconnect / NoC</strong>: 코어가 수십 개로 늘면 버스 한 줄로는 부족합니다. 칩 위에 작은 "네트워크"를 까는 이야기.</div>

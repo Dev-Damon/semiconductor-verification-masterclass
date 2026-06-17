@@ -200,7 +200,7 @@
   phase.<span class="fn">drop_objection</span>(<span class="kw">this</span>);   <span class="cmt">// "이제 끝나도 됨"</span>
 <span class="kw">endtask</span></code></pre>
         <div class="codecap">// raise/drop 짝이 안 맞으면 sim이 안 끝나거나 조기 종료</div>
-        <div class="dev-bridge"><p style="margin:6px 0">개발자 직관: <strong>참조 카운트</strong>(RC)와 같습니다. raise=retain, drop=release. 0이 되면 GC(=phase 종료)가 일어납니다.</p></div>
+        <div class="note">raise는 "아직 일이 남았다"는 표시를 하나 거는 것, drop은 그 표시를 떼는 것입니다. 표시가 모두 떨어져 카운터가 0이 되는 순간 phase가 끝납니다 — 마치 회의실에 남은 사람이 한 명도 없어야 문을 잠그는 것과 같습니다.</div>
       </div>
     </div>
     <div class="pitfall mt"><p style="margin:6px 0"><strong>objection 누락이 1순위 함정:</strong> raise를 안 하면 자극이 돌기도 전에 <strong>run_phase가 0시간에 끝나</strong> 테스트가 "그냥 통과"합니다. 반대로 drop을 빠뜨리면 <code>timeout</code>까지 매달려 hang.</p></div>
@@ -208,7 +208,7 @@
 
   <!-- 8 -->
   <section class="slide">
-    <div class="kicker">의존성 주입</div>
+    <div class="kicker">설정값 전달 통로</div>
     <h2>uvm_config_db — virtual interface 전달</h2>
     <p>DUT의 핀(<code>interface</code>)을 클래스 세계(TB)로 넘기는 표준 통로. <strong class="hl">top에서 set, 컴포넌트에서 get.</strong></p>
     <pre class="code"><code><span class="cmt">// ── top module (정적 세계) ──────────────────────────</span>
@@ -351,7 +351,7 @@ ral.ctrl_reg.<span class="fn">mirror</span>(status, UVM_CHECK);</code></pre>
     <div class="kicker">면접 심화 질문</div>
     <h2>여기까지 답하면 "실무자"로 보인다</h2>
     <div class="qa"><div class="q">objection 메커니즘을 설명해보세요.</div><div class="a">run_phase는 raise/drop objection으로 만든 카운터가 0이 되면 종료됩니다. 자극 시작 전 <code>phase.raise_objection(this)</code>로 +1, 끝나면 <code>drop_objection</code>으로 −1, 모든 컴포넌트 합이 0이면 다음 phase로 넘어갑니다. raise를 빼면 0시간에 끝나 테스트가 헛통과하고, drop을 빼면 timeout까지 hang합니다.</div></div>
-    <div class="qa"><div class="q">sequencer–driver 핸드셰이크는?</div><div class="a">driver가 <code>seq_item_port.get_next_item(req)</code>로 다음 아이템을 요청(blocking), 구동 후 <code>item_done()</code>으로 완료 통지합니다. sequence 쪽은 <code>start_item</code>/<code>finish_item</code>이 짝이고, finish_item은 driver의 item_done까지 블록됩니다. 1:1 핸드셰이크라 백프레셔처럼 자연스럽게 속도가 맞춰집니다.</div></div>
+    <div class="qa"><div class="q">sequencer–driver 핸드셰이크는?</div><div class="a">driver가 <code>seq_item_port.get_next_item(req)</code>로 다음 아이템을 요청(blocking), 구동 후 <code>item_done()</code>으로 완료 통지합니다. sequence 쪽은 <code>start_item</code>/<code>finish_item</code>이 짝이고, finish_item은 driver의 item_done까지 블록됩니다. 1:1 핸드셰이크라 driver가 하나를 처리할 때까지 sequence가 다음 것을 못 보내, 두 쪽의 속도가 자연스럽게 맞춰집니다.</div></div>
     <div class="qa"><div class="q">config_db와 factory override는 각각 무엇이고, override 종류는?</div><div class="a">config_db는 virtual interface나 설정값을 트리에 주입하는 통로로 top에서 set, 컴포넌트 build에서 get합니다. factory는 <code>type_id::create</code>로 만든 객체의 타입을 교체하는 메커니즘으로, 전역 교체 <code>set_type_override_by_type</code>과 인스턴스 한정 <code>set_inst_override_by_type</code>(+이름 기반)이 있습니다. 자식이 부모를 extends해야 적용됩니다. RAL은 레지스터를 <code>uvm_reg</code> 클래스 모델로 추상화해 주소 대신 이름으로 read/write·mirror하는 계층입니다.</div></div>
   </section>
 

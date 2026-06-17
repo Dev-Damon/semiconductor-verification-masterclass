@@ -47,10 +47,7 @@
       <div class="arrow">→</div>
       <div class="box">Run<br><span class="dim" style="font-size:12px">시뮬레이션</span></div>
     </div>
-    <div class="grid2 mt">
-      <div class="note"><strong>Analyze/Compile</strong>: 파일 단위로 파싱·문법 검사 후 라이브러리에 중간 표현을 적재. <strong>Elaborate</strong>: top을 기준으로 디자인 전체를 한 덩어리로 조립(인스턴스화·파라미터 확정·연결 해결). <strong>Run</strong>: 만들어진 이미지로 시간을 진행.</div>
-      <div class="dev-bridge"><p style="margin:6px 0">개발자 비유: <code>compile</code>은 <strong>.o 오브젝트 만들기</strong>(파일별), <code>elaborate</code>는 <strong>link 단계</strong>(심볼·인스턴스 해결해 실행파일 생성), <code>run</code>은 그 바이너리 실행. 다만 HDL의 elaboration은 "하드웨어 계층을 펼치는" 작업이라 링크보다 훨씬 구조적입니다.</p></div>
-    </div>
+    <div class="note mt"><strong>Analyze/Compile</strong>: 파일 단위로 파싱·문법 검사 후 라이브러리에 중간 표현을 적재. <strong>Elaborate</strong>: top을 기준으로 디자인 전체를 한 덩어리로 조립(인스턴스화·파라미터 확정·연결 해결). <strong>Run</strong>: 만들어진 이미지로 시간을 진행. 비유하자면 부품을 하나씩 검수(Analyze)하고, 설계도대로 전부 조립해 완성품을 만든 뒤(Elaborate), 그 완성품을 작동시키는(Run) 것과 같습니다 — 특히 Elaborate는 단순 결합이 아니라 부품 계층 전체를 펼쳐 확정하는 단계입니다.</div>
   </section>
 
   <!-- 4 -->

@@ -13,7 +13,7 @@
   <section class="slide title-slide">
     <div class="part-badge">Part 0 · 기초 다리</div>
     <h1>반도체 · 칩 · SoC<br>도대체 뭘 검증한다는 걸까?</h1>
-    <p class="hook">코드를 짜본 당신에게, 하드웨어라는 세계를 한 장의 지도로 펼쳐 드립니다.
+    <p class="hook">하드웨어라는 낯선 세계를 한 장의 지도로 펼쳐 드립니다.
       이 챕터가 끝나면 "내가 무엇을 검증하는 사람인지" 한 문장으로 말할 수 있습니다.</p>
     <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
   </section>
@@ -51,26 +51,26 @@
         </ul>
       </div>
       <div class="analogy">
-        <p style="margin-top:6px">당신이 아는 <code>if (a && b)</code> 한 줄은, 하드웨어에선 실제 <strong>AND 게이트라는 물리적 회로</strong>가 됩니다. 소프트웨어는 CPU를 빌려 "흉내"내지만, 하드웨어는 그 논리를 <strong class="hl">전선과 트랜지스터로 직접 깎아</strong> 만듭니다.</p>
+        <p style="margin-top:6px">"A와 B가 둘 다 켜져 있으면 켜라" 같은 논리 한 줄은, 하드웨어에선 실제 <strong>AND 게이트라는 물리적 회로</strong>가 됩니다. 그 논리를 빌려 쓰는 게 아니라 <strong class="hl">전선과 트랜지스터로 직접 깎아</strong> 만드는 것이죠.</p>
         <p class="dim" style="margin-bottom:6px">그래서 빠르고, 그래서 한번 만들면 못 바꿉니다.</p>
       </div>
     </div>
   </section>
 
-  <!-- 4. 개발자 비유: SW vs HW -->
+  <!-- 4. 하드웨어의 특징 -->
   <section class="slide">
-    <div class="kicker">개발자 직관으로 번역</div>
-    <h2>소프트웨어 vs 하드웨어, 무엇이 다른가</h2>
+    <div class="kicker">직관적으로 이해하기</div>
+    <h2>하드웨어가 가진 네 가지 특징</h2>
+    <p>일상적인 기계나 시스템과 비교하면, 반도체 하드웨어에는 몇 가지 독특한 성질이 있습니다.</p>
     <table class="compare">
-      <tr><th>관점</th><th>소프트웨어 (당신의 세계)</th><th>하드웨어 (반도체)</th></tr>
-      <tr><td>만드는 것</td><td>실행되는 명령어(코드)</td><td>물리적 회로 그 자체</td></tr>
-      <tr><td>"실행"의 의미</td><td>CPU가 한 줄씩 순차 실행</td><td><strong class="hl">모든 회로가 동시에</strong> 살아 동작 (동기 회로는 매 클럭마다, 조합회로는 입력이 바뀌면 곧바로)</td></tr>
-      <tr><td>버그 수정</td><td>패치 배포하면 끝</td><td>공장 재투입 = <strong class="hl">수개월 + 수십~수백억원</strong></td></tr>
-      <tr><td>디버깅</td><td>중단점 찍고 디버거로</td><td>실물 전에 <strong>시뮬레이션</strong>으로 파형을 본다</td></tr>
-      <tr><td>"빌드"</td><td>compile → link → run</td><td>compile → <strong>elaboration</strong> → simulation (Part 4!)</td></tr>
+      <tr><th>관점</th><th>하드웨어 (반도체)</th></tr>
+      <tr><td>만드는 것</td><td>명령서가 아니라 <strong>물리적 회로 그 자체</strong> — 전선과 트랜지스터로 직접 깎아 만든다</td></tr>
+      <tr><td>"동작"의 의미</td><td><strong class="hl">모든 회로가 동시에</strong> 살아 움직인다 (동기 회로는 매 클럭마다, 조합회로는 입력이 바뀌면 곧바로). 어느 한 곳이 차례를 기다리는 게 아니라, 오케스트라 전체가 동시에 연주하듯 병렬로 동작한다</td></tr>
+      <tr><td>버그 수정</td><td>한번 공장에서 찍어내면 못 고친다 → 재제조 = <strong class="hl">수개월 + 수십~수백억원</strong></td></tr>
+      <tr><td>버그 찾기</td><td>실물이 나오기 전, <strong>시뮬레이션</strong>으로 회로 안 신호의 파형을 들여다본다</td></tr>
     </table>
-    <div class="dev-bridge mt">
-      <p style="margin:6px 0">핵심 멘탈 모델: 하드웨어 기술 언어(Verilog)는 "한 줄씩 실행되는 코드"가 아니라 <strong>"이런 회로를 만들어라"라는 설계도</strong>입니다. 그래서 모든 블록이 병렬로 살아 움직입니다. 이 한 가지만 받아들이면 절반은 끝났습니다.</p>
+    <div class="note mt">
+      <p style="margin:6px 0">핵심 멘탈 모델: 하드웨어를 적는 기술 언어(Verilog)는 "차례차례 따라 하는 절차서"가 아니라 <strong>"이런 모양의 회로를 만들어라"라는 설계도</strong>입니다. 그래서 모든 블록이 병렬로 살아 움직입니다. 이 한 가지만 받아들이면 절반은 끝났습니다.</p>
     </div>
   </section>
 
@@ -138,23 +138,21 @@
         <div class="box">⑧ 제조·테스트<br><span class="dim" style="font-size:12px">Fab → 실물칩</span></div>
       </div>
     </div>
-    <div class="grid2 mt">
-      <div class="dev-bridge"><p style="margin:6px 0"><strong>②~③</strong>은 "코드 짜고 테스트 짜기"와 똑같은 리듬입니다. 설계자가 RTL을 짜면, 당신은 그게 스펙대로 도는지 검증 환경을 만들어 두드립니다.</p></div>
-      <div class="takeaway"><p style="margin:6px 0">검증은 한 번이 아니라 <strong class="hl">여러 단계에서 반복</strong>됩니다. RTL 시뮬레이션(빠르고 디버깅 쉬움) → Gate 시뮬레이션(타이밍까지 정밀하지만 더 느림) → 에뮬레이션(전용 하드웨어로 가속해 대규모 테스트를 훨씬 빠르게 돌리되, 내부 신호 가시성은 낮아 디버깅이 어려움). 즉 정밀도와 속도는 단순히 한 방향이 아니라, 단계마다 트레이드오프가 다릅니다.</p></div>
-    </div>
+    <div class="note mt"><p style="margin:6px 0"><strong>②~③</strong>은 한 묶음으로 맞물려 돕니다. 설계자가 RTL을 작성하면, 검증 엔지니어는 그게 스펙대로 동작하는지 확인하는 검증 환경을 만들어 두드립니다.</p></div>
+    <div class="takeaway mt"><p style="margin:6px 0">검증은 한 번이 아니라 <strong class="hl">여러 단계에서 반복</strong>됩니다. RTL 시뮬레이션(빠르고 디버깅 쉬움) → Gate 시뮬레이션(타이밍까지 정밀하지만 더 느림) → 에뮬레이션(전용 하드웨어로 가속해 대규모 테스트를 훨씬 빠르게 돌리되, 내부 신호 가시성은 낮아 디버깅이 어려움). 즉 정밀도와 속도는 단순히 한 방향이 아니라, 단계마다 트레이드오프가 다릅니다.</p></div>
   </section>
 
   <!-- 7. 추상화 수준 -->
   <section class="slide">
     <div class="kicker">추상화 수준 (Abstraction)</div>
     <h2>같은 회로를 4가지 해상도로 본다</h2>
-    <p>소프트웨어에 "고수준 언어 → 어셈블리 → 기계어"가 있듯, 하드웨어에도 추상화 사다리가 있습니다. 검증은 주로 <strong class="hl">RTL</strong>과 <strong class="hl">Gate</strong> 두 층에서 일어납니다.</p>
+    <p>건물을 볼 때 "전체 조감도 → 평면 설계도 → 벽돌·배관 시공도"처럼 점점 자세한 도면으로 내려가듯, 하드웨어에도 같은 회로를 점점 더 자세히 그리는 추상화 사다리가 있습니다. 검증은 주로 <strong class="hl">RTL</strong>과 <strong class="hl">Gate</strong> 두 층에서 일어납니다.</p>
     <table>
-      <tr><th>층</th><th>무엇</th><th>비유</th><th>검증에서</th></tr>
-      <tr><td><span class="pill violet">Behavioral</span></td><td>"무엇을 하는가"만 기술</td><td>의사코드</td><td>모델/테스트벤치</td></tr>
-      <tr><td><span class="pill teal">RTL</span></td><td>레지스터+논리 단위로 기술 (Verilog)</td><td>고수준 언어 소스</td><td><strong>주 무대</strong> · 빠름</td></tr>
-      <tr><td><span class="pill blue">Gate</span></td><td>실제 AND/OR/FF 게이트 그물망</td><td>컴파일된 어셈블리</td><td><strong>GLS</strong> · 타이밍 정확</td></tr>
-      <tr><td><span class="pill" style="background:rgba(108,124,149,.2);color:var(--muted)">Transistor</span></td><td>트랜지스터·전압 수준</td><td>기계어/전기신호</td><td>아날로그/물리 영역</td></tr>
+      <tr><th>층</th><th>무엇</th><th>비유 (건물 도면)</th><th>검증에서</th></tr>
+      <tr><td><span class="pill violet">Behavioral</span></td><td>"무엇을 하는가"만 기술</td><td>전체 조감도</td><td>모델/테스트벤치</td></tr>
+      <tr><td><span class="pill teal">RTL</span></td><td>레지스터+논리 단위로 기술 (Verilog)</td><td>층별 평면 설계도</td><td><strong>주 무대</strong> · 빠름</td></tr>
+      <tr><td><span class="pill blue">Gate</span></td><td>실제 AND/OR/FF 게이트 그물망</td><td>벽돌·배관 시공도</td><td><strong>GLS</strong> · 타이밍 정확</td></tr>
+      <tr><td><span class="pill" style="background:rgba(108,124,149,.2);color:var(--muted)">Transistor</span></td><td>트랜지스터·전압 수준</td><td>재료 자체(콘크리트·전기)</td><td>아날로그/물리 영역</td></tr>
     </table>
     <div class="note mt"><strong>RTL = Register Transfer Level.</strong> "매 클럭마다 레지스터(기억소자)들 사이로 데이터가 어떻게 흘러가는가"를 적는 수준. 검증 엔지니어가 가장 많이 사는 동네입니다.</div>
   </section>
@@ -182,7 +180,7 @@
         </ul>
       </div>
     </div>
-    <div class="analogy mt"><p style="margin:6px 0">QA 엔지니어가 단위테스트·통합테스트·E2E로 앱을 두드리듯, 검증 엔지니어는 칩을 시뮬레이션 위에서 두드립니다. 다른 점은 <strong>출시 후엔 절대 못 고친다</strong>는 것 — 그래서 출시 전 검증의 무게가 비교할 수 없이 무겁습니다.</p></div>
+    <div class="analogy mt"><p style="margin:6px 0">신약을 시판하기 전에 임상시험으로 안전성과 효능을 철저히 검증하듯, 검증 엔지니어는 칩을 시뮬레이션 위에서 온갖 상황으로 두드려 봅니다. 다른 점은 <strong>출시 후엔 절대 못 고친다</strong>는 것 — 그래서 출시 전 검증의 무게가 비교할 수 없이 무겁습니다.</p></div>
   </section>
 
   <!-- 9. Q&A -->

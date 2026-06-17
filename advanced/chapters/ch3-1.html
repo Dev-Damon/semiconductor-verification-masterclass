@@ -221,7 +221,7 @@ PSTRB   = <span class="str">4'b0011</span>;  <span class="cmt">// [0],[1]=1</spa
       <tr><td>APB4</td><td><strong class="hl3">PSTRB · PPROT</strong></td><td>바이트 단위 부분 쓰기와 보호 속성(권한/보안/명령) 도입.</td></tr>
     </table>
     <div class="deepnote mt"><p style="margin:6px 0">정리 한 줄: <strong class="hl">PREADY/PSLVERR이 보이면 최소 APB3, PSTRB/PPROT이 보이면 APB4</strong>. 반대로 어떤 IP가 "PREADY가 없다"면 APB2 슬레이브이며, 항상 정확히 2클럭에 끝납니다(브리지가 wait를 줄 수 없음).</p></div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: APB2는 <strong>타임아웃 없는 동기 호출</strong>(서버가 무조건 정해진 시간에 답한다고 가정), APB3의 PREADY는 <strong class="hl">서버가 "처리 중, 잠깐만요"라고 backpressure</strong>를 거는 것, PSLVERR은 <strong>HTTP 5xx 상태코드</strong>, PSTRB는 <strong>PATCH의 부분 필드 업데이트</strong>에 가깝습니다.</p></div>
+    <div class="note mt"><p style="margin:6px 0">한 줄 직관: APB2는 <strong>"무조건 정해진 시간에 답이 온다"</strong>고 가정하는 버스, APB3의 PREADY는 슬레이브가 <strong class="hl">"처리 중이니 잠깐만요"</strong>라고 손을 들어 기다리게 하는 장치, PSLVERR은 <strong>"방금 그 요청은 실패했다"</strong>는 오류 표시, PSTRB는 <strong>워드 전체가 아니라 일부 바이트만 골라 쓰는</strong> 기능에 해당합니다.</p></div>
   </section>
 
   <!-- 9. 비파이프라인 / 무버스트 + 브리지 -->

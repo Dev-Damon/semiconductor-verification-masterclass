@@ -13,8 +13,8 @@
   <section class="slide title-slide">
     <div class="part-badge">Part 3 · 버스 프로토콜</div>
     <h1>AMBA AXI<br>칩 안의 다차선 고속도로</h1>
-    <p class="hook">읽기와 쓰기가 따로 달리고, 수십 개의 요청이 동시에 in-flight로 흐르며,
-      송장번호(ID)로 순서가 뒤섞여도 다 추적되는 버스. 비동기 파이프라인을 아는 당신이라면 이미 절반은 이해한 셈입니다.</p>
+    <p class="hook">읽기와 쓰기가 따로 달리고, 수십 개의 요청이 동시에 처리 중인 채로 흐르며,
+      송장번호(ID)로 순서가 뒤섞여도 다 추적되는 버스. 다차선 고속도로를 떠올리면 절반은 이해한 셈입니다.</p>
     <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
   </section>
 
@@ -44,25 +44,25 @@
     <div class="note mt">AMBA 제품군: 저속·단순 제어용 <strong>APB</strong>, 중간 성능의 <strong>AHB</strong>(Advanced High-performance Bus), 그리고 최고 성능의 <strong class="hl">AXI</strong>. (캐시 일관성이 필요한 멀티코어에는 더 상위인 ACE·CHI가 쓰입니다.) 이번 챕터는 AXI에 집중합니다.</div>
   </section>
 
-  <!-- 3. 개발자 비유 -->
+  <!-- 3. 직관적 비유 -->
   <section class="slide">
-    <div class="kicker">개발자 직관으로 번역</div>
-    <h2>AXI는 "배압 있는 비동기 메시지 큐"다</h2>
-    <p>당신이 이미 쓰는 개념으로 그대로 매핑됩니다. 새로운 마법이 아니라, <strong>익숙한 비동기 패턴이 전선 위에 구현된 것</strong>입니다.</p>
+    <div class="kicker">직관적으로 이해하기</div>
+    <h2>AXI는 "송장번호로 추적되는 다차선 물류망"이다</h2>
+    <p>새로운 마법이 아니라, 우리가 아는 <strong>고속도로와 택배 시스템의 발상이 전선 위에 구현된 것</strong>입니다.</p>
     <div class="grid2 mt">
-      <div class="dev-bridge">
-        <p style="margin:6px 0">각 AXI 채널은 <strong>배압(backpressure)이 있는 스트림</strong>입니다. <code>VALID</code>는 producer가 "보낼 게 준비됐다", <code>READY</code>는 consumer가 "받을 준비됐다" — 둘 다 켜진 클럭에만 한 칸 전송됩니다. Reactive Streams / TCP 흐름제어와 똑같은 발상입니다.</p>
+      <div class="analogy">
+        <p style="margin-top:6px"><strong>신호등 있는 진입로</strong>: 각 채널은 보내는 쪽이 "보낼 게 준비됐다"(<code>VALID</code>)고 손을 들고, 받는 쪽이 "받을 준비됐다"(<code>READY</code>)고 손을 들어야만 차 한 대가 지나갑니다. 한쪽이라도 손을 안 들면 차가 멈춰 서서 기다립니다 — 마치 양쪽이 동시에 OK해야 통과시키는 톨게이트와 같습니다.</p>
       </div>
       <div class="analogy">
         <p style="margin-top:6px"><strong>다차선 고속도로</strong>: 읽기 차선과 쓰기 차선이 따로 있어 서로 막지 않고, 여러 차(트랜잭션)가 동시에 달립니다. 각 차에는 <strong>택배 송장번호(ID)</strong>가 붙어 있어, 도착 순서가 뒤섞여도 어느 요청의 응답인지 추적됩니다.</p>
       </div>
     </div>
     <table class="compare mt">
-      <tr><th>AXI 개념</th><th>당신이 아는 것</th></tr>
-      <tr><td>VALID / READY 핸드셰이크</td><td>배압 있는 스트림 / <code>await producer &amp;&amp; consumer</code></td></tr>
-      <tr><td>Outstanding 트랜잭션</td><td>응답 안 기다리고 여러 요청 발사 (다중 in-flight)</td></tr>
-      <tr><td>ID 기반 out-of-order</td><td>비동기 요청에 붙인 <code>requestId</code> / correlation key</td></tr>
-      <tr><td>Burst</td><td>한 번의 헤더로 여러 패킷 전송 (배치 처리)</td></tr>
+      <tr><th>AXI 개념</th><th>일상 비유</th></tr>
+      <tr><td>VALID / READY 핸드셰이크</td><td>양쪽이 동시에 OK해야 차 한 대를 통과시키는 톨게이트</td></tr>
+      <tr><td>Outstanding 트랜잭션</td><td>답을 기다리지 않고 주문서 여러 장을 연달아 접수 (동시에 처리 중)</td></tr>
+      <tr><td>ID 기반 out-of-order</td><td>택배마다 붙은 송장번호로 도착 순서가 뒤섞여도 추적</td></tr>
+      <tr><td>Burst</td><td>주문서 한 장으로 여러 개 묶음 배송 (대량 한 번에)</td></tr>
     </table>
   </section>
 
@@ -126,7 +126,7 @@
     </table>
     <div class="grid2 mt">
       <div class="analogy"><p style="margin:6px 0">쓰기는 <strong>3박자</strong>: "여기에 써줘(AW)" + "이게 데이터(W)" → "다 썼어(B)". 읽기는 <strong>2박자</strong>: "여기 좀 읽어줘(AR)" → "여기 있어(R)".</p></div>
-      <div class="dev-bridge"><p style="margin:6px 0">쓰기 응답 채널 <strong>B</strong>가 따로 있는 이유: 메시지 큐에 넣고 끝나는 게 아니라, "정말 저장됐다"는 <strong>ack</strong>를 받아야 완료로 칩니다. 비동기 쓰기 + 완료 콜백 패턴 그대로입니다.</p></div>
+      <div class="analogy"><p style="margin:6px 0">쓰기 응답 채널 <strong>B</strong>가 따로 있는 이유: 택배를 보내기만 하고 끝나는 게 아니라, "정말 잘 받았다"는 <strong>수령 확인서</strong>가 돌아와야 완료로 칩니다. 보낸 쪽은 이 확인을 받기 전까지는 안심할 수 없습니다.</p></div>
     </div>
   </section>
 
@@ -184,15 +184,9 @@
         <h3 class="mt"><span class="hl2">Outstanding</span></h3>
         <p>응답(B/R)을 받기 전에 <strong>여러 요청을 연달아 발사</strong>해 둘 수 있습니다. 동시에 "처리 대기 중"인 트랜잭션 수 = outstanding. 메모리 지연을 숨겨 대역폭을 채웁니다.</p>
       </div>
-      <div class="dev-bridge">
-        <p style="margin:6px 0"><strong>HTTP/1.1 vs HTTP/2 파이프라이닝</strong>을 떠올리세요. 요청마다 응답을 끝까지 기다리면(blocking) 링크가 놉니다. AXI는 응답을 기다리지 않고 요청을 쌓아 보내는 <strong>다중 in-flight</strong> 모델이라 링크를 꽉 채웁니다.</p>
-        <pre class="code" style="margin-top:12px"><code><span class="cmt">// 막힘(blocking): 느림</span>
-r1 = <span class="fn">read</span>(A); <span class="cmt">// 응답까지 대기…</span>
-r2 = <span class="fn">read</span>(B);
-
-<span class="cmt">// outstanding: 빠름</span>
-<span class="fn">send</span>(AR,A); <span class="fn">send</span>(AR,B); <span class="fn">send</span>(AR,C);
-<span class="cmt">// R 채널로 결과가 순차/비순차로 도착</span></code></pre>
+      <div class="analogy">
+        <p style="margin:6px 0"><strong>커피 주문 줄</strong>을 떠올리세요. 한 손님의 음료가 다 나올 때까지 다음 주문을 안 받으면(한 건씩 끝까지 대기) 줄이 멈춰 섭니다. AXI는 응답을 기다리지 않고 주문을 연달아 접수해 두는 방식이라, 주방(메모리)이 음료를 만드는 동안에도 새 주문이 계속 들어가 처리 능력을 꽉 채웁니다.</p>
+        <p style="margin:6px 0">즉 "A 읽기 → 결과 대기 → B 읽기"처럼 한 건씩 기다리는 대신, "A·B·C 읽기 요청을 먼저 다 던져두고" 결과가 준비되는 대로 받아옵니다.</p>
       </div>
     </div>
   </section>
@@ -264,7 +258,7 @@ r2 = <span class="fn">read</span>(B);
         <div class="box on" style="border-color:var(--accent3)">B: OKAY</div>
       </div>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">한 번의 헤더로 여러 페이로드를 보내는 <strong>배치 전송</strong>입니다. HTTP 헤더 한 번에 chunked body 여러 개, 또는 한 SQL로 여러 row를 가져오는 것과 같은 절약 효과입니다.</p></div>
+    <div class="analogy mt"><p style="margin:6px 0">택배에 비유하면, 물건마다 매번 새 송장(주소)을 붙이는 대신 <strong>"이 주소로 N개 묶음 배송"</strong>이라고 한 번만 적어두는 것과 같습니다. 주소를 반복해서 적는 수고(오버헤드)를 없애 같은 시간에 더 많이 나를 수 있습니다.</p></div>
   </section>
 
   <!-- 10. APB 대비 비교 -->
@@ -298,7 +292,7 @@ r2 = <span class="fn">read</span>(B);
     </div>
     <div class="qa">
       <div class="q">Outstanding과 out-of-order는 무엇이고 왜 필요한가요?</div>
-      <div class="a">Outstanding은 응답을 기다리지 않고 여러 트랜잭션을 미리 발사해 동시에 in-flight로 두는 것으로, 메모리 지연을 숨겨 대역폭을 채웁니다. Out-of-order는 각 트랜잭션의 ID 덕분에 응답이 보낸 순서와 달리 도착해도 매칭되는 것입니다. 단 같은 ID끼리는 순서가 보장됩니다.</div>
+      <div class="a">Outstanding은 응답을 기다리지 않고 여러 트랜잭션을 미리 발사해 동시에 처리 중인 상태로 두는 것으로, 메모리 지연을 숨겨 대역폭을 채웁니다. Out-of-order는 각 트랜잭션의 ID 덕분에 응답이 보낸 순서와 달리 도착해도 매칭되는 것입니다. 단 같은 ID끼리는 순서가 보장됩니다.</div>
     </div>
     <div class="qa">
       <div class="q">APB 대신 AXI를 쓰는 장점과 트레이드오프는?</div>
@@ -315,15 +309,15 @@ r2 = <span class="fn">read</span>(B);
         <ul>
           <li><strong>AXI</strong> = AMBA의 고성능 버스, <strong class="hl">5개 독립 채널</strong> (AW·W·B / AR·R)</li>
           <li>모든 채널이 <strong>VALID/READY</strong> 핸드셰이크 → 배압(백프레셔)</li>
-          <li><strong>주소·데이터 분리</strong> + <strong>outstanding</strong> = 다중 in-flight로 대역폭 확보</li>
+          <li><strong>주소·데이터 분리</strong> + <strong>outstanding</strong> = 여러 요청을 동시에 처리해 대역폭 확보</li>
           <li><strong>ID</strong> 기반 <strong>out-of-order</strong> 완료 (같은 ID는 in-order)</li>
           <li><strong>버스트</strong>(INCR/WRAP, len/size)로 주소 오버헤드 절감</li>
           <li>vs APB: 빠르지만 복잡·큼 → 역할 분담</li>
         </ul>
       </div>
       <div class="takeaway">
-        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"AXI는 읽기/쓰기 5채널을 VALID/READY 배압으로 굴리고, ID로 다중 in-flight·out-of-order를 허용하는 <strong class="hl">고성능 비동기 버스</strong>입니다."</p>
-        <p class="dim" style="margin-bottom:6px">— 비동기 파이프라인 + 송장번호. 이 두 비유면 충분합니다.</p>
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"AXI는 읽기/쓰기 5채널을 VALID/READY 배압으로 굴리고, ID로 여러 요청을 동시에·순서 뒤섞어 처리하는 <strong class="hl">고성능 온칩 버스</strong>입니다."</p>
+        <p class="dim" style="margin-bottom:6px">— 다차선 고속도로 + 택배 송장번호. 이 두 비유면 충분합니다.</p>
       </div>
     </div>
     <div class="note mt">다음 → <strong>3-3 AXI 검증 포인트</strong>: VALID/READY 프로토콜 체크, 버스트 경계, outstanding 추적을 어떻게 scoreboard·assertion으로 잡는가.</div>

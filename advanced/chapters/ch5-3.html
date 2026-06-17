@@ -216,7 +216,7 @@
       <tr><td>CORRUPT_ON_<br>ACTIVITY</td><td>전압 부족 + 토글 시</td><td>토글하면 X로 오염</td></tr>
     </table>
     <div class="spec mt"><p style="margin:6px 0"><strong>CORRUPT의 의미:</strong> 도메인이 꺼지면 그 안의 모든 플롭/래치/조합 출력이 <strong class="hl">X(unknown)</strong>로 바뀝니다. 단, <strong>retention 셀로 지정된 플롭</strong>과 <strong>isolation으로 보호된 출력</strong>은 예외 — 그래서 retention/isolation을 안 적으면 켤 때 X가 그대로 쏟아집니다.</p></div>
-    <div class="note mt"><strong>개발자 직관:</strong> <code>free()</code>한 메모리를 다시 읽으면 쓰레기가 나오는 것과 같습니다. CORRUPT = "이 영역은 전원이 없으니 값을 신뢰하지 마라"는 X 표식. retention = 명시적으로 백업해 둔 변수, isolation = 경계에서 안전한 기본값으로 막은 출력입니다.</div>
+    <div class="note mt"><strong>직관적으로 이해하기:</strong> 정전된 방의 전등 스위치를 더듬는 것과 같습니다 — 전원이 없으니 어떤 상태인지 알 수 없습니다. CORRUPT = "이 영역은 전원이 없으니 값을 신뢰하지 마라"는 X 표식. retention = 따로 백업 전원을 둬서 상태를 지킨 플롭, isolation = 경계에서 안전한 기본값으로 막은 출력입니다.</div>
   </section>
 
   <!-- 9 -->
@@ -290,7 +290,7 @@
     </table>
     <div class="grid2 mt">
       <div class="spec"><p style="margin:6px 0"><strong>SCE-MI / DPI:</strong> 에뮬(HW) ↔ 테스트벤치(SW, 워크스테이션)를 잇는 표준 인터페이스. <strong>SCE-MI</strong>(Standard Co-Emulation Modeling Interface)로 트랜잭션을 주고받고, <strong>DPI</strong>(SystemVerilog Direct Programming Interface)로 C/C++ 모델을 호출. 핀 단위 대신 <strong class="hl3">트랜잭션 단위</strong> 통신이라 빨라짐.</p></div>
-      <div class="dev-bridge"><p style="margin:6px 0"><strong>hybrid emulation:</strong> CPU 같은 성숙 IP는 <strong>virtual platform(SW 모델, fast)</strong>로, 새로 만든 RTL은 에뮬로 — 둘을 붙여 돌립니다. "이미 검증된 건 빠른 모델, 새 RTL만 정밀 HW"라는 분업. 부팅·드라이버 같은 SW를 며칠이 아니라 시간 단위로 돌릴 수 있게 됩니다.</p></div>
+      <div class="spec"><p style="margin:6px 0"><strong>hybrid emulation:</strong> CPU처럼 이미 충분히 검증된 IP는 동작만 빠르게 흉내 내는 <strong>가상 플랫폼</strong>으로, 새로 만든 RTL만 에뮬레이터로 — 둘을 붙여 함께 돌립니다. 이미 검증된 부분은 빠른 모델로, 새 RTL만 정밀 HW로 나눠 맡기는 분업입니다. 덕분에 부팅·드라이버 실행을 며칠이 아니라 시간 단위로 끝낼 수 있습니다.</p></div>
     </div>
   </section>
 

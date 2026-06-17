@@ -45,22 +45,18 @@
     <div class="note mt">즉 DFT는 "제조 불량 잡기"용 회로이고, 그 회로가 설계대로 동작하는지를 시뮬레이션으로 확인하는 게 검증 엔지니어의 일입니다.</div>
   </section>
 
-  <!-- 3. 개발자 비유 -->
+  <!-- 3. 직관적으로 이해하기 -->
   <section class="slide">
-    <div class="kicker">개발자 직관으로 번역</div>
-    <h2>이미 당신은 self-test를 매일 돌리고 있다</h2>
-    <div class="dev-bridge">
-      <p style="margin:6px 0">서버가 부팅될 때 <code>/healthz</code> 엔드포인트로 <strong>self-test/헬스체크</strong>를 돌려본 적 있나요?
-        DB 연결·디스크·메모리를 스스로 점검하고, 정상이어야 트래픽을 받죠. 그게 바로 칩의 <strong class="hl2">POST(Power-On Self Test)</strong>입니다.</p>
-      <p style="margin:6px 0">배포 파이프라인의 <strong>CI smoke test</strong>도 떠올리세요. 진짜 동작 전에 "기본은 깨지지 않았나"를 빠르게 확인하죠.
-        칩도 본격 동작 전에 메모리·로직을 스스로 두드려 봅니다.</p>
-    </div>
+    <div class="kicker">직관적으로 이해하기</div>
+    <h2>자가점검은 우리 주변에도 늘 있다</h2>
+    <p class="lead">자동차에 시동을 걸면 계기판의 경고등이 한 번에 켜졌다 꺼지죠. 그 짧은 순간, 차는 <strong class="hl2">스스로를 점검</strong>합니다.
+      "브레이크·에어백·센서가 다 멀쩡한가"를 확인하고 이상이 없어야 정상 주행으로 넘어갑니다. 칩도 똑같이, 본격 동작 전에 메모리와 로직을 스스로 두드려 보고 시작합니다 — 이것이 칩의 <strong class="hl2">POST(Power-On Self Test)</strong>입니다.</p>
     <table class="compare mt">
-      <tr><th>칩 (하드웨어)</th><th>당신이 아는 것 (소프트웨어)</th></tr>
-      <tr><td>POST / IST (부팅 시 자가점검)</td><td>부팅 시 health check / self-test</td></tr>
-      <tr><td>Scan / MBIST (출하 전 전수검사)</td><td>CI smoke test / 단위테스트 한 바퀴</td></tr>
-      <tr><td><strong class="hl">fault coverage</strong> (결함 잡는 비율)</td><td><strong class="hl">test coverage</strong> (코드 커버리지)</td></tr>
-      <tr><td>ATPG (테스트 패턴 자동 생성)</td><td>fuzzer / property-based 테스트 생성기</td></tr>
+      <tr><th>칩의 자가검사</th><th>역할(한마디로)</th></tr>
+      <tr><td>POST / IST</td><td>전원이 켜질 때 칩이 스스로 멀쩡한지 점검</td></tr>
+      <tr><td>Scan / MBIST</td><td>공장 출하 전 내부를 전수검사</td></tr>
+      <tr><td><strong class="hl">fault coverage</strong></td><td>테스트가 잡아낼 수 있는 결함의 비율</td></tr>
+      <tr><td>ATPG</td><td>검사용 입력 패턴을 자동으로 만들어 주는 도구</td></tr>
     </table>
   </section>
 
@@ -102,7 +98,7 @@
         <text x="640" y="223" fill="#9fb0c7" font-size="12">③ 읽어내기(shift-out)</text>
       </svg>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: 함수 내부 지역변수를 직접 못 보니, <strong>디버거로 모든 변수를 한 줄씩 주입(set)하고 한 스텝 실행 후 다시 읽는(get)</strong> 것과 같습니다. scan chain은 칩 전체에 박아둔 "디버그 직렬 포트"입니다.</p></div>
+    <div class="analogy mt"><p style="margin:6px 0">비유: 빌딩 깊숙한 방들의 상태를 밖에서 볼 수 없으니, 방들을 <strong>하나의 복도로 줄줄이 이어</strong>두는 셈입니다. 복도 한쪽 끝으로 원하는 값을 밀어넣어 각 방에 채우고, 한 번 동작시킨 뒤, 같은 복도로 결과를 밀어내 한 줄씩 읽어냅니다. scan chain은 칩 전체에 깔아둔 "점검용 복도"입니다.</p></div>
   </section>
 
   <!-- 5. Scan 동작 3단계 + 모드 -->
@@ -166,12 +162,12 @@
     <div class="note mt">다른 결함 모델: <strong>transition(느려진 경로)</strong>, <strong>bridging(두 선 단락)</strong> 등도 있지만, 면접에선 보통 stuck-at만 정확히 말하면 충분합니다.</div>
   </section>
 
-  <!-- 7. fault coverage / test coverage -->
+  <!-- 7. fault coverage -->
   <section class="slide">
     <div class="kicker">얼마나 잘 잡았나 — 커버리지</div>
     <h2><span class="hl">Fault Coverage</span> = 테스트가 잡아낼 수 있는 결함 비율</h2>
-    <p>코드 커버리지가 "테스트가 실행한 코드 비율"이듯, <strong>fault coverage</strong>는 "내 테스트 패턴이 검출 가능한
-      전체 결함의 비율"입니다. 양산 칩 품질을 좌우하는 숫자라 보통 <strong class="hl">99%대</strong>를 목표로 합니다.</p>
+    <p><strong>fault coverage</strong>는 "내 테스트 패턴이 검출 가능한 전체 결함의 비율"입니다. 일어날 수 있는 모든 결함 중 몇 퍼센트를
+      실제로 걸러낼 수 있는지를 나타내죠. 양산 칩 품질을 좌우하는 숫자라 보통 <strong class="hl">99%대</strong>를 목표로 합니다.</p>
     <div class="diagram mt">
       <svg viewBox="0 0 760 170" width="760">
         <text x="30" y="40" fill="#9fb0c7" font-size="13">전체 가능한 stuck-at 결함</text>
@@ -180,10 +176,10 @@
         <text x="376" y="86" fill="#38e1c6" font-size="15" text-anchor="middle" font-weight="bold">검출됨 (covered) ≈ 99%</text>
         <text x="723" y="86" fill="#ff7a85" font-size="12" text-anchor="middle">잔여</text>
         <text x="30" y="140" fill="#9fb0c7" font-size="13">fault coverage = 검출된 결함 / 전체 결함</text>
-        <text x="430" y="140" fill="#6c7c95" font-size="12">test coverage = (검출+검출불가 제외 보정) / 테스트 가능 결함</text>
+        <text x="430" y="140" fill="#6c7c95" font-size="12">검출 불가능한 결함(테스트 불가)은 분모에서 보정</text>
       </svg>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: <strong>fault coverage ≈ 코드 커버리지</strong>. "테스트가 100%면 버그가 0"이 아니듯, fault coverage 100%여도 모델 밖 결함은 못 잡습니다. 그래도 높일수록 <strong class="hl">불량 유출(test escape)</strong>이 줄어듭니다.</p></div>
+    <div class="note mt">주의: fault coverage가 100%여도 완벽은 아닙니다. 우리가 가정한 결함 모델(예: stuck-at) 안에서만 100%일 뿐, 모델 밖의 결함은 못 잡습니다. 그래도 이 수치를 높일수록 불량 칩이 양품으로 새어나가는 <strong class="hl">불량 유출(test escape)</strong>이 줄어듭니다.</div>
   </section>
 
   <!-- 8. MBIST -->
@@ -276,7 +272,7 @@
         <div class="box">OS/펌웨어 시작</div>
       </div>
     </div>
-    <div class="note mt">FAIL이면 부팅을 멈추거나 안전 상태(safe state)로 진입합니다. "점검 통과해야 다음 단계 진행" — 헬스체크 통과 후 트래픽 받는 서버와 똑같은 구조입니다.</div>
+    <div class="note mt">FAIL이면 부팅을 멈추거나 안전 상태(safe state)로 진입합니다. "점검을 통과해야 다음 단계로 진행" — 자가점검에 이상이 없어야 정상 주행으로 넘어가는 자동차의 시동 절차와 똑같은 구조입니다.</div>
   </section>
 
   <!-- 11. 검증 관점 -->
@@ -305,7 +301,7 @@
         </ul>
       </div>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: 헬스체크 코드를 짜면 그게 <strong>실제로 장애를 감지하는지 테스트</strong>해보죠("일부러 DB를 끊어보기"). DFT 검증도 똑같이 일부러 결함을 넣어 self-test가 잡아내는지 확인하는 <strong class="hl">"테스트를 위한 테스트"</strong>입니다.</p></div>
+    <div class="note mt">화재경보기를 설치하면 정기적으로 일부러 연기를 피워 정말 울리는지 확인하죠. DFT 검증도 똑같습니다. 일부러 결함을 집어넣어(fault injection) 자가점검이 그것을 FAIL로 잡아내는지 확인하는, 말하자면 <strong class="hl">"테스트를 위한 테스트"</strong>입니다.</div>
   </section>
 
   <!-- 12. Q&A -->
@@ -326,7 +322,7 @@
     </div>
     <div class="qa">
       <div class="q">Test coverage(fault coverage)란 무엇인가요?</div>
-      <div class="a">테스트 패턴이 검출할 수 있는 결함의 비율입니다. 코드 커버리지의 하드웨어판이라 생각하면 됩니다. 보통 stuck-at 기준으로 99%대를 목표로 하며, 이 수치가 높을수록 불량 칩이 양품으로 새어나가는 test escape가 줄어듭니다. 다만 모델 밖 결함은 못 잡으므로 100%여도 완벽을 보장하진 않습니다.</div>
+      <div class="a">테스트 패턴이 검출할 수 있는 결함의 비율입니다. 일어날 수 있는 전체 결함 중 몇 퍼센트를 실제로 걸러낼 수 있는지를 나타냅니다. 보통 stuck-at 기준으로 99%대를 목표로 하며, 이 수치가 높을수록 불량 칩이 양품으로 새어나가는 test escape가 줄어듭니다. 다만 가정한 결함 모델 밖의 결함은 못 잡으므로 100%여도 완벽을 보장하진 않습니다.</div>
     </div>
   </section>
 
@@ -342,7 +338,7 @@
           <li><strong class="hl3">stuck-at</strong> = 선이 0/1에 고정된 기본 결함 모델</li>
           <li><strong class="hl2">MBIST</strong> = 메모리 전용 내장 엔진, <strong>March</strong> 알고리즘으로 셀 검사</li>
           <li><strong>POST/IST</strong> = 부팅·필드에서 self-test, PASS여야 진행 (ISO 26262)</li>
-          <li><strong class="hl">fault coverage</strong> = 잡아낸 결함 비율(≈코드 커버리지), 목표 99%↑</li>
+          <li><strong class="hl">fault coverage</strong> = 잡아낼 수 있는 결함 비율, 목표 99%↑</li>
         </ul>
       </div>
       <div class="takeaway">

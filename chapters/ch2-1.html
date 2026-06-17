@@ -12,7 +12,7 @@
   <!-- 1. Title -->
   <section class="slide title-slide">
     <div class="part-badge">Part 2 · 검증 방법론</div>
-    <h1>UVM<br>검증계의 Spring 프레임워크</h1>
+    <h1>UVM<br>검증을 위한 표준 골격</h1>
     <p class="hook">매번 테스트벤치를 맨바닥부터 짜지 않기 위해, 전 세계가 합의한 "정해진 구조". 영화 제작 스튜디오에 빗대면, 한 번에 머릿속에 들어옵니다.</p>
     <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
   </section>
@@ -43,20 +43,19 @@
     <div class="note mt">즉 UVM은 새로운 언어가 아니라 <strong>SystemVerilog 위에 얹힌 약속</strong>입니다. 면접에선 "표준화된 재사용 가능한 검증 방법론"이라고 한 줄로 정의할 수 있어야 합니다.</div>
   </section>
 
-  <!-- 3. 개발자 비유 -->
+  <!-- 3. 프레임워크 개념 -->
   <section class="slide">
-    <div class="kicker">개발자 직관으로 번역</div>
-    <h2>왜 "프레임워크"라고 부르는가</h2>
-    <div class="dev-bridge">
-      <p style="margin:6px 0">웹 개발에서 <strong>Spring·Django</strong>를 쓰는 이유와 똑같습니다. 라우팅·DI·계층 구조를 매번 새로 만들지 않고, <strong class="hl2">정해진 골격에 비즈니스 로직만 채워넣죠.</strong> UVM도 검증 환경의 골격(컴포넌트 계층·실행 순서·통신 규약)을 제공하고, 당신은 "이 칩을 어떻게 두드릴까"라는 알맹이만 채웁니다.</p>
+    <div class="kicker">직관적으로 이해하기</div>
+    <h2>왜 "프레임워크(골격)"라고 부르는가</h2>
+    <div class="analogy">
+      <p style="margin:6px 0">건축에 비유하면, 건물마다 기초·기둥·배관·전기 배선을 매번 처음부터 발명하지 않습니다. <strong class="hl2">표준 골조(framework)는 이미 정해져 있고, 우리는 그 위에 방 배치와 인테리어만 채워넣죠.</strong> UVM도 검증 환경의 골격(부품들의 계층, 실행 순서, 부품끼리 주고받는 약속)을 미리 제공하고, 검증자는 "이 칩을 어떤 자극으로 두드릴까"라는 알맹이만 채웁니다.</p>
     </div>
     <table class="compare mt">
-      <tr><th>소프트웨어 프레임워크</th><th>UVM</th></tr>
-      <tr><td>정해진 디렉토리/클래스 구조</td><td>agent · env · test 계층 구조</td></tr>
-      <tr><td>의존성 주입(DI) 컨테이너</td><td><strong class="hl">factory + config_db</strong></td></tr>
-      <tr><td>생명주기 훅 (init → run → destroy)</td><td><strong class="hl">UVM phases</strong> (build → connect → run …)</td></tr>
-      <tr><td>인터페이스 기반 모듈화</td><td>TLM 포트로 컴포넌트 결합</td></tr>
-      <tr><td>설정파일 / 환경변수</td><td>config_db (설정 주입)</td></tr>
+      <tr><th>UVM이 미리 정해 주는 골격</th><th>그래서 얻는 것</th></tr>
+      <tr><td>agent · env · test 계층 구조</td><td>누가 짜도 같은 모양 → 바로 읽힘</td></tr>
+      <tr><td><strong class="hl">factory + config_db</strong> (부품 교체·설정 전달 장치)</td><td>코드를 안 고치고 부품·설정만 바꿔치기</td></tr>
+      <tr><td><strong class="hl">UVM phases</strong> (build → connect → run …)</td><td>모두 같은 순서로 만들어지고 실행됨</td></tr>
+      <tr><td>TLM 포트로 컴포넌트 결합</td><td>부품을 느슨하게 이어 갈아끼우기 쉬움</td></tr>
     </table>
   </section>
 
@@ -187,7 +186,7 @@
       <span class="arrow">→</span>
       <div class="box">scoreboard</div>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: driver는 요청을 직렬화해 소켓에 쓰는 <strong>클라이언트</strong>, monitor는 와이어를 스니핑하는 <strong>패킷 캡처(tcpdump)</strong>에 가깝습니다. 같은 데이터를 한쪽은 보내고, 한쪽은 엿봅니다.</p></div>
+    <div class="analogy mt"><p style="margin:6px 0">한 줄 비유: driver는 무대에 올라 실제로 연기하는 <strong>배우</strong>, monitor는 객석에서 무대를 지켜보며 받아적는 <strong>관객(기록자)</strong>입니다. 같은 장면을 한쪽은 만들어내고, 한쪽은 지켜보기만 합니다.</p></div>
   </section>
 
   <!-- 8. scoreboard -->
@@ -230,8 +229,8 @@
   <!-- 9. UVM Phases -->
   <section class="slide">
     <div class="kicker">실행 순서의 약속</div>
-    <h2>UVM phases — 생명주기 훅</h2>
-    <p>모든 컴포넌트가 <strong class="hl">같은 순서로</strong> 빌드되고 연결되고 실행되도록 정해둔 단계들입니다. 프레임워크의 라이프사이클 콜백(<code>onCreate → onStart → onDestroy</code>)과 똑같은 개념.</p>
+    <h2>UVM phases — 정해진 실행 단계</h2>
+    <p>모든 컴포넌트가 <strong class="hl">같은 순서로</strong> 만들어지고 연결되고 실행되도록 정해둔 단계들입니다. 연극으로 치면 "무대 설치 → 배우 배치 → 본 공연 → 막 내리고 정산"처럼, 순서가 고정된 진행표인 셈입니다.</p>
     <div class="flow mt">
       <div class="box on">build_phase<br><span class="dim" style="font-size:11px">객체 생성</span></div>
       <span class="arrow">→</span>
@@ -257,7 +256,7 @@
 
   <!-- 10. factory & config_db -->
   <section class="slide">
-    <div class="kicker">의존성 주입 (DI)</div>
+    <div class="kicker">부품 교체와 설정 전달</div>
     <h2>factory와 config_db — 코드를 안 고치고 바꿔치기</h2>
     <div class="grid2">
       <div class="card">
@@ -276,7 +275,7 @@ uvm_config_db#(<span class="kw">virtual</span> my_if)::<span class="fn">set</spa
   <span class="kw">null</span>, <span class="str">"*.drv"</span>, <span class="str">"vif"</span>, my_vif);</code></pre>
       </div>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">정확히 <strong class="hl2">의존성 주입(DI)</strong>입니다. Spring의 <code>@Bean</code> 교체나 mock 주입처럼, factory override로 <strong>테스트마다 다른 구현체를 끼워넣어</strong> 에러 주입·재사용을 합니다. config_db는 환경설정 주입에 해당합니다.</p></div>
+    <div class="takeaway mt"><p style="margin:6px 0">자동차 정비에 비유하면, 본체 설계도는 그대로 둔 채 <strong class="hl2">멀쩡한 부품을 일부러 고장난 부품으로 갈아 끼워</strong> 안전장치가 작동하는지 시험하는 것과 같습니다. factory override는 테스트마다 다른 부품(정상/고장/변형)을 끼워넣어 에러 주입·재사용을 가능하게 하고, config_db는 그 부품들에 필요한 설정값을 위에서 아래로 전달합니다.</p></div>
   </section>
 
   <!-- 11. TLM / analysis port -->
@@ -292,19 +291,19 @@ uvm_config_db#(<span class="kw">virtual</span> my_if)::<span class="fn">set</spa
           <tr><td><strong class="hl">analysis port</strong></td><td>1:N <strong>브로드캐스트</strong>. monitor가 하나 쏘면 scoreboard·coverage가 동시에 구독</td></tr>
           <tr><td>seq_item pull port</td><td>driver↔sequencer 전용 <strong>양방향 1:1 pull</strong> (driver가 <code>get_next_item()</code>으로 item을 능동적으로 당겨옴)</td></tr>
         </table>
-        <div class="analogy mt"><p style="margin:6px 0">analysis port는 <strong>Pub/Sub(이벤트 버스)</strong>입니다. monitor가 "트랜잭션 발생!"을 publish하면, 구독자(scoreboard, 커버리지 수집기)가 각자 받아 처리합니다.</p></div>
+        <div class="analogy mt"><p style="margin:6px 0">analysis port는 <strong>라디오 방송</strong>과 같습니다. monitor가 "트랜잭션 발생!"이라고 한 번 송출하면, 여러 청취자(scoreboard, 커버리지 수집기)가 각자 그 방송을 받아 자기 일에 씁니다.</p></div>
       </div>
       <div class="diagram">
         <svg viewBox="0 0 320 240" width="320" font-family="var(--mono)">
           <rect x="90" y="14" width="140" height="50" rx="9" fill="#172236" stroke="#5b9cff"/>
           <text x="160" y="38" fill="#e8eef7" font-size="13" text-anchor="middle" font-weight="bold">monitor</text>
-          <text x="160" y="55" fill="#9fb0c7" font-size="10" text-anchor="middle">analysis port (publish)</text>
+          <text x="160" y="55" fill="#9fb0c7" font-size="10" text-anchor="middle">analysis port (송출)</text>
           <rect x="14" y="150" width="130" height="56" rx="9" fill="#172236" stroke="#ff7a85"/>
           <text x="79" y="175" fill="#e8eef7" font-size="12" text-anchor="middle" font-weight="bold">scoreboard</text>
-          <text x="79" y="193" fill="#9fb0c7" font-size="10" text-anchor="middle">subscriber</text>
+          <text x="79" y="193" fill="#9fb0c7" font-size="10" text-anchor="middle">수신자</text>
           <rect x="176" y="150" width="130" height="56" rx="9" fill="#172236" stroke="#5ee6a0"/>
           <text x="241" y="175" fill="#e8eef7" font-size="12" text-anchor="middle" font-weight="bold">coverage</text>
-          <text x="241" y="193" fill="#9fb0c7" font-size="10" text-anchor="middle">subscriber</text>
+          <text x="241" y="193" fill="#9fb0c7" font-size="10" text-anchor="middle">수신자</text>
           <line x1="140" y1="64" x2="79" y2="150" stroke="#38e1c6" stroke-width="2"/>
           <polygon points="79,150 84,141 89,148" fill="#38e1c6"/>
           <line x1="180" y1="64" x2="241" y2="150" stroke="#38e1c6" stroke-width="2"/>
@@ -321,7 +320,7 @@ uvm_config_db#(<span class="kw">virtual</span> my_if)::<span class="fn">set</spa
     <h2>이렇게 물어보면, 이렇게 답한다</h2>
     <div class="qa">
       <div class="q">UVM을 왜 쓰나요?</div>
-      <div class="a">SystemVerilog 기반의 표준화된 검증 방법론이기 때문입니다. 정해진 계층 구조와 실행 순서(phase), factory·config_db 같은 의존성 주입 메커니즘을 제공해, 테스트벤치를 매번 새로 짜지 않고 컴포넌트를 재사용·확장·이식할 수 있습니다. 또 업계 공용어라 협업과 IP 재사용에 유리합니다.</div>
+      <div class="a">SystemVerilog 기반의 표준화된 검증 방법론이기 때문입니다. 정해진 계층 구조와 실행 순서(phase), factory·config_db 같은 부품 교체·설정 전달 장치를 제공해, 테스트벤치를 매번 새로 짜지 않고 컴포넌트를 재사용·확장·이식할 수 있습니다. 또 업계 공용어라 협업과 IP 재사용에 유리합니다.</div>
     </div>
     <div class="qa">
       <div class="q">agent는 무엇으로 구성되나요? driver와 monitor의 차이는?</div>
@@ -329,7 +328,7 @@ uvm_config_db#(<span class="kw">virtual</span> my_if)::<span class="fn">set</spa
     </div>
     <div class="qa">
       <div class="q">scoreboard 역할과 factory override의 장점은?</div>
-      <div class="a">scoreboard는 reference model의 기대값과 monitor가 캡처한 실제값을 비교해 합·불을 자동 판정하는 self-checking의 핵심입니다. factory override는 코드를 수정하지 않고 test 레벨에서 특정 컴포넌트나 트랜잭션을 다른 구현체로 교체할 수 있게 해줍니다 — 에러 주입, 변형 시퀀스, 재사용에 강력합니다. 의존성 주입과 같은 개념입니다.</div>
+      <div class="a">scoreboard는 reference model의 기대값과 monitor가 캡처한 실제값을 비교해 합·불을 자동 판정하는 self-checking의 핵심입니다. factory override는 코드를 수정하지 않고 test 레벨에서 특정 컴포넌트나 트랜잭션을 다른 구현체로 교체할 수 있게 해줍니다 — 에러 주입, 변형 시퀀스, 재사용에 강력합니다.</div>
     </div>
   </section>
 
@@ -344,11 +343,11 @@ uvm_config_db#(<span class="kw">virtual</span> my_if)::<span class="fn">set</spa
           <li>계층: <strong>sequence → sequencer → driver → DUT → monitor → scoreboard</strong></li>
           <li><strong>agent</strong> = sequencer+driver+monitor <span class="dim">(active 기준; passive는 monitor만)</span> / <strong>env</strong>가 묶고 / <strong>test</strong>가 지휘</li>
           <li><strong>phases</strong>로 build→connect→run 순서를 강제</li>
-          <li><strong>factory/config_db</strong> = 의존성 주입, <strong>TLM/analysis port</strong> = 느슨한 통신</li>
+          <li><strong>factory/config_db</strong> = 부품 교체·설정 전달, <strong>TLM/analysis port</strong> = 느슨한 통신</li>
         </ul>
       </div>
       <div class="takeaway">
-        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"UVM은 검증계의 Spring입니다. 표준 계층과 phase, 의존성 주입(factory·config_db)으로 <strong class="hl">재사용 가능한 self-checking 테스트벤치</strong>를 짭니다."</p>
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"UVM은 검증을 위한 표준 골격입니다. 정해진 계층과 phase, 부품 교체·설정 전달 장치(factory·config_db)로 <strong class="hl">재사용 가능한 self-checking 테스트벤치</strong>를 짭니다."</p>
         <p class="dim" style="margin-bottom:6px">— 영화 스튜디오 비유 하나면 컴포넌트 6개가 다 설명됩니다.</p>
       </div>
     </div>

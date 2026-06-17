@@ -14,7 +14,7 @@
     <div class="part-badge">Part 3 · 칩 안의 통신</div>
     <h1>AMBA APB<br>칩 속 가장 단순한 골목길</h1>
     <p class="hook">블록끼리 어떻게 대화할까? 그 약속(프로토콜) 중 가장 느리지만 가장 단순한 APB부터.
-      "한 번에 하나, 또박또박" — 동기 블로킹 REST 호출을 떠올리면 절반은 이해한 겁니다.</p>
+      "한 번에 하나, 또박또박" — 우체국 창구에서 한 사람씩 일을 처리하는 모습을 떠올리면 절반은 이해한 겁니다.</p>
     <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
   </section>
 
@@ -54,23 +54,24 @@
     <div class="note mt">실무에선 흔히 AXI/AHB로 들어온 요청을 <strong>브리지(bridge)</strong>가 APB로 변환해 느린 주변장치에 전달합니다. "고속도로에서 빠져 골목으로 들어가는 IC" 같은 역할입니다.</div>
   </section>
 
-  <!-- 4. 개발자 비유 -->
+  <!-- 4. 우체국 비유 -->
   <section class="slide">
-    <div class="kicker">개발자 직관으로 번역</div>
-    <h2>APB는 "동기 블로킹 REST 호출"이다</h2>
+    <div class="kicker">직관적으로 이해하기</div>
+    <h2>APB는 "우체국 창구에서 한 명씩"이다</h2>
     <div class="grid2">
       <div>
-        <p>당신이 짠 이런 코드를 떠올려 보세요. 응답이 올 때까지 <strong>다음 줄로 못 넘어가고</strong>, 한 번에 요청 하나만 날아갑니다.</p>
-        <pre class="code"><code><span class="cmt">// APB의 멘탈 모델 = 이 코드</span>
-<span class="kw">val</span> resp = http.<span class="fn">get</span>(<span class="str">"/reg/0x10"</span>)  <span class="cmt">// 읽기</span>
-http.<span class="fn">post</span>(<span class="str">"/reg/0x14"</span>, <span class="str">0xFF</span>)    <span class="cmt">// 쓰기</span>
-<span class="cmt">// 둘은 절대 겹치지 않는다 (비파이프라인)</span></code></pre>
+        <p><strong>우체국 창구</strong>를 떠올려 보세요. 우편물 한 통을 직원에게 건네고(주소 + 내용), 직원이 "처리 끝났다"고 도장 찍어줄 때까지 그 자리에서 기다립니다. 다음 사람은 그 다음. 줄을 서서 <strong>한 번에 한 통씩</strong> — 이게 APB입니다.</p>
+        <ul>
+          <li>요청 하나를 건네면 <strong>완료될 때까지 기다린다</strong> (그 사이 다음 요청은 못 보냄)</li>
+          <li>여러 요청이 <strong>동시에 진행되지 않는다</strong></li>
+          <li>창구 직원(주변장치)이 느리면 "잠깐만요"라고 손을 들 수 있다</li>
+        </ul>
       </div>
-      <div class="dev-bridge">
-        <p style="margin:6px 0">APB는 <strong>요청 → 응답</strong>이 또박또박 짝지어지는 동기 호출입니다. 서버가 느리면(준비가 안 되면) <strong class="hl"><code>PREADY</code>로 "잠깐만요"</strong> 하며 호출자를 블로킹시킵니다. 그래서 비동기·동시요청을 다루는 AXI보다 훨씬 단순합니다.</p>
+      <div>
+        <p>창구 직원이 아직 일을 끝내지 못했으면 <strong class="hl"><code>PREADY</code>로 "잠깐만요"</strong> 하며 우리를 기다리게 합니다. 준비가 끝나야 다음으로 넘어가죠. 이렇게 <strong>요청 → 완료 확인</strong>이 또박또박 짝지어지기 때문에, 여러 요청을 동시에 처리하는 AXI보다 회로가 훨씬 단순합니다.</p>
       </div>
     </div>
-    <div class="analogy mt"><p style="margin:6px 0">또는 <strong>우체국 창구</strong>를 떠올리세요. 우편물 한 통을 직원에게 건네고(주소+내용), 직원이 처리 끝났다고 도장 찍어줄 때까지 기다립니다. 다음 사람은 그 다음. 줄 서서 <strong>한 번에 한 통씩</strong> — 이게 APB입니다.</p></div>
+    <div class="analogy mt"><p style="margin:6px 0">한 줄 요약: APB는 <strong>"줄 서서 한 번에 한 통씩, 도장 받고 다음"</strong>인 단순한 거래 방식입니다. 빠를 필요 없는 설정값을 가끔 주고받기엔 이 단순함이 오히려 장점입니다.</p></div>
   </section>
 
   <!-- 5. 신호들 -->
@@ -94,7 +95,7 @@ http.<span class="fn">post</span>(<span class="str">"/reg/0x14"</span>, <span cl
       </dl>
     </div>
     <div class="note mt">이 외에 리셋 <code>PRESETn</code>(active-low)이 항상 있고, 선택 신호 <code>PPROT</code>(보호)·<code>PSTRB</code>(바이트 strobe, APB4~)도 존재합니다.</div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 매핑: <code>PADDR</code>=URL 경로, <code>PWRITE</code>=GET/POST 구분, <code>PWDATA</code>=요청 바디, <code>PRDATA</code>=응답 바디, <code>PREADY</code>=200 응답 도착(블로킹 해제), <code>PSLVERR</code>=HTTP 500/4xx. 모든 신호의 <strong class="hl">P</strong> 접두사는 이게 APB(Peripheral 버스) 신호라는 표식입니다. (예: <code>PSLVERR</code> = P(APB 신호) + SLV(Slave) + ERR(에러)처럼, P 뒤 글자들은 별개 약어입니다.)</p></div>
+    <div class="note mt"><p style="margin:6px 0">외우는 요령: 모든 신호의 <strong class="hl">P</strong> 접두사는 이게 APB(Peripheral 버스) 신호라는 표식입니다. P 뒤에 붙는 글자들이 진짜 뜻이죠. 예를 들어 <code>PSLVERR</code> = P(APB 신호) + SLV(Slave, 슬레이브) + ERR(에러)처럼, P 뒤 글자들은 별개 약어입니다.</p></div>
   </section>
 
   <!-- 6. 2-phase 상태 -->
@@ -179,9 +180,9 @@ http.<span class="fn">post</span>(<span class="str">"/reg/0x14"</span>, <span cl
       <tr><td>주소/데이터 채널</td><td>공유, 직렬</td><td>읽기/쓰기 주소·데이터 채널 분리</td></tr>
       <tr><td>버스트 전송</td><td>없음 (한 번에 1워드)</td><td>있음 (한 요청에 여러 워드)</td></tr>
       <tr><td>순서 바꾸기</td><td>불가 (순차)</td><td>가능 (out-of-order, ID로 구분)</td></tr>
-      <tr><td>개발자 비유</td><td>동기 블로킹 호출</td><td>async/await + 동시 요청 풀</td></tr>
+      <tr><td>일상 비유</td><td>창구에서 한 명씩</td><td>여러 창구에서 동시에</td></tr>
     </table>
-    <div class="dev-bridge mt"><p style="margin:6px 0">AXI가 <strong>비동기 + 커넥션 풀</strong>이라면, APB는 <strong class="hl">한 줄짜리 동기 호출 루프</strong>입니다. 그래서 주변장치 설정처럼 가끔, 조금만 오가면 되는 곳엔 APB가 정답입니다 — 굳이 비싼 비동기 인프라를 깔 이유가 없죠.</p></div>
+    <div class="note mt"><p style="margin:6px 0">AXI가 <strong>여러 창구를 동시에 운영하는 큰 우체국</strong>이라면, APB는 <strong class="hl">창구 하나로 한 명씩 처리하는 동네 우체국</strong>입니다. 주변장치 설정처럼 가끔, 조금만 오가면 되는 곳엔 APB가 정답입니다 — 굳이 복잡하고 비싼 다중 채널 회로를 깔 이유가 없죠.</p></div>
   </section>
 
   <!-- 9. Q&A -->
@@ -198,7 +199,7 @@ http.<span class="fn">post</span>(<span class="str">"/reg/0x14"</span>, <span cl
     </div>
     <div class="qa">
       <div class="q">PREADY와 PSLVERR의 역할은?</div>
-      <div class="a"><code>PREADY</code>는 슬레이브의 핸드셰이크 신호로, 0이면 아직 준비 안 됨(대기 사이클을 삽입해 마스터를 블로킹), 1이면 이번 클럭에 전송 완료를 뜻합니다. 느린 주변장치가 속도를 맞추는 수단이죠. <code>PSLVERR</code>은 에러 응답으로, <code>PSEL</code>·<code>PENABLE</code>·<code>PREADY</code>가 모두 1인 전송의 마지막 클럭(즉 전송이 완료되는 클럭)에만 유효하며, 이때 1이면 그 트랜잭션이 실패(잘못된 주소·쓰기 금지 영역 등)했음을 알립니다. HTTP로 치면 PREADY는 응답 도착, PSLVERR은 500 에러에 해당합니다.</div>
+      <div class="a"><code>PREADY</code>는 슬레이브의 핸드셰이크 신호로, 0이면 아직 준비 안 됨(대기 사이클을 삽입해 마스터를 블로킹), 1이면 이번 클럭에 전송 완료를 뜻합니다. 느린 주변장치가 속도를 맞추는 수단이죠. <code>PSLVERR</code>은 에러 응답으로, <code>PSEL</code>·<code>PENABLE</code>·<code>PREADY</code>가 모두 1인 전송의 마지막 클럭(즉 전송이 완료되는 클럭)에만 유효하며, 이때 1이면 그 트랜잭션이 실패(잘못된 주소·쓰기 금지 영역 등)했음을 알립니다. 우체국 창구에 비유하면 <code>PREADY</code>는 "처리 끝났습니다" 도장, <code>PSLVERR</code>은 "이 우편물은 보낼 수 없습니다"라는 반려 통지에 해당합니다.</div>
     </div>
   </section>
 
@@ -217,8 +218,8 @@ http.<span class="fn">post</span>(<span class="str">"/reg/0x14"</span>, <span cl
         </ul>
       </div>
       <div class="takeaway">
-        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"APB는 AMBA에서 가장 단순한 <strong class="hl">동기·비파이프라인 버스</strong>로, SETUP/ACCESS 2페이즈로 주변장치 제어 레지스터를 한 번에 하나씩 읽고 씁니다."</p>
-        <p class="dim" style="margin-bottom:6px">— 마치 동기 블로킹 REST 호출처럼.</p>
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"APB는 AMBA에서 가장 단순한 <strong class="hl">비파이프라인 버스</strong>로, SETUP/ACCESS 2페이즈로 주변장치 제어 레지스터를 한 번에 하나씩 읽고 씁니다."</p>
+        <p class="dim" style="margin-bottom:6px">— 마치 우체국 창구에서 한 명씩 처리하듯.</p>
       </div>
     </div>
     <div class="note mt">다음 → <strong>3-2 AMBA AXI</strong>: 다중 채널·버스트·outstanding으로 "동시에 여러 요청"을 처리하는 고속도로. APB의 정반대 세계로.</div>

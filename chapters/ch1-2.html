@@ -13,7 +13,7 @@
   <section class="slide title-slide">
     <div class="part-badge">Part 1 · 언어</div>
     <h1>SystemVerilog<br>Verilog에 <span class="hl">OOP와 테스트</span>를 더하다</h1>
-    <p class="hook">Verilog가 "회로를 그리는 언어"였다면, SystemVerilog는 거기에 Java/C++급 객체지향과 테스트 기능을 통째로 내장한 슈퍼셋입니다.
+    <p class="hook">Verilog가 "회로를 그리는 언어"였다면, SystemVerilog는 거기에 본격적인 객체지향과 테스트 기능을 통째로 내장한 슈퍼셋입니다.
       검증 엔지니어의 진짜 무기가 여기서 시작됩니다.</p>
     <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
   </section>
@@ -36,21 +36,19 @@
     <div class="note mt"><strong>왜 배우나?</strong> UVM을 비롯한 현대 검증 방법론은 전부 SystemVerilog의 클래스·랜덤·커버리지 기능 위에 세워져 있습니다. SV를 모르면 UVM은 한 줄도 못 읽습니다.</div>
   </section>
 
-  <!-- 3. 개발자 비유 -->
+  <!-- 3. 검증 기능 한눈에 -->
   <section class="slide">
-    <div class="kicker">개발자 직관으로 번역</div>
-    <h2>당신이 이미 아는 것으로 SV 전체가 설명된다</h2>
-    <div class="dev-bridge">
-      <p style="margin:6px 0 14px">SystemVerilog의 검증 기능은 사실 <strong>당신이 이미 쓰던 도구들의 하드웨어 버전</strong>입니다. 새로 외울 게 아니라, 이름만 바꿔 매핑하면 됩니다.</p>
-      <table class="compare" style="margin-bottom:0">
-        <tr><th>SystemVerilog</th><th>개발자가 아는 것</th></tr>
-        <tr><td><code>class</code> / 상속(extends)</td><td>Java/C++의 클래스·상속 — 테스트를 객체로 모델링</td></tr>
-        <tr><td><code>rand</code> + <code>constraint</code></td><td><strong class="hl">Property-based testing</strong> (QuickCheck/Hypothesis)</td></tr>
-        <tr><td>SVA assertion</td><td><strong class="hl">runtime invariant / assert()</strong> — 항상 참이어야 할 조건</td></tr>
-        <tr><td><code>fork ... join</code></td><td>스레드/async 병렬 실행</td></tr>
-        <tr><td><code>covergroup</code></td><td>코드 커버리지 도구 (어디까지 테스트했나)</td></tr>
-      </table>
-    </div>
+    <div class="kicker">직관적으로 이해하기</div>
+    <h2>SV의 검증 기능, <span class="hl">하는 일 한 줄로</span> 정리</h2>
+    <p class="lead">검증측 기능은 종류가 많아 보이지만, "무엇을 하려는 도구인가"로 묶으면 다섯 갈래뿐입니다. 자세한 문법은 뒤에서 하나씩 보고, 먼저 큰 그림을 잡읍시다.</p>
+    <table class="compare" style="margin-bottom:0">
+      <tr><th>SystemVerilog 기능</th><th>한 줄 역할</th></tr>
+      <tr><td><code>class</code> / 상속(extends)</td><td>테스트를 하나의 부품(객체)으로 모델링하고, 변형을 만들어 재사용</td></tr>
+      <tr><td><code>rand</code> + <code>constraint</code></td><td><strong class="hl">규칙을 지키는 범위 안에서 값을 무작위로 생성</strong></td></tr>
+      <tr><td>SVA assertion</td><td><strong class="hl">"항상 참이어야 할 조건"</strong>을 적어두고 어기면 즉시 알림</td></tr>
+      <tr><td><code>fork ... join</code></td><td>여러 작업을 동시에 돌리고 끝날 때까지 기다림</td></tr>
+      <tr><td><code>covergroup</code></td><td>어디까지 테스트했는지를 백분율로 측정</td></tr>
+    </table>
   </section>
 
   <!-- 4. logic vs wire/reg -->
@@ -64,7 +62,7 @@
       <tr><td><code>reg</code></td><td>always 블록 안에서 할당되는 변수 (실제로 레지스터란 뜻 아님!)</td></tr>
       <tr><td><code class="hl">logic</code></td><td colspan="2"><strong class="hl">둘 다 됨</strong> — 단, "한 곳에서만 구동" 규칙을 도구가 검사해 줌</td></tr>
     </table>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: <code>reg</code>라는 이름이 "register"처럼 보이지만 실제론 그냥 변수였습니다 — 마치 <code>var</code>가 변수인지 상수인지 헷갈리던 시절. <code>logic</code>은 그 모호함을 없앤 <strong>명확한 단일 타입</strong>입니다. (단, 여러 곳에서 동시에 구동되는 진짜 양방향 배선엔 여전히 <code>wire</code>를 씁니다.)</p></div>
+    <div class="note mt"><strong>이름의 함정:</strong> <code>reg</code>라는 이름은 "register(레지스터)"처럼 보이지만 실제로는 그냥 변수일 뿐이라, 처음 배우는 사람을 오래 헷갈리게 했습니다. <code>logic</code>은 그 모호함을 없앤 <strong class="hl">명확한 단일 타입</strong>입니다. (단, 여러 곳에서 동시에 구동되는 진짜 양방향 배선엔 여전히 <code>wire</code>를 씁니다.)</div>
   </section>
 
   <!-- 5. always_comb / always_ff -->
@@ -86,7 +84,7 @@
         <p><strong>래치</strong>를 의도적으로 만들 때. 의도치 않은 래치는 도구가 <strong class="hl">경고</strong>로 잡아줌.</p>
       </div>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: TypeScript의 타입 어노테이션과 같습니다. 동작은 같아도 <strong>"내 의도는 이거다"라고 명시</strong>하면, 컴파일러(여기선 합성 도구)가 의도와 실제 회로가 다를 때 에러를 띄워 줍니다.</p></div>
+    <div class="note mt"><strong>핵심:</strong> 회로 동작은 같더라도 <strong class="hl">"내 의도는 조합논리(또는 순차논리)다"라고 이름으로 못박아 두면</strong>, 합성 도구가 내가 적은 의도와 실제 만들어질 회로가 어긋날 때 곧바로 에러를 띄워 줍니다. 실험에서 예상값을 미리 적어두면 결과가 어긋났을 때 바로 알아채는 것과 같습니다.</div>
   </section>
 
   <!-- 6. interface -->
@@ -133,7 +131,7 @@
   <section class="slide">
     <div class="kicker">검증측 ① · 핵심 질문</div>
     <h2>왜 검증에 <span class="hl2">OOP</span>가 필요한가?</h2>
-    <p>설계(RTL)는 병렬 회로라 OOP가 어울리지 않지만, <strong>테스트 코드</strong>는 일반 소프트웨어와 똑같습니다 — 재사용하고, 확장하고, 수천 개의 변형을 만들어야 하죠.</p>
+    <p>설계(RTL)는 동시에 돌아가는 병렬 회로라 OOP가 어울리지 않지만, <strong>테스트를 만드는 일</strong>은 다릅니다 — 한 번 만든 걸 재사용하고, 확장하고, 수천 개의 변형을 찍어내야 하죠. 이렇게 "부품을 만들어 조립·재사용"하는 작업에는 객체지향(OOP)이 딱 맞습니다.</p>
     <div class="grid3 mt">
       <div class="card">
         <h3><span class="ico">♻️</span> 재사용</h3>
@@ -148,7 +146,7 @@
         <p>객체 안에 <code>rand</code> 변수를 두면 <strong>수천 개의 시나리오</strong>를 자동 생성. 사람이 일일이 못 만든다.</p>
       </div>
     </div>
-    <div class="analogy mt"><p style="margin:6px 0">비유: 테스트벤치를 하나의 <strong>애플리케이션</strong>이라 생각하세요. 그 앱을 절차적 코드로 짜겠습니까, 객체지향으로 짜겠습니까? 복잡한 칩일수록 답은 명확합니다 — <strong class="hl">OOP로 구조화</strong>해야 유지보수가 됩니다.</p></div>
+    <div class="analogy mt"><p style="margin:6px 0">비유: 테스트벤치를 하나의 <strong>레고 작품</strong>이라 생각하세요. 부품을 그때그때 통으로 깎아 만들 수도 있지만, 규격화된 블록(객체)을 만들어 두고 끼워 맞추면 고치고 확장하기가 훨씬 쉽습니다. 복잡한 칩일수록 답은 명확합니다 — <strong class="hl">OOP로 구조화</strong>해야 유지보수가 됩니다.</p></div>
   </section>
 
   <!-- 8. rand + constraint (예시) -->
@@ -156,9 +154,8 @@
     <div class="kicker">검증측 ② · 랜덤화</div>
     <h2><code>rand</code> + <code>constraint</code> = <span class="hl">제약 기반 랜덤</span></h2>
     <p>핵심 아이디어: "값을 랜덤하게 뽑되, <strong>말이 되는 범위 안에서만</strong>". 변수에 <code>rand</code>를 붙이고, <code>constraint</code>로 규칙을 건 뒤 <code>randomize()</code>를 호출합니다.</p>
-    <div class="grid2 mt">
-      <div>
-        <pre class="code"><code><span class="kw">class</span> <span class="fn">Packet</span>;
+    <div class="mt">
+      <pre class="code"><code><span class="kw">class</span> <span class="fn">Packet</span>;
   <span class="kw">rand bit</span> [7:0] addr;
   <span class="kw">rand bit</span> [7:0] len;
 
@@ -173,28 +170,24 @@
 Packet p = <span class="kw">new</span>();
 <span class="kw">if</span> (p.<span class="fn">randomize</span>())  <span class="cmt">// 규칙 지킨 랜덤값 채움</span>
   drive(p);</code></pre>
-      </div>
-      <div class="dev-bridge">
-        <p style="margin:6px 0 12px"><strong>이게 바로 Property-based testing</strong>입니다. QuickCheck/Hypothesis로 "입력은 이 조건을 만족해야 한다"를 선언하면 프레임워크가 수천 케이스를 뽑아주던 그 패턴.</p>
-        <p style="margin:6px 0">차이점: <code>constraint</code>는 <strong class="hl">제약 솔버</strong>(constraint solver — 내부적으로 BDD·SAT 등 형식 엔진을 혼합해 씀)가 풀어, 단순 범위가 아니라 변수 간 복잡한 관계식까지 만족하는 값을 생성합니다.</p>
-      </div>
     </div>
+    <div class="note mt"><strong>그냥 난수가 아니다:</strong> <code>constraint</code>에 적은 규칙은 <strong class="hl">전용 풀이 엔진(제약 솔버)</strong>이 처리합니다. 그래서 단순한 값 범위뿐 아니라 "addr가 짝수이면서 len과는 이런 관계여야 한다" 같은 <strong>변수 사이의 복잡한 조건식까지 동시에 만족하는 값</strong>을 자동으로 찾아냅니다. 연립부등식의 해를 풀어 그중 하나를 무작위로 골라주는 셈이죠.</div>
     <div class="note mt">왜 중요한가? 사람은 "정상 케이스 + 떠오르는 코너 케이스" 정도만 짭니다. 제약 랜덤은 <strong class="hl">사람이 상상 못 한 조합</strong>을 끝없이 던져 숨은 버그를 캐냅니다. 이를 CRV(Constrained-Random Verification)라 부릅니다.</div>
   </section>
 
   <!-- 9. 병렬/통신: fork-join, mailbox, semaphore -->
   <section class="slide">
     <div class="kicker">검증측 ③ · 병렬과 통신</div>
-    <h2>테스트벤치는 본질적으로 <span class="hl2">멀티스레드</span></h2>
-    <p>자극을 넣는 스레드, 응답을 받는 스레드, 검사하는 스레드가 동시에 돌아야 합니다. SV는 SW의 동시성 도구를 그대로 제공합니다.</p>
+    <h2>테스트벤치는 본질적으로 <span class="hl2">여러 일이 동시에</span> 돌아간다</h2>
+    <p>자극을 넣는 흐름, 응답을 받는 흐름, 검사하는 흐름이 동시에 진행돼야 합니다. SV는 여러 작업을 동시에 다루는 도구를 기본으로 제공합니다.</p>
     <table>
-      <tr><th>SV 구문</th><th>하는 일</th><th>개발자가 아는 것</th></tr>
-      <tr><td><code>fork ... join</code></td><td>여러 작업을 병렬 실행, 모두 끝날 때까지 대기</td><td>스레드 spawn + join</td></tr>
-      <tr><td><code>fork ... join_none</code></td><td>병렬로 띄우고 기다리지 않음</td><td>fire-and-forget async</td></tr>
-      <tr><td><code class="hl">mailbox</code></td><td>스레드 간 데이터 전달 큐 (FIFO)</td><td>스레드-세이프 큐 / 채널</td></tr>
-      <tr><td><code class="hl">semaphore</code></td><td>공유 자원 동시 접근 제한</td><td>세마포어 (그대로!)</td></tr>
+      <tr><th>SV 구문</th><th>하는 일</th></tr>
+      <tr><td><code>fork ... join</code></td><td>여러 작업을 동시에 시작하고, 모두 끝날 때까지 기다림</td></tr>
+      <tr><td><code>fork ... join_none</code></td><td>동시에 띄워 놓고 기다리지 않음 (계속 다음 일 진행)</td></tr>
+      <tr><td><code class="hl">mailbox</code></td><td>동시에 도는 작업끼리 데이터를 주고받는 줄서기 통로(FIFO)</td></tr>
+      <tr><td><code class="hl">semaphore</code></td><td>공유 자원에 동시에 접근하는 수를 제한 (화장실 열쇠 같은 것)</td></tr>
     </table>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: Go의 <strong>goroutine + channel</strong>, 또는 Java의 <strong>ExecutorService + BlockingQueue</strong>와 똑같은 그림입니다. 검증 환경에서 컴포넌트들은 이런 느슨한 결합으로 트랜잭션을 주고받습니다 — UVM도 같은 원리를 raw mailbox가 아닌 TLM 포트(analysis_port·uvm_tlm_fifo 등)로 구현합니다.</p></div>
+    <div class="note mt">비유: <strong class="hl">오케스트라</strong>를 떠올리면 됩니다. 여러 연주자(작업)가 동시에 연주하되, <code>mailbox</code>는 악보를 건네는 보면대, <code>semaphore</code>는 한 번에 한 명만 쓸 수 있는 마이크 같은 역할입니다. 검증 환경의 부품들은 이렇게 서로 느슨하게 연결돼 데이터를 주고받습니다.</div>
   </section>
 
   <!-- 10. covergroup + assertion -->
@@ -223,24 +216,24 @@ Packet p = <span class="kw">new</span>();
 );</code></pre>
       </div>
     </div>
-    <div class="note mt"><strong>핵심 구분:</strong> 커버리지는 "충분히 했나?"(완성도), assertion은 "규칙을 어겼나?"(정확성). 개발자 비유로 covergroup은 <strong class="hl">코드 커버리지 리포트</strong>, SVA는 코드 곳곳의 <strong class="hl">runtime assert / invariant</strong>입니다.</div>
+    <div class="note mt"><strong>핵심 구분:</strong> 커버리지는 "충분히 했나?"(완성도), assertion은 "규칙을 어겼나?"(정확성)를 봅니다. covergroup은 시험 범위 중 <strong class="hl">어디까지 풀어봤는지 표시한 진도표</strong>, SVA는 회로 곳곳에 붙여둔 <strong class="hl">"이 조건이 깨지면 즉시 경보를 울리는 센서"</strong>라고 생각하면 됩니다.</div>
   </section>
 
   <!-- 11. virtual interface -->
   <section class="slide">
     <div class="kicker">검증측 ⑤ · 연결의 다리</div>
     <h2><code>virtual interface</code> = 클래스 세계 ↔ 신호 세계의 다리</h2>
-    <p>여기서 두 세계가 부딪힙니다. <strong class="hl2">class</strong>는 동적으로 생기는 객체(SW), <strong class="hl">interface/신호</strong>는 정적인 하드웨어 배선. 클래스 안에서 실제 핀(wire)을 흔들려면 둘을 이어줄 핸들이 필요합니다.</p>
+    <p>여기서 두 세계가 부딪힙니다. <strong class="hl2">class</strong>는 시뮬레이션 도중 필요할 때 생겼다 사라지는 동적인 객체, <strong class="hl">interface/신호</strong>는 칩에 고정된 정적인 배선입니다. 클래스 안에서 실제 핀(wire)을 흔들려면 둘을 이어줄 연결 고리가 필요합니다.</p>
     <div class="diagram mt">
       <div class="flow">
-        <div class="box" style="border-color:var(--accent2)">검증 class<br><span class="dim" style="font-size:12px">동적 객체(SW)</span></div>
+        <div class="box" style="border-color:var(--accent2)">검증 class<br><span class="dim" style="font-size:12px">동적인 객체</span></div>
         <span class="arrow">→</span>
-        <div class="box on" style="border-color:var(--accent)">virtual interface<br><span class="hl" style="font-size:12px">핸들(포인터)</span></div>
+        <div class="box on" style="border-color:var(--accent)">virtual interface<br><span class="hl" style="font-size:12px">연결 고리</span></div>
         <span class="arrow">→</span>
-        <div class="box" style="border-color:var(--warn)">실제 interface<br><span class="dim" style="font-size:12px">DUT의 핀(HW)</span></div>
+        <div class="box" style="border-color:var(--warn)">실제 interface<br><span class="dim" style="font-size:12px">DUT의 핀(배선)</span></div>
       </div>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: <strong>virtual interface는 사실상 포인터/참조</strong>입니다. 클래스(객체)가 실제 하드웨어 배선 묶음을 가리키는 핸들을 들고 있어서, 객체 메서드로 핀을 읽고 쓸 수 있게 됩니다. 이 다리가 없으면 OOP 테스트벤치와 RTL은 영원히 서로 못 만납니다.</p></div>
+    <div class="note mt"><strong>한 줄로:</strong> virtual interface는 <strong class="hl">"실제 배선 묶음을 가리키는 주소표(연결 고리)"</strong>입니다. 클래스(객체)가 이 연결 고리를 들고 있어서, 멀리 떨어진 실제 핀을 마치 손에 쥔 것처럼 읽고 쓸 수 있게 됩니다. 우편번호가 실제 건물을 가리키듯, 객체가 하드웨어 신호를 가리키는 것이죠. 이 다리가 없으면 OOP 테스트벤치와 RTL은 영원히 서로 못 만납니다.</div>
   </section>
 
   <!-- 12. Q&A -->
@@ -257,7 +250,7 @@ Packet p = <span class="kw">new</span>();
     </div>
     <div class="qa">
       <div class="q">rand/constraint와 assertion(SVA)이 뭔가요?</div>
-      <div class="a">rand는 클래스 변수를 랜덤화 대상으로 표시하고, constraint는 그 랜덤값이 만족해야 할 규칙입니다. randomize() 호출 시 솔버가 제약을 만족하는 값을 생성하죠 — property-based testing과 같은 발상입니다. assertion(SVA)은 "이 조건은 항상 참이어야 한다"를 시간 관계로 선언해, 위반 시 시뮬레이션이 즉시 잡아내는 runtime invariant입니다.</div>
+      <div class="a">rand는 클래스 변수를 랜덤화 대상으로 표시하고, constraint는 그 랜덤값이 만족해야 할 규칙입니다. randomize() 호출 시 전용 풀이 엔진(솔버)이 규칙을 만족하는 값을 생성하죠 — "규칙을 지키는 한도 안에서 무작위로 값을 던져 본다"는 발상입니다. assertion(SVA)은 "이 조건은 매 순간 항상 참이어야 한다"를 시간 관계로 선언해, 위반하는 순간 시뮬레이션이 즉시 잡아내는 자동 감시 장치입니다.</div>
     </div>
   </section>
 

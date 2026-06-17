@@ -32,10 +32,10 @@
     <div class="note mt">한 번 잘못 부팅되는 칩은 <strong class="hl">벽돌(brick)</strong>이 됩니다 — 그래서 부팅은 가장 먼저, 가장 철저히 검증하는 시나리오 중 하나입니다.</div>
   </section>
 
-  <!-- 3. 개발자 비유 -->
+  <!-- 3. 직관 비유 -->
   <section class="slide">
-    <div class="kicker">개발자 직관으로 번역</div>
-    <h2>당신은 이미 부팅 체인을 안다 — BIOS → GRUB → 커널</h2>
+    <div class="kicker">직관적으로 이해하기</div>
+    <h2>부팅 체인 = 사람이 아침에 깨어나 출근하는 순서</h2>
     <div class="grid2">
       <div class="analogy">
         <p style="margin-top:6px"><strong>사람이 아침에 깨는 순서</strong>로 생각하면 한 번에 외워집니다.</p>
@@ -47,15 +47,15 @@
           <li>집을 나서 출근 → <strong class="hl">OS 진입</strong></li>
         </ul>
       </div>
-      <div class="dev-bridge">
-        <p style="margin-top:6px">PC를 켜본 개발자라면 이 체인이 낯익습니다.</p>
-        <table class="compare">
-          <tr><th>PC (당신의 세계)</th><th>SoC</th></tr>
-          <tr><td>BIOS / UEFI (메인보드 ROM)</td><td>BootROM (칩 안 마스크롬)</td></tr>
-          <tr><td>GRUB (1차/2차 부트로더)</td><td>SPL → U-Boot</td></tr>
-          <tr><td>Linux 커널 부팅</td><td>OS / 펌웨어 진입</td></tr>
-        </table>
-        <p style="margin:6px 0">핵심: <strong>작은 코드가 더 큰 코드를 불러오는 릴레이</strong>. 각 단계는 "다음 단계를 메모리에 올리고 점프"할 뿐입니다.</p>
+      <div class="analogy">
+        <p style="margin-top:6px">한 단계가 다음 단계를 깨우는 <strong>릴레이 계주</strong>를 떠올려도 좋습니다.</p>
+        <ul>
+          <li>가장 단순한 첫 주자 → <strong class="hl">BootROM</strong> (칩에 새겨진 마스크 ROM)</li>
+          <li>바통을 받아 다음을 준비 → <strong class="hl">SPL</strong> (작은 2차 부트)</li>
+          <li>본격적으로 달리는 주자 → <strong class="hl">U-Boot</strong> (메인 부트로더)</li>
+          <li>결승선 → <strong class="hl">OS / 펌웨어 진입</strong></li>
+        </ul>
+        <p style="margin:6px 0">핵심: <strong>작은 부트 코드가 더 큰 부트 코드를 불러오는 릴레이</strong>. 각 단계는 "다음 단계를 메모리에 올리고 그곳으로 넘긴다"가 전부입니다.</p>
       </div>
     </div>
   </section>
@@ -100,7 +100,7 @@
       <div class="card">
         <h3><span class="ico">⚡</span> POR (Power-On Reset)</h3>
         <p>전원 전압이 안정 범위에 들어올 때까지 <strong class="hl">모든 회로를 강제로 리셋 상태에 묶어두는</strong> 신호입니다. 전압이 출렁이는 동안 회로가 엉뚱하게 움직이지 못하게 막는 안전장치.</p>
-        <p class="dim">프로그램 시작 시 모든 변수를 <code>0</code>으로 초기화하는 것과 같은 개념 — 단, 전기적으로.</p>
+        <p class="dim">실험 장비를 켜기 전, 모든 다이얼을 0점에 맞춰 놓고 시작하는 것과 같은 개념 — 단, 전기적으로 한순간에.</p>
       </div>
       <div class="card">
         <h3><span class="ico">🔄</span> PLL lock</h3>
@@ -159,7 +159,7 @@
     <span class="fn">hang</span>();                       <span class="cmt">// 실패 → 정지</span>
   <span class="fn">jump_to</span>(spl);                   <span class="cmt">// 2차 부트로 점프</span>
 }</code></pre>
-        <div class="dev-bridge"><p style="margin:6px 0">reset vector는 <strong>프로그램의 <code>main()</code> 진입점 주소를 하드웨어로 고정한 것</strong>이라고 보면 됩니다. 단지 그 진입점이 칩에 영구히 새겨져 있을 뿐.</p></div>
+        <div class="note" style="margin-top:10px"><p style="margin:6px 0">reset vector는 <strong>"전원을 켜면 무조건 여기서부터 시작한다"는 출발선이 칩에 영구히 새겨져 있는 것</strong>입니다. 매번 같은 곳에서 시작하기에, 부팅이 항상 같은 방식으로 재현됩니다.</p></div>
       </div>
     </div>
   </section>
@@ -180,8 +180,9 @@
         <h3><span class="ico">🧠</span> 왜 DRAM init이 큰 일인가</h3>
         <p>DRAM은 그냥 켠다고 동작하지 않습니다. 타이밍 파라미터 설정·트레이닝(전기 신호 보정)을 거쳐야 안정적으로 읽고 쓸 수 있습니다. 이게 SPL의 핵심 임무이자 <strong class="hl">부팅 디버깅의 단골 실패 지점</strong>입니다.</p>
       </div>
-      <div class="dev-bridge">
-        <p style="margin-top:6px">개발자 비유: SPL은 <strong>최소 의존성 부트스트랩</strong>, U-Boot는 <strong>풀 기능 런처</strong>입니다. 컨테이너의 작은 init 프로세스가 본 애플리케이션을 띄우는 것과 같은 릴레이 구조죠.</p>
+      <div class="card">
+        <h3><span class="ico">🪜</span> 왜 두 단계로 나누나</h3>
+        <p>SPL은 <strong class="hl">좁은 SRAM에 겨우 들어가는 최소한의 코드</strong>로, 큰 DRAM을 켜는 일만 합니다. DRAM이 켜진 뒤에야 비로소 <strong>풍부한 기능을 가진 U-Boot</strong>를 그 넓은 DRAM에 올려 돌릴 수 있습니다. 좁은 발판을 딛고 넓은 무대로 올라서는 사다리 구조입니다.</p>
       </div>
     </div>
   </section>
@@ -223,7 +224,7 @@
     </div>
     <div class="grid2 mt">
       <div class="analogy"><p style="margin:6px 0"><strong>Root of Trust</strong>는 절대 변조 불가한 <strong>BootROM + 칩에 구운 eFuse 키</strong>입니다. 여기서 출발한 신뢰가 한 칸씩 다음 단계로 전달됩니다 — 한 칸이라도 검증 실패하면 사슬이 끊겨 부팅 중단.</p></div>
-      <div class="dev-bridge"><p style="margin:6px 0">개발자에겐 친숙합니다: <strong>TLS 인증서 체인</strong>이나 <strong>Git 커밋 서명(GPG)</strong>과 같은 구조 — 신뢰의 뿌리(Root CA)에서 시작해 서명으로 다음을 검증하는 사슬.</p></div>
+      <div class="analogy"><p style="margin:6px 0">일상의 비유: <strong>봉랍 인장으로 봉인된 공문서</strong>가 한 사람에서 다음 사람으로 전달되는 것과 같습니다. 받는 사람은 인장이 진짜인지 확인한 뒤에만 봉투를 열고, 그 안의 문서가 다시 다음 사람의 인장을 검증합니다 — 가장 믿을 수 있는 첫 인장(Root of Trust)에서 시작된 신뢰가 한 칸씩 이어집니다.</p></div>
     </div>
   </section>
 
@@ -291,7 +292,7 @@
       </div>
       <div class="takeaway">
         <p style="margin:6px 0;font-size:18px;color:var(--ink)">"SoC 부팅은 POR·PLL lock 후 CPU가 reset vector에서 깨어나 BootROM→부트로더→OS로 신뢰의 사슬을 이으며 올라가는 과정이고, 저는 그 시퀀스를 실리콘 전에 C-test로 검증합니다."</p>
-        <p class="dim" style="margin-bottom:6px">— PC의 BIOS→GRUB→커널과 같은 체인이라고 말하면 면접관이 바로 끄덕입니다.</p>
+        <p class="dim" style="margin-bottom:6px">— 작은 부트 코드가 더 큰 코드를 차례로 불러오는 릴레이라고 말하면 면접관이 바로 끄덕입니다.</p>
       </div>
     </div>
     <div class="note mt">다음 → <strong>5-2 Low Power 검증</strong>: 깨어난 칩을 다시 재우고 깨우는 전력 관리 — 클럭 게이팅·파워 도메인·UPF 이야기로.</div>

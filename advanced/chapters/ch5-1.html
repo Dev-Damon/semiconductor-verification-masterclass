@@ -96,7 +96,7 @@
 }                             <span class="cmt">// → BL1(BootROM) 첫 명령 실행</span></code></pre>
         <div class="codecap">RVBAR는 read-only(또는 pin/eFuse strap으로 고정). 멀티코어는 보통 primary 코어만 부팅하고 나머지는 WFI/WFE로 park.</div>
       </div>
-      <div class="deepnote"><p style="margin:6px 0"><strong>x86 비교:</strong> x86은 reset 시 <code>0xFFFFFFF0</code>(주소공간 top에서 16바이트 아래)에서 시작하며, 이 좁은 자리엔 BIOS/펌웨어 본체로 향하는 far-jump 명령 하나(예: <code>ljmp $0xf000,$0xe05b</code>)가 들어있다. ARM은 그게 <code>RVBAR_ELx</code> 레지스터 값으로 <strong>유연하게 지정</strong>된다는 점이 다릅니다. 개발자 직관: "엔트리포인트 주소를 하드코딩한 레지스터"입니다.</p></div>
+      <div class="deepnote"><p style="margin:6px 0"><strong>x86 비교:</strong> x86은 reset 시 <code>0xFFFFFFF0</code>(주소공간 top에서 16바이트 아래)에서 시작하며, 이 좁은 자리엔 BIOS/펌웨어 본체로 향하는 far-jump 명령 하나(예: <code>ljmp $0xf000,$0xe05b</code>)가 들어있다. ARM은 그게 <code>RVBAR_ELx</code> 레지스터 값으로 <strong>유연하게 지정</strong>된다는 점이 다릅니다. 쉽게 말해 RVBAR는 "코어가 깨어나면 가장 먼저 읽어야 할 첫 명령이 어디 있는지"를 적어 둔 주소표지판입니다.</p></div>
     </div>
   </section>
 
@@ -199,7 +199,7 @@ ver = cert.version;
         <div class="codecap">서명검증 = "이 이미지를 우리가 만들었나". anti-rollback = "취약했던 구버전으로 되돌리지 못하게".</div>
       </div>
       <div>
-        <div class="dev-bridge"><p style="margin:6px 0">개발자 비유: <strong>서명검증</strong>은 패키지의 GPG/코드서명 확인, <strong>anti-rollback</strong>은 <code>npm install pkg@&lt;취약버전&gt;</code>을 막는 minimum-version 락. 차이는 <strong>키 앵커가 소프트웨어가 아니라 칩 안 fuse</strong>라 공격자가 못 바꾼다는 점.</p></div>
+        <div class="spec"><p style="margin:6px 0"><strong>서명검증</strong>은 봉인된 소포에 찍힌 도장이 진짜인지 확인하는 일, <strong>anti-rollback</strong>은 "이미 폐기한 옛 버전은 다시 받지 않겠다"는 거절 규칙입니다. 핵심은 검증의 기준이 되는 <strong>열쇠(키)가 소프트웨어가 아니라 칩 안의 fuse에 박혀</strong> 있어서 공격자가 바꿀 수 없다는 점입니다.</p></div>
         <div class="pitfall mt"><p style="margin:6px 0"><strong>함정:</strong> 서명검증만 있고 anti-rollback이 없으면, 공격자가 <strong>정상 서명된 옛 취약 펌웨어</strong>를 다시 올려 우회한다. 그래서 monotonic 카운터(OTP)가 필수.</p></div>
       </div>
     </div>

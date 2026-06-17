@@ -60,9 +60,9 @@
       <tr><td>실행 시점</td><td>즉시 계산·즉시 대입(순차적)</td><td>RHS는 즉시 평가, LHS 대입은 <strong class="hl">NBA 영역에서 한꺼번에</strong></td></tr>
       <tr><td>같은 블록 내</td><td>다음 줄이 새 값을 봄</td><td>다음 줄도 <strong>옛 값</strong>을 봄(병렬)</td></tr>
       <tr><td>모델링 대상</td><td>조합논리·테스트벤치 임시변수</td><td><strong class="hl2">순차논리(FF)</strong></td></tr>
-      <tr><td>비유(SW)</td><td><code>a = a + 1;</code> 즉시 갱신</td><td>모든 RHS를 먼저 스냅샷 → 동시에 commit</td></tr>
+      <tr><td>직관적 그림</td><td>칠판에 적힌 값을 <strong>그 자리에서</strong> 지우고 새로 씀</td><td>모든 우변값을 <strong>먼저 메모</strong>해 두고 → 사이클 끝에 한꺼번에 옮겨 적음</td></tr>
     </table>
-    <div class="dev-bridge mt"><p style="margin:6px 0">소프트웨어로 보면 <code>&lt;=</code>는 "이번 사이클의 입력은 <strong>전부 직전 값으로 고정</strong>해서 읽고, 출력은 사이클 끝에 일괄 반영"하는 <strong>더블 버퍼링</strong>과 같습니다. 그래서 두 FF이 서로의 값을 교환(swap)하는 코드가 자연스럽게 동작합니다.</p></div>
+    <div class="note mt"><p style="margin:6px 0"><code>&lt;=</code>는 "이번 사이클의 입력은 <strong>전부 직전 값으로 고정</strong>해서 읽고, 출력은 사이클 끝에 한꺼번에 반영"한다고 보면 됩니다. 마치 시험 답을 모두 연습장에 적어둔 뒤 종료 직전에 답안지에 동시에 옮기는 것과 같아서, 두 FF이 서로의 값을 맞바꾸는(swap) 동작도 자연스럽게 됩니다.</p></div>
   </section>
 
   <!-- 5 -->
@@ -118,9 +118,9 @@
       <div class="spec">
         <p style="margin:6px 0"><strong>③ NBA(Non-Blocking Assignment update) 영역</strong>이 핵심입니다.</p>
         <ul>
-          <li>posedge에서 모든 always의 <code>&lt;=</code> <strong>RHS는 Active에서 먼저 전부 평가</strong>(옛 값 스냅샷).</li>
+          <li>posedge에서 모든 always의 <code>&lt;=</code> <strong>RHS는 Active에서 먼저 전부 평가</strong>(옛 값을 그대로 떠 둠).</li>
           <li>실제 <strong>LHS 대입은 NBA 영역</strong>에서 일괄 수행 → 같은 슬롯의 다른 블록이 옛 값을 본다.</li>
-          <li>이 분리 덕분에 FF 간 값 교환·시프트가 <strong>실행 순서와 무관</strong>하게 결정적(deterministic).</li>
+          <li>이 분리 덕분에 FF 간 값 교환·시프트가 <strong>실행 순서와 무관</strong>하게 항상 같은 결과로 결정됩니다.</li>
         </ul>
       </div>
     </div>
@@ -221,7 +221,7 @@
         <span class="fn">dff</span> u_dff (.clk(clk), .d(din[i]), .q(dout[i]));
     <span class="kw">end</span>
 <span class="kw">endgenerate</span></code></pre>
-    <p class="codecap">// generate-for는 런타임 루프가 아니라 "컴파일 타임에 하드웨어 N개를 복제"하는 구조다.</p>
+    <p class="codecap">// generate-for는 동작 중에 도는 반복이 아니라, 회로를 만들 때 "같은 하드웨어 블록 N개를 그대로 복제해 펼치는" 구조다.</p>
     <div class="grid2">
       <div class="spec">
         <ul>
@@ -271,7 +271,7 @@
     <div class="kicker">면접 심화 질문</div>
     <h2>여기까지 답하면 "RTL 써본 사람"으로 보인다</h2>
     <div class="qa"><div class="q">non-blocking 대입은 이벤트 큐의 어느 영역에서 적용되나요?</div><div class="a"><code>&lt;=</code>의 RHS는 Active 영역에서 즉시 평가되지만, LHS 대입은 같은 time slot의 <strong>NBA(Non-Blocking Assignment) 영역</strong>에서 일괄 수행됩니다. 영역 순서는 Active → Inactive → NBA → Postponed이고, 이 분리 덕에 같은 클럭에서 FF끼리 옛 값을 보며 race 없이 결정적으로 갱신됩니다.</div></div>
-    <div class="qa"><div class="q">왜 순차회로엔 non-blocking, 조합엔 blocking인가요?</div><div class="a">순차는 모든 FF이 같은 엣지에 <strong>동시에</strong> 옛 값으로 갱신돼야 실제 하드웨어와 맞습니다. <code>&lt;=</code>는 RHS를 스냅샷 후 NBA에서 일괄 대입해 이 동시성과 실행순서 독립성을 보장합니다. 조합은 한 always 안에서 임시값이 즉시 전파돼야 하므로 <code>=</code>가 맞고, 둘을 섞으면 race·합성불일치가 납니다.</div></div>
+    <div class="qa"><div class="q">왜 순차회로엔 non-blocking, 조합엔 blocking인가요?</div><div class="a">순차는 모든 FF이 같은 엣지에 <strong>동시에</strong> 옛 값으로 갱신돼야 실제 하드웨어와 맞습니다. <code>&lt;=</code>는 RHS(옛 값)를 먼저 떠 둔 뒤 NBA에서 일괄 대입해 이 동시성과 실행순서 독립성을 보장합니다. 조합은 한 always 안에서 임시값이 즉시 전파돼야 하므로 <code>=</code>가 맞고, 둘을 섞으면 race·합성불일치가 납니다.</div></div>
     <div class="qa"><div class="q">latch는 왜 추론되며 casex는 왜 피하나요?</div><div class="a">latch는 조합 always에서 <strong>어떤 입력 경로에 출력 대입이 빠질 때</strong>(else/default 누락, 일부 출력만 대입) 합성기가 값을 기억해야 해서 생깁니다. 방어는 블록 상단 기본값 대입입니다. casex는 셀렉트의 <code>x</code>까지 don't-care로 와일드매칭해, 미초기화 x가 엉뚱한 분기에 걸려 시뮬↔합성 불일치를 만들므로 <code>?</code> 기반 <code>casez</code>를 씁니다.</div></div>
   </section>
 

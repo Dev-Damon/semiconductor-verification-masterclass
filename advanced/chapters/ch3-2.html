@@ -196,7 +196,7 @@ WSTRB  = 8'b0000_1100    <span class="cmt">// lane 2,3 만 1</span>
         <text x="429" y="158" fill="#ff7ac0" font-size="10" text-anchor="middle">RLAST=1</text>
       </svg>
     </div>
-    <div class="note mt">AR에서 주소 1번 수락 → R 채널로 <strong>D0~D3 네 박자</strong>가 흐르고, 마지막 beat에 <code>RLAST=1</code>. RREADY가 0인 동안은 슬레이브가 기다립니다(백프레셔).</div>
+    <div class="note mt">AR에서 주소 1번 수락 → R 채널로 <strong>D0~D3 네 박자</strong>가 흐르고, 마지막 beat에 <code>RLAST=1</code>. RREADY가 0인 동안은 받는 쪽이 아직 준비되지 않았다는 뜻이라 슬레이브가 데이터를 멈추고 기다립니다.</div>
   </section>
 
   <!-- 11 -->
@@ -207,7 +207,7 @@ WSTRB  = 8'b0000_1100    <span class="cmt">// lane 2,3 만 1</span>
       <div class="card"><h3><span class="ico">🧩</span> 무엇으로</h3>
         <ul><li><strong>AXI VIP</strong>(Verification IP) — 상용 마스터/슬레이브 BFM</li><li>UVM agent로 트랜잭션 자극·관찰</li><li><strong>프로토콜 assertion</strong>(ARM/벤더 제공 SVA)로 규칙 위반 즉시 검출</li></ul></div>
       <div class="card"><h3><span class="ico">🎯</span> 무엇을(커버리지 코너)</h3>
-        <ul><li>모든 버스트 타입×길이×size 조합</li><li>비정렬·narrow·부분 WSTRB</li><li>최대 outstanding, OOO 응답, 같은/다른 ID</li><li>SLVERR/DECERR/EXOKAY 응답 경로</li><li>백프레셔(READY 지연) 극단</li></ul></div>
+        <ul><li>모든 버스트 타입×길이×size 조합</li><li>비정렬·narrow·부분 WSTRB</li><li>최대 outstanding, OOO 응답, 같은/다른 ID</li><li>SLVERR/DECERR/EXOKAY 응답 경로</li><li>받는 쪽이 READY를 한참 늦게 주는 극단 상황</li></ul></div>
     </div>
     <div class="deepnote mt"><p style="margin:6px 0">"기능은 도는데 프로토콜을 어긴" 경우가 제일 위험합니다. 그래서 <strong>protocol checker(assertion)</strong>를 항상 켜두고 회귀를 돌립니다.</p></div>
   </section>

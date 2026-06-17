@@ -44,20 +44,20 @@
     <div class="note mt">검증 엔지니어에게 DVFS는 "전압·주파수가 동작 중에 바뀌는데, 그래도 칩이 멀쩡히 돌아가는가?"를 증명해야 하는 시나리오입니다.</div>
   </section>
 
-  <!-- 3. 개발자 비유 -->
+  <!-- 3. 일상 비유 -->
   <section class="slide">
-    <div class="kicker">개발자 직관으로 번역</div>
-    <h2>이미 당신은 DVFS를 매일 쓰고 있다</h2>
-    <div class="dev-bridge">
-      <p style="margin:6px 0">리눅스의 <strong>CPU governor</strong> — <code>performance</code> / <code>powersave</code> / <code>ondemand</code> — 를 만져본 적 있나요? 그게 바로 DVFS의 정책 부분입니다. 부하를 보고 클럭을 올렸다 내렸다 하죠.</p>
-      <p style="margin:6px 0">클라우드를 다뤄봤다면 <strong>오토스케일링</strong>을 떠올리세요. 트래픽이 몰리면 인스턴스를 늘리고(성능↑), 한가하면 줄여서 비용을 아낍니다(전력↑). DVFS는 <strong class="hl2">칩 내부에서 일어나는 오토스케일링</strong>입니다.</p>
+    <div class="kicker">직관적으로 이해하기</div>
+    <h2>DVFS는 사실 우리 주변에 이미 있다</h2>
+    <div class="analogy">
+      <p style="margin:6px 0">에어컨을 떠올리세요. 방이 더우면 컴프레서를 세게 돌리고(성능↑·전력↑), 설정 온도에 가까워지면 살살 돌리거나 잠깐 멈춥니다(전력↓). 굳이 항상 최대 출력으로 돌릴 필요가 없죠. DVFS도 똑같이 <strong class="hl2">"지금 필요한 만큼만"</strong> 칩에 힘을 줍니다.</p>
+      <p style="margin:6px 0">자동차 변속기도 같은 원리입니다. 평지에선 낮은 RPM으로 연비주행하고, 언덕에선 기어를 낮춰 힘을 끌어올립니다. 부하에 맞춰 출력을 통째로 바꾼다는 점이 DVFS와 똑같습니다.</p>
     </div>
     <table class="compare mt">
-      <tr><th>DVFS</th><th>당신이 아는 것</th></tr>
-      <tr><td>부하 모니터링 → V/f 결정</td><td>오토스케일러가 CPU 사용률 보고 인스턴스 수 결정</td></tr>
-      <tr><td>governor (정책 엔진)</td><td>스케일링 정책 (target tracking 등)</td></tr>
-      <tr><td>operating point 테이블</td><td>인스턴스 타입 목록 (small/medium/large)</td></tr>
-      <tr><td>전력 절감 vs 성능</td><td>비용 절감 vs 응답 속도</td></tr>
+      <tr><th>DVFS 요소</th><th>하는 일</th></tr>
+      <tr><td>부하 모니터링 → V/f 결정</td><td>지금 칩이 얼마나 바쁜지 측정해 출력 단계를 정함</td></tr>
+      <tr><td>governor (정책)</td><td>"어느 단계로 갈지"를 정하는 규칙</td></tr>
+      <tr><td>동작점(OPP) 테이블</td><td>미리 검증된 (전압, 주파수) 단계들의 목록</td></tr>
+      <tr><td>전력 절감 ↔ 성능</td><td>아낄 것이냐, 빠를 것이냐의 맞교환</td></tr>
     </table>
   </section>
 
@@ -107,7 +107,7 @@
         <p class="dim" style="margin-bottom:6px">DVFS는 "지금 얼마나 빨리 갈지"에 맞춰 엔진 출력을 통째로 조절하는 변속기입니다.</p>
       </div>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">물리 제약: <strong>주파수가 높을수록 더 높은 최소 전압이 필요</strong>합니다. 그래서 (V, f) 쌍은 아무렇게나 못 정하고, 검증·실측으로 보장된 조합만 테이블로 관리합니다. → 다음 슬라이드 OPP.</p></div>
+    <div class="note mt">물리 제약: <strong>주파수가 높을수록 더 높은 최소 전압이 필요</strong>합니다. 그래서 (V, f) 쌍은 아무렇게나 못 정하고, 검증·실측으로 보장된 조합만 테이블로 관리합니다. → 다음 슬라이드 OPP.</div>
   </section>
 
   <!-- 6. OPP 테이블 -->
@@ -160,7 +160,7 @@
     <div class="grid2 mt">
       <div class="card">
         <h3><span class="ico">🧠</span> Governor (정책)</h3>
-        <p>"지금 어떤 OPP로 갈지"를 결정하는 두뇌. <code>performance</code>는 항상 최고, <code>powersave</code>는 항상 최저, <code>ondemand</code>는 부하 따라 동적. <strong>리눅스 governor와 같은 개념</strong>입니다.</p>
+        <p>"지금 어떤 OPP로 갈지"를 결정하는 두뇌. 정책에 따라 <strong>항상 최고 성능</strong>으로 둘 수도, <strong>항상 최저 전력</strong>으로 둘 수도, <strong>부하에 맞춰 그때그때</strong> 단계를 바꿀 수도 있습니다. 운영체제가 CPU 속도를 자동으로 올렸다 내렸다 하는 것도 바로 이 governor가 하는 일입니다.</p>
       </div>
       <div class="card">
         <h3><span class="ico">⚡</span> PMIC + PLL (실행)</h3>
@@ -237,7 +237,7 @@
         </ul>
       </div>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: 오토스케일링 도중에 <strong>요청이 유실되면 안 되듯</strong>, DVFS 전환 도중에도 인플라이트 트랜잭션은 살아남아야 합니다. 그 "전환 중 무결성"을 시뮬레이션으로 검증하는 게 당신의 일입니다.</p></div>
+    <div class="note mt">비유하자면, 달리는 자동차가 기어를 바꾸는 순간에도 차가 멈추거나 튀어선 안 되는 것과 같습니다. DVFS 전환 도중에도 진행 중이던 작업(데이터)은 손실 없이 살아남아야 하며, 그 "전환 중 무결성"을 시뮬레이션으로 검증하는 것이 검증 엔지니어의 일입니다.</div>
   </section>
 
   <!-- 11. Q&A -->
@@ -278,7 +278,7 @@
         </ul>
       </div>
       <div class="takeaway">
-        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"DVFS는 P ∝ C·V²·f에 기반해 부하에 맞춰 OPP를 바꾸는 칩의 오토스케일링이고, 저는 그 전압·주파수 <strong class="hl">전환이 안전하게 일어나는지를 검증</strong>합니다."</p>
+        <p style="margin:6px 0;font-size:18px;color:var(--ink)">"DVFS는 P ∝ C·V²·f에 기반해 부하에 맞춰 동작점(OPP)을 바꿔 전력과 성능을 맞바꾸는 기법이고, 저는 그 전압·주파수 <strong class="hl">전환이 안전하게 일어나는지를 검증</strong>합니다."</p>
         <p class="dim" style="margin-bottom:6px">— 공식 + 검증 관점, 두 가지를 한 문장에.</p>
       </div>
     </div>

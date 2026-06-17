@@ -43,10 +43,7 @@
       <tr><td>S (Shared)</td><td>예</td><td>아니오(공유)</td><td>예(clean)</td><td>아니오(먼저 무효화 필요)</td></tr>
       <tr><td>I (Invalid)</td><td><strong>아니오</strong></td><td>—</td><td>—</td><td>—</td></tr>
     </table>
-    <div class="grid2 mt">
-      <div class="spec"><p style="margin:6px 0">핵심 불변식: <strong>한 라인은 어디서든 M/E 둘 중 최대 하나</strong>. M·E는 "나만 갖는다", S는 "여럿이 clean 공유", I는 "없음". <strong class="hl">E→M은 버스 트래픽 없이 silent</strong>하게 일어납니다(나만 가졌으니).</p></div>
-      <div class="dev-bridge"><p style="margin:6px 0">RDBMS의 잠금/버전과 닮았습니다: <code>E</code>=배타 잠금 가진 clean 캐시, <code>M</code>=아직 flush 안 한 dirty 페이지, <code>S</code>=읽기 전용 공유 스냅샷, <code>I</code>=캐시 미스.</p></div>
-    </div>
+    <div class="spec mt"><p style="margin:6px 0">핵심 불변식: <strong>한 라인은 어디서든 M/E 둘 중 최대 하나</strong>. M·E는 "나만 갖는다", S는 "여럿이 clean 공유", I는 "없음". <strong class="hl">E→M은 버스 트래픽 없이 silent</strong>하게 일어납니다(나만 가졌으니). 쉽게 보면 도서관 책에 비유할 수 있습니다 — M=내가 빌려가 연필로 수정 중인 책(원본과 다름), E=나만 빌렸지만 아직 그대로인 책, S=여러 명이 같은 내용을 복사해 읽는 중, I=내 손엔 없는 상태입니다.</p></div>
   </section>
 
   <!-- 4 -->
@@ -187,22 +184,24 @@
       <tr><td>쓰기 정책</td><td><strong>Write-back</strong>: dirty 보관, 교체 시 메모리에. 트래픽↓(M 상태가 이것)</td><td><strong>Write-through</strong>: 매 쓰기 즉시 하위로. 단순·트래픽↑</td></tr>
       <tr><td>레벨 포함</td><td><strong>Inclusive</strong>: L2가 L1 내용 포함(스누프 필터링 쉬움)</td><td><strong>Exclusive</strong>: 중복 없이 용량↑(전이 복잡)</td></tr>
     </table>
-    <div class="pitfall mt"><p style="margin:6px 0"><strong>False sharing(거짓 공유):</strong> 두 코어가 <strong class="hl">다른 변수</strong>를 쓰는데 <strong>같은 64B 캐시 라인</strong>에 있으면, 코히런시는 <strong>라인 단위</strong>라 매 쓰기마다 서로 라인을 <code>S/M↔I</code>로 핑퐁시켜 성능이 급락합니다. 해법: 핫 변수 <strong>패딩/정렬</strong>(예: <code>alignas(64)</code>, per-CPU 분리). 멀티스레드 SW 성능 버그 1순위.</p></div>
+    <div class="pitfall mt"><p style="margin:6px 0"><strong>False sharing(거짓 공유):</strong> 두 코어가 <strong class="hl">서로 다른 데이터</strong>를 쓰는데 그 둘이 <strong>같은 64B 캐시 라인</strong>에 들어 있으면, 코히런시는 <strong>라인 단위</strong>로만 동작하므로 매 쓰기마다 서로 라인을 <code>S/M↔I</code>로 핑퐁시켜 성능이 급락합니다. 해법: 자주 쓰는 데이터를 <strong>한 라인에 하나씩 떨어지도록 간격을 띄워(패딩) 배치</strong>하는 것입니다. 여러 코어가 같은 메모리 영역을 동시에 다룰 때 가장 흔히 나오는 성능 함정입니다.</p></div>
   </section>
 
   <!-- 12 -->
   <section class="slide">
-    <div class="kicker">코드로 보는 false sharing</div>
-    <h2>같은 라인 vs 패딩 — 무엇이 다른가</h2>
-    <pre class="code"><code><span class="cmt">// ❌ 두 카운터가 같은 64B 캐시 라인에 인접 → false sharing</span>
-<span class="kw">struct</span> Bad { <span class="kw">uint64_t</span> a; <span class="kw">uint64_t</span> b; };   <span class="cmt">// a,b 16B 이내, 한 라인</span>
-<span class="cmt">// CPU0이 a++, CPU1이 b++ 반복 → 라인이 M↔I 핑퐁(coherency miss 폭증)</span>
+    <div class="kicker">그림으로 보는 false sharing</div>
+    <h2>같은 라인 vs 띄워 놓기 — 무엇이 다른가</h2>
+    <pre class="code"><code><span class="cmt">// ❌ 데이터 A와 B가 같은 64B 캐시 라인 안에 나란히 들어 있음</span>
+<span class="cmt">캐시 라인 #1 (64B): [ A | B | ............비어있음............ ]</span>
+<span class="cmt">// CPU0은 A만, CPU1은 B만 반복해서 고치는데도</span>
+<span class="cmt">// 둘이 한 라인을 공유하므로 라인이 M↔I로 계속 핑퐁(불필요한 무효화 폭증)</span>
 
-<span class="cmt">// ✅ 각 카운터를 독립 캐시 라인(64B)으로 분리</span>
-<span class="kw">struct alignas</span>(64) Counter { <span class="kw">uint64_t</span> v; <span class="kw">char</span> pad[64 - <span class="kw">sizeof</span>(<span class="kw">uint64_t</span>)]; };
-Counter a, b;   <span class="cmt">// a,b 서로 다른 라인 → 스누프 충돌 없음</span></code></pre>
-    <div class="codecap">정렬/패딩으로 핫 변수를 라인 단위로 떼어내면 coherency 트래픽이 사라집니다.</div>
-    <div class="spec"><p style="margin:6px 0"><strong>정밀 포인트:</strong> 코히런시 단위는 <strong>변수 1개가 아니라 캐시 라인(보통 64B)</strong>입니다. <code>a</code>를 <code>S→M</code>으로 올리려면 라인 전체를 무효화하므로, <strong>같은 라인의 <code>b</code>까지</strong> 다른 코어에서 <code>I</code>가 됩니다. 데이터 의존이 전혀 없어도 충돌하는 게 "거짓" 공유인 이유.</p></div>
+<span class="cmt">// ✅ A와 B를 충분히 띄워 서로 다른 64B 라인에 배치(사이를 빈칸으로 채움=패딩)</span>
+<span class="cmt">캐시 라인 #1 (64B): [ A | ......빈칸(패딩)...... ]</span>
+<span class="cmt">캐시 라인 #2 (64B): [ B | ......빈칸(패딩)...... ]</span>
+<span class="cmt">// A와 B가 서로 다른 라인 → 한쪽을 고쳐도 다른 쪽은 영향 없음</span></code></pre>
+    <div class="codecap">자주 쓰는 데이터 사이에 빈칸(패딩)을 넣어 라인 단위로 떼어 놓으면 불필요한 코히런시 트래픽이 사라집니다.</div>
+    <div class="spec"><p style="margin:6px 0"><strong>정밀 포인트:</strong> 코히런시 단위는 <strong>데이터 1개가 아니라 캐시 라인(보통 64B)</strong>입니다. <code>A</code>를 <code>S→M</code>으로 올리려면 라인 전체를 무효화하므로, <strong>같은 라인의 <code>B</code>까지</strong> 다른 코어에서 <code>I</code>가 됩니다. 두 데이터가 서로 아무 관련이 없어도 충돌하는 것이 "거짓" 공유라 불리는 이유입니다.</p></div>
   </section>
 
   <!-- 13 -->

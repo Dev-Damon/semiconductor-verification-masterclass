@@ -13,15 +13,15 @@
   <section class="slide title-slide">
     <div class="part-badge">Part 1 · 설계 언어</div>
     <h1>Verilog<br>회로를 "글"로 기술하는 언어</h1>
-    <p class="hook">if/for를 알면 절반은 온 겁니다. 단, 한 가지만 머리를 바꾸세요 —
-      Verilog는 "실행되는 코드"가 아니라 <strong>"이런 회로를 만들어라"는 설계도</strong>이고, 모든 줄이 <strong>동시에</strong> 살아 움직입니다.</p>
+    <p class="hook">생긴 건 보통의 컴퓨터 언어와 비슷합니다. 단, 한 가지만 머리를 바꾸세요 —
+      Verilog는 "차례대로 실행되는 명령"이 아니라 <strong>"이런 회로를 만들어라"는 설계도</strong>이고, 모든 줄이 <strong>동시에</strong> 살아 움직입니다.</p>
     <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
   </section>
 
   <!-- 2. 왜 배우나 / 한 문장 정의 -->
   <section class="slide">
     <div class="kicker">왜 배우나 · 한 문장 정의</div>
-    <h2>Verilog = 하드웨어를 적는 <span class="hl">프로그래밍처럼 생긴 언어</span></h2>
+    <h2>Verilog = 하드웨어를 <span class="hl">글(텍스트)로 적는 언어</span></h2>
     <p class="lead">Verilog는 <strong class="hl">HDL(Hardware Description Language)</strong> 입니다. 회로도를 그림으로 그리는 대신, <strong>텍스트로 회로를 기술(description)</strong>하는 언어죠.</p>
     <div class="grid2 mt">
       <div class="card">
@@ -36,35 +36,35 @@
     <div class="note mt"><strong>DUT</strong> = Design Under Test, 즉 당신이 검증할 대상 회로. 실무에선 SystemVerilog를 쓰지만, 그 뿌리이자 핵심 문법이 바로 Verilog입니다.</div>
   </section>
 
-  <!-- 3. 개발자 비유 -->
+  <!-- 3. 핵심 개념 정리 -->
   <section class="slide">
-    <div class="kicker">개발자 직관으로 번역</div>
-    <h2>당신이 아는 개념에 그대로 매핑됩니다</h2>
+    <div class="kicker">직관적으로 이해하기</div>
+    <h2>다섯 가지 핵심 개념부터 잡고 갑니다</h2>
     <table class="compare">
-      <tr><th>Verilog 개념</th><th>당신이 아는 것 (SW)</th><th>한마디</th></tr>
-      <tr><td><code>module</code></td><td>함수 / 클래스</td><td>재사용 가능한 회로 묶음</td></tr>
-      <tr><td>인스턴스화(instantiation)</td><td><code>new</code> 객체 생성</td><td>설계도로 실제 부품을 박아 넣기</td></tr>
-      <tr><td>port (input/output)</td><td>함수의 인자 / 리턴값</td><td>module의 입출력 핀</td></tr>
-      <tr><td><code>assign</code></td><td>수식 바인딩 (스프레드시트 셀)</td><td>입력 바뀌면 출력 즉시 갱신</td></tr>
-      <tr><td><code>always @(posedge clk)</code></td><td>매 클럭마다 호출되는 콜백</td><td>이벤트 핸들러</td></tr>
+      <tr><th>Verilog 개념</th><th>쉽게 말하면</th><th>한마디</th></tr>
+      <tr><td><code>module</code></td><td>재사용 가능한 부품 한 덩이</td><td>회로의 기본 묶음 단위</td></tr>
+      <tr><td>인스턴스화(instantiation)</td><td>설계도로 실제 부품 찍어내기</td><td>같은 부품을 여러 개 박아 넣기</td></tr>
+      <tr><td>port (input/output)</td><td>부품의 입력 핀 / 출력 핀</td><td>module이 바깥과 주고받는 통로</td></tr>
+      <tr><td><code>assign</code></td><td>입력이 바뀌면 출력이 즉시 따라감</td><td>입력 바뀌면 출력 즉시 갱신</td></tr>
+      <tr><td><code>always @(posedge clk)</code></td><td>매 클럭(박자)마다 한 번씩 동작</td><td>클럭에 맞춰 깨어나는 회로</td></tr>
     </table>
-    <div class="dev-bridge mt">
-      <p style="margin:6px 0">가장 중요한 차이: 일반 코드는 위에서 아래로 <strong>한 줄씩</strong> 실행되지만, Verilog의 <code>assign</code>·<code>always</code> 블록들은 전부 <strong class="hl">동시에(병렬로)</strong> 항상 살아 있습니다. 순서가 아니라 "관계"를 적는다고 생각하세요. 엑셀에서 셀 100개에 수식을 걸어두면 한 칸만 바꿔도 관련된 셀이 동시에 다시 계산되는 것과 같습니다.</p>
+    <div class="note mt">
+      <p style="margin:6px 0">가장 중요한 차이: 보통의 컴퓨터 명령은 위에서 아래로 <strong>한 줄씩</strong> 차례대로 실행되지만, Verilog의 <code>assign</code>·<code>always</code> 블록들은 전부 <strong class="hl">동시에(병렬로)</strong> 항상 살아 있습니다. 순서가 아니라 "관계"를 적는다고 생각하세요. 엑셀에서 셀 100개에 수식을 걸어두면 한 칸만 바꿔도 관련된 셀이 동시에 다시 계산되는 것과 같습니다.</p>
     </div>
   </section>
 
   <!-- 4. module과 port -->
   <section class="slide">
     <div class="kicker">기본 단위 · module</div>
-    <h2>module = 함수, port = 입출력 인자</h2>
+    <h2>module = 부품 한 덩이, port = 입출력 통로</h2>
     <div class="grid2">
       <div>
         <p>모든 Verilog 설계는 <code>module</code> 단위로 만듭니다. 입력(<code>input</code>)과 출력(<code>output</code>) <strong>포트</strong>를 선언하고, 그 안에서 입력으로 출력을 어떻게 만들지 기술합니다.</p>
         <ul>
-          <li><code>module</code> = 함수/클래스 정의</li>
-          <li><code>input</code> = 들어오는 인자</li>
-          <li><code>output</code> = 돌려주는 값(출력 핀)</li>
-          <li><code>[3:0]</code> = 4비트 묶음(버스), 배열 폭처럼 생각</li>
+          <li><code>module</code> = 재사용 가능한 회로 부품 정의</li>
+          <li><code>input</code> = 부품으로 들어오는 신호</li>
+          <li><code>output</code> = 부품이 내보내는 신호(출력 핀)</li>
+          <li><code>[3:0]</code> = 비트 4개를 한 묶음으로 다루는 신호(버스)</li>
         </ul>
       </div>
       <pre class="code"><code><span class="cmt">// 2비트를 더해 합을 내보내는 회로</span>
@@ -76,7 +76,7 @@
   <span class="kw">assign</span> sum = a + b;
 <span class="kw">endmodule</span></code></pre>
     </div>
-    <div class="note mt">포트 폭 <code>[2:0]</code>은 비트 3개(2,1,0)를 뜻합니다. SW의 <code>uint8_t</code>처럼 "이 신호는 몇 비트짜리냐"를 정하는 것.</div>
+    <div class="note mt">포트 폭 <code>[2:0]</code>은 비트 3개(2,1,0)를 뜻합니다. "이 신호는 몇 비트짜리냐"를 정하는 표기예요.</div>
   </section>
 
   <!-- 5. wire vs reg -->
@@ -103,7 +103,7 @@
     <div class="grid2">
       <div>
         <p><code>assign</code>은 "이 등호 관계를 <strong>항상</strong> 유지하라"는 뜻입니다. 오른쪽이 바뀌면 왼쪽이 즉시 따라 바뀝니다 — 기억 없이 입력만으로 출력이 정해지는 <strong class="hl">조합 회로</strong>.</p>
-        <p>예시는 <strong>2:1 MUX</strong>(멀티플렉서): 선택 신호 <code>sel</code>에 따라 두 입력 중 하나를 고르는 회로. SW의 삼항 연산자 <code>sel ? a : b</code> 그 자체입니다.</p>
+        <p>예시는 <strong>2:1 MUX</strong>(멀티플렉서): 선택 신호 <code>sel</code>에 따라 두 입력 중 하나를 고르는 회로. 철로를 두 갈래로 나누는 선로 전환기처럼, <code>sel</code> 값에 따라 <code>a</code> 또는 <code>b</code> 중 하나가 출력으로 연결됩니다.</p>
         <div class="analogy">
           <p style="margin:6px 0">스프레드시트에서 <code>=IF(sel, a, b)</code>를 셀에 걸어둔 것과 똑같습니다. <code>a</code>나 <code>sel</code>을 바꾸는 순간 결과 셀이 자동 갱신되죠.</p>
         </div>
@@ -152,13 +152,13 @@
       </div>
       <div class="card" style="border-color:var(--accent2)">
         <h3><span class="ico">⏰</span> always @(posedge clk) — 순차</h3>
-        <p>"클럭이 <strong>0→1로 올라가는 순간에만</strong> 실행". 즉 <strong class="hl">매 클럭 호출되는 콜백</strong>. 값을 다음 클럭까지 <strong>기억</strong> → 플립플롭(레지스터)이 됩니다.</p>
+        <p>"클럭이 <strong>0→1로 올라가는 순간에만</strong> 실행". 즉 <strong class="hl">매 박자(클럭)마다 한 번씩</strong> 동작합니다. 값을 다음 클럭까지 <strong>기억</strong> → 플립플롭(레지스터)이 됩니다.</p>
         <pre class="code"><code><span class="kw">always</span> @(<span class="kw">posedge</span> clk) <span class="kw">begin</span>
   q &lt;= d;   <span class="cmt">// 매 클럭, d를 q에 저장</span>
 <span class="kw">end</span></code></pre>
       </div>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0"><code>posedge</code> = positive edge(상승 엣지). <code>setInterval</code>로 거는 콜백이 아니라, <strong>클럭이라는 공용 심장박동</strong>에 모든 순차 회로가 동시에 깨어나 한 박자 전진한다고 생각하세요.</p></div>
+    <div class="note mt"><p style="margin:6px 0"><code>posedge</code> = positive edge(상승 엣지). <strong>클럭이라는 공용 심장박동</strong>에 맞춰 모든 순차 회로가 동시에 깨어나 한 박자씩 전진한다고 생각하세요. 오케스트라의 모든 연주자가 지휘자의 한 박자에 맞춰 동시에 다음 음을 내는 것과 같습니다.</p></div>
   </section>
 
   <!-- 8. D-FF 다이어그램 + 코드 -->
@@ -206,7 +206,7 @@
         <table class="compare">
           <tr><th></th><th>blocking =</th><th>non-blocking &lt;=</th></tr>
           <tr><td>실행</td><td>위→아래 순차, 즉시 반영</td><td>오른쪽 값 먼저 다 읽고, <strong>동시에</strong> 대입</td></tr>
-          <tr><td>비유</td><td><code>x = x + 1</code> (일반 변수)</td><td>모든 갱신이 한 박자에 동시 발생</td></tr>
+          <tr><td>느낌</td><td>한 줄 끝나야 다음 줄 시작</td><td>모든 갱신이 한 박자에 동시 발생</td></tr>
           <tr><td>쓰는 곳</td><td>조합 <code>@(*)</code></td><td>순차 <code>@(posedge clk)</code></td></tr>
         </table>
         <div class="takeaway">
@@ -231,7 +231,7 @@
   <section class="slide">
     <div class="kicker">계층 · 인스턴스화</div>
     <h2>작은 module을 조립해 큰 회로를 만든다</h2>
-    <p>큰 설계는 작은 module들을 <strong>인스턴스화(instantiation)</strong>해서 조립합니다. 클래스를 정의하고 <code>new</code>로 객체를 여러 개 만드는 것과 정확히 같습니다.</p>
+    <p>큰 설계는 작은 module들을 <strong>인스턴스화(instantiation)</strong>해서 조립합니다. 하나의 부품 설계도(module)로 똑같은 부품을 여러 개 찍어내 회로에 박아 넣는 것입니다 — 레고 블록 하나를 여러 번 끼워 큰 구조물을 만드는 것과 같죠.</p>
     <div class="grid2 mt">
       <div>
         <pre class="code"><code><span class="cmt">// dff를 2개 박아 2비트 레지스터</span>
@@ -246,11 +246,11 @@
       </div>
       <div>
         <ul>
-          <li><code>dff</code> = 클래스 정의(설계도)</li>
-          <li><code>u0</code>, <code>u1</code> = 인스턴스 이름(객체)</li>
+          <li><code>dff</code> = 부품 설계도(정의)</li>
+          <li><code>u0</code>, <code>u1</code> = 찍어낸 실제 부품의 이름(인스턴스)</li>
           <li><code>.clk(clk)</code> = 포트를 이름으로 연결(named port) — <strong class="hl">위치 순서보다 이름 연결을 권장</strong></li>
         </ul>
-        <div class="dev-bridge"><p style="margin:6px 0">이렇게 만들어진 <strong>module 계층 트리</strong>가 곧 검증할 때 신호를 찾아가는 경로(<code>top.reg2.u0.q</code>)가 됩니다. 파일·폴더 트리에서 경로 찾는 것과 같죠.</p></div>
+        <div class="note"><p style="margin:6px 0">이렇게 만들어진 <strong>module 계층 트리</strong>가 곧 검증할 때 신호를 찾아가는 주소(<code>top.reg2.u0.q</code>)가 됩니다. 건물의 "몇 동 몇 호"처럼 큰 덩어리 안의 작은 부품까지 점(.)으로 짚어 내려가는 주소예요.</p></div>
       </div>
     </div>
   </section>
@@ -259,7 +259,7 @@
   <section class="slide">
     <div class="kicker">4-state 값 체계</div>
     <h2>비트는 0/1만이 아니다 — <span class="hl">0 · 1 · x · z</span></h2>
-    <p>SW의 <code>bool</code>은 true/false 2개뿐이지만, Verilog의 1비트는 <strong>4가지 상태</strong>를 가질 수 있습니다. 디버깅의 단서가 되는 핵심 개념입니다.</p>
+    <p>흔히 1비트는 0/1 두 값만 떠올리지만, Verilog의 1비트는 <strong>4가지 상태</strong>를 가질 수 있습니다. 디버깅의 단서가 되는 핵심 개념입니다.</p>
     <div class="grid2 mt">
       <div class="grid2" style="gap:14px">
         <div class="card"><h3><span class="ico">0️⃣</span> 0</h3><p>논리 0 (Low)</p></div>
@@ -269,7 +269,7 @@
       </div>
       <div>
         <div class="analogy">
-          <p style="margin:6px 0"><code>x</code>는 SW의 <strong>초기화 안 된 변수 / NaN</strong> 같은 느낌입니다. 시뮬레이션에서 <code>x</code>가 줄줄이 퍼지면 "어딘가 리셋이나 초기화가 빠졌다"는 강력한 버그 신호죠.</p>
+          <p style="margin:6px 0"><code>x</code>는 <strong>"아직 아무 값도 정해지지 않은"</strong> 칸 같은 느낌입니다. 측정값이 빠진 빈 데이터 칸처럼요. 시뮬레이션에서 <code>x</code>가 줄줄이 퍼지면 "어딘가 리셋이나 초기화가 빠졌다"는 강력한 버그 신호죠.</p>
         </div>
         <div class="note mt"><strong>주의:</strong> <code>x</code>는 시뮬레이터의 표현일 뿐, 실제 칩엔 0이나 1만 존재합니다. 그래서 <code>x</code>가 실제 칩에선 예측할 수 없는(불확정한) 0이나 1로 굳어져 위험합니다 — 검증에서 <code>x</code> 추적이 중요한 이유입니다.</div>
       </div>
@@ -285,7 +285,7 @@
       <tr><th>구분</th><th>Synthesizable (설계, DUT)</th><th>시뮬 전용 (테스트벤치)</th></tr>
       <tr><td>목적</td><td>실제 회로가 됨</td><td>회로를 두드려 검증</td></tr>
       <tr><td>예</td><td><code>assign</code>, 클럭 <code>always</code>, module</td><td><code>initial</code>, <code>#10</code>(딜레이), <code>$display</code>, <code>$finish</code></td></tr>
-      <tr><td>제약</td><td>실물 회로로 그릴 수 있어야 함</td><td>제약 없음, C처럼 자유</td></tr>
+      <tr><td>제약</td><td>실물 회로로 그릴 수 있어야 함</td><td>실물 제약 없음, 자유롭게 작성</td></tr>
     </table>
     <div class="warnbox mt">
       <p style="margin:6px 0"><strong>왜 중요?</strong> <code>#10</code> 같은 시간 지연이나 <code>$display</code>는 어떤 합성에서도 게이트로 만들 수 없어 <strong class="hl">합성되지 않습니다</strong>. <code>initial</code> 블록도 ASIC 합성에서는 무시/오류가 되지만, FPGA(Vivado·Quartus 등)에서는 레지스터 초기값처럼 일부 파워업 상태로 합성에 반영되기도 합니다. 설계자가 실수로 이런 걸 DUT에 넣으면 "시뮬은 통과했는데 칩은 다르게 동작"하는 사고가 납니다. 검증 엔지니어가 잡아내야 할 대표적 함정입니다.</p>
@@ -322,9 +322,9 @@
       <div>
         <ul>
           <li>Verilog는 <strong>HDL</strong> — 회로를 글로 기술, 모든 블록이 <strong class="hl">병렬</strong></li>
-          <li><strong>module</strong>=함수/클래스, <strong>인스턴스화</strong>=객체 생성, port=입출력</li>
-          <li><strong>assign</strong>=조합(즉시 바인딩), <strong>wire</strong>로 받음</li>
-          <li><strong>always @(*)</strong>=조합, <strong>@(posedge clk)</strong>=순차(콜백), <strong>reg</strong>로 받음</li>
+          <li><strong>module</strong>=재사용 부품, <strong>인스턴스화</strong>=부품 찍어내기, port=입출력</li>
+          <li><strong>assign</strong>=조합(입력 바뀌면 즉시 갱신), <strong>wire</strong>로 받음</li>
+          <li><strong>always @(*)</strong>=조합, <strong>@(posedge clk)</strong>=순차(클럭마다 동작), <strong>reg</strong>로 받음</li>
           <li>순차엔 <strong class="hl">non-blocking &lt;=</strong>, 조합엔 blocking <code>=</code></li>
           <li>값은 4-state <strong>0/1/x/z</strong>, 설계는 <strong>synthesizable</strong>해야</li>
         </ul>

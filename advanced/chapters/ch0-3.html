@@ -268,7 +268,7 @@ urg -dir simv.vdb/*  <span class="cmt"># merge → 통합 커버리지 리포트
     <h2>UVM에서 이 모든 게 어디 붙나</h2>
     <div class="grid2">
       <div class="card"><h3><span class="ico">🧱</span> 어디에</h3>
-        <ul><li><strong>covergroup</strong>은 보통 monitor가 본 트랜잭션에서 <code>cg.sample()</code></li><li><strong>scoreboard</strong>가 정답 비교(체크), 빈 체크면 미검증</li><li><strong>SVA</strong>는 interface/bind로 RTL에 항상 켜둠(protocol checker)</li><li>sequence/constraint가 자극을 만들고, <strong>커버리지 피드백</strong>으로 reactive하게 조정</li></ul></div>
+        <ul><li><strong>covergroup</strong>은 보통 monitor가 본 트랜잭션에서 <code>cg.sample()</code></li><li><strong>scoreboard</strong>가 정답 비교(체크), 빈 체크면 미검증</li><li><strong>SVA</strong>는 interface/bind로 RTL에 항상 켜둠(protocol checker)</li><li>sequence/constraint가 자극을 만들고, <strong>커버리지 피드백</strong>에 따라 자극을 그때그때 조정</li></ul></div>
       <div class="card"><h3><span class="ico">🎯</span> closure 운영</h3>
         <ul><li>야간 회귀 → 커버리지 <strong>merge</strong> → 구멍 리스트</li><li>구멍을 vplan 항목에 <strong>역매핑</strong>(traceability)</li><li>못 닿는 코너는 <strong>directed test</strong> 또는 <strong>formal</strong>로 보강</li><li>설명 가능한 미달은 <strong>waiver</strong> 문서화 후 사인오프</li></ul></div>
     </div>

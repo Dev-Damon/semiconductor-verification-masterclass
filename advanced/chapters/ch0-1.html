@@ -105,9 +105,8 @@
       <tr><td>gate</td><td>표준셀 네트리스트(AND/FF…)</td><td>합성 결과 netlist</td><td>느림 / 게이트 정확</td></tr>
       <tr><td>transistor</td><td>트랜지스터·아날로그 거동</td><td>SPICE</td><td>가장 느림 / 물리 정확</td></tr>
     </table>
-    <div class="grid2 mt">
-      <div class="dev-bridge"><p style="margin:6px 0">소프트웨어로 치면 <strong>고수준 언어 → 바이트코드 → 어셈블리 → 마이크로아키텍처</strong>로 내려가는 것과 같습니다. 위로 갈수록 빠르고 추상, 아래로 갈수록 느리지만 실제에 가깝습니다.</p></div>
-      <div class="deepnote"><p style="margin:6px 0"><strong>합성</strong>은 RTL을 gate 네트리스트로, <strong>P&amp;R</strong>은 gate를 물리 배치(layout)로, <strong>제조</strong>는 그걸 transistor로 실체화합니다. 한 단계 내려갈 때마다 "정말 같은가?"를 검증해야 합니다.</p></div>
+    <div class="mt">
+      <div class="deepnote"><p style="margin:6px 0">지도를 줌인하는 것과 비슷합니다 — 위쪽 레벨일수록 동작의 큰 그림만 빠르게 보고, 아래로 내려갈수록 세부(게이트·트랜지스터)까지 정확히 보지만 느립니다. <strong>합성</strong>은 RTL을 gate 네트리스트로, <strong>P&amp;R</strong>은 gate를 물리 배치(layout)로, <strong>제조</strong>는 그걸 transistor로 실체화합니다. 한 단계 내려갈 때마다 "정말 같은가?"를 검증해야 합니다.</p></div>
     </div>
   </section>
 
@@ -252,7 +251,7 @@
       <div class="card"><h3><span class="ico">📐</span> Area</h3><p>다이 면적=원가. <strong class="hl">면적↓</strong>는 셀을 줄여 타이밍 여유·전력 마진을 깎음.</p></div>
     </div>
     <div class="spec mt"><p style="margin:6px 0">예시 트레이드오프: 타이밍 위반 경로를 <strong>더 빠른 셀(high-drive)</strong>로 바꾸면 → slack은 좋아지지만 <strong>면적·전력↑</strong>. <strong>Vt 선택</strong>도 마찬가지 — LVT는 빠르지만 누설↑, HVT는 느리지만 누설↓. 합성·P&amp;R 전체가 이 세 축의 <strong class="hl">최적화 문제</strong>입니다.</p></div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">소프트웨어의 <strong>시간 vs 공간 vs 전력</strong> 최적화와 같습니다. 알고리즘 하나에 "빠르고 메모리 적고 배터리 적게"를 동시에 못 주듯, 칩도 PPA 중 무엇을 우선할지 <strong>스펙으로 정하고</strong> 그쪽으로 튜닝합니다.</p></div>
+    <div class="note mt"><p style="margin:6px 0">자동차에서 "빠르고, 연비 좋고, 가벼운" 차를 동시에 만들 수 없는 것과 같습니다. 칩도 PPA 셋을 한꺼번에 최고로 만들 수 없으니, 무엇을 우선할지 <strong>스펙으로 먼저 정하고</strong> 그 방향으로 튜닝합니다.</p></div>
   </section>
 
   <!-- 12 -->
@@ -267,7 +266,7 @@
           <li><strong>full-layer vs metal-only(ECO)</strong>: 금속층만 바꾸는 부분 수정으로 일부 비용을 줄이기도</li>
         </ul>
       </div>
-      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">검증이 프로젝트 공수의 <strong class="hl">절반 이상</strong>인 근본 이유 — 소프트웨어는 패치를 배포하면 끝이지만, 칩은 <strong>리스핀이 곧 돈과 시간</strong>입니다. "사후 패치 불가"가 검증을 비싸게 만듭니다.</p></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">검증이 프로젝트 공수의 <strong class="hl">절반 이상</strong>인 근본 이유 — 한 번 찍은 칩은 출고 후 내부 회로를 고칠 수 없고, 잘못을 바로잡으려면 <strong>리스핀이 곧 돈과 시간</strong>입니다. "사후 수정 불가"가 검증을 비싸게 만듭니다.</p></div>
     </div>
     <div class="pitfall mt"><p style="margin:6px 0">"버그 나면 펌웨어로 우회하면 되지" — 일부는 맞지만, 하드웨어 로직·타이밍·아날로그 결함은 <strong>SW로 못 고칩니다</strong>. 그래서 shift-left와 사인오프 게이트가 강박적으로 엄격합니다.</p></div>
   </section>
@@ -309,7 +308,7 @@
         <li>RTL sim 통과 ≠ silicon(타이밍·X·CDC·async)</li>
         <li>리스핀 비용 때문에 검증이 공수의 <strong>절반 이상</strong></li>
       </ul></div>
-      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"칩은 RTL을 합성·P&amp;R·STA로 내려 사인오프 후 마스크를 만들고, 돌아온 실리콘을 post-silicon으로 검증합니다. 사후 패치가 불가능해 <strong class="hl">검증을 shift-left로 앞당기는 것</strong>이 핵심입니다."</p></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"칩은 RTL을 합성·P&amp;R·STA로 내려 사인오프 후 마스크를 만들고, 돌아온 실리콘을 post-silicon으로 검증합니다. 사후 수정이 불가능해 <strong class="hl">검증을 shift-left로 앞당기는 것</strong>이 핵심입니다."</p></div>
     </div>
     <div class="note mt">다음 심화 → <strong>0-2 디지털 설계 기초 정밀</strong>: 동기 설계·setup/hold·메타스테이빌리티와 CDC 동기화기.</div>
   </section>

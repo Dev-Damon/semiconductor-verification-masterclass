@@ -45,20 +45,20 @@
     <div class="note mt">UPF는 IEEE 1801 표준입니다. (경쟁 포맷 CPF도 있지만 면접에선 UPF만 알아도 충분합니다.)</div>
   </section>
 
-  <!-- 3. 개발자 비유 -->
+  <!-- 3. 직관으로 이해하기 -->
   <section class="slide">
-    <div class="kicker">개발자 직관으로 번역</div>
-    <h2>UPF는 "전원용 설정 파일", 에뮬은 "스테이징 환경"</h2>
-    <div class="dev-bridge">
-      <p style="margin:6px 0">코드(RTL)는 그대로 두고, <strong>전원 동작은 별도 설정 파일(UPF)</strong>로 빼는 겁니다. 마치 애플리케이션 코드는 안 건드리고 <code>config.yaml</code> / <strong>feature flag</strong> 로 모듈을 켜고 끄는 것과 똑같습니다. UPF의 power switch가 곧 "이 모듈 끄기" 플래그죠.</p>
-      <p style="margin:6px 0">에뮬레이션은 <strong>스테이징 환경</strong>입니다. 단위 테스트(시뮬레이션)는 정확하지만 느려서, 실제 OS를 부팅하고 진짜 소프트웨어를 돌려보는 검증은 <strong class="hl2">전용 가속 하드웨어(스테이징)</strong>에서 합니다.</p>
+    <div class="kicker">직관적으로 이해하기</div>
+    <h2>UPF는 "전원 사용설명서", 에뮬은 "고속 시운전"</h2>
+    <div class="analogy">
+      <p style="margin:6px 0">건물 도면(RTL)은 방 구조와 배선만 그릴 뿐, <strong>"어느 층은 평소 전기를 끊고, 끌 땐 어떤 안전장치를 둔다"</strong>는 운영 규칙은 담지 못합니다. 그래서 <strong>전원 운영 규칙을 별도 문서(UPF)</strong>로 분리해 적습니다. 도면은 그대로 두고, 전원 의도만 따로 관리하는 셈입니다.</p>
+      <p style="margin:6px 0">에뮬레이션은 <strong>고속 시운전</strong>입니다. 정밀한 시뮬레이션은 정확하지만 너무 느려서, 실제로 전체 시스템을 오래 돌려봐야 하는 검증은 <strong class="hl2">전용 가속 하드웨어</strong> 위에서 합니다 — 자동차를 한 부품씩 정밀 점검하는 것과, 완성차를 시험 트랙에서 실제로 달려보는 것의 차이죠.</p>
     </div>
     <table class="compare mt">
-      <tr><th>반도체 검증</th><th>당신이 아는 것</th></tr>
-      <tr><td>UPF (전원 의도 분리)</td><td>코드와 분리된 config / feature flag</td></tr>
-      <tr><td>power gating (블록 전원 차단)</td><td>안 쓰는 마이크로서비스 스케일을 0으로</td></tr>
-      <tr><td>simulation (느리지만 정밀)</td><td>로컬 유닛 테스트</td></tr>
-      <tr><td>emulation (실 SW·OS 부팅)</td><td>스테이징에서 E2E 통합 테스트</td></tr>
+      <tr><th>개념</th><th>핵심 한 줄</th></tr>
+      <tr><td>UPF (전원 의도 분리)</td><td>설계도와 분리해 전원 운영 규칙만 적은 문서</td></tr>
+      <tr><td>power gating (블록 전원 차단)</td><td>안 쓰는 부분의 전원을 통째로 끊어 전력 절약</td></tr>
+      <tr><td>simulation (느리지만 정밀)</td><td>한 부분씩 천천히 정밀하게 점검</td></tr>
+      <tr><td>emulation (실 SW·OS 부팅)</td><td>전체를 빠르게 돌려 실제 동작까지 확인</td></tr>
     </table>
   </section>
 
@@ -80,7 +80,7 @@
       <div class="card">
         <h3><span class="ico">💾</span> Retention</h3>
         <p>전원을 끄기 전에 핵심 <strong class="hl3">상태를 별도 저장</strong>. 다시 켜면 그 자리에서 복구.</p>
-        <div class="analogy" style="margin-top:10px"><p style="margin:4px 0;font-size:14px">앱의 <strong>자동저장</strong>. 껐다 켜도 작업하던 문서가 그대로 떠 있죠.</p></div>
+        <div class="analogy" style="margin-top:10px"><p style="margin:4px 0;font-size:14px">읽던 책에 <strong>책갈피를 끼워 두는 것</strong>. 책을 덮었다 다시 펴도 읽던 페이지로 바로 돌아오죠.</p></div>
       </div>
     </div>
     <div class="warnbox mt"><p style="margin:4px 0">문제: 전원을 끄거나 전압이 다른 블록끼리 신호를 주고받으면 <strong>전기적 사고</strong>가 납니다. 꺼진 블록의 출력은 <strong class="hl3">알 수 없는 값(X)</strong>이 되고, 전압이 다르면 신호가 깨집니다. 그래서 경계마다 <strong>보호 셀</strong>이 필요합니다 → 다음 슬라이드.</p></div>
@@ -105,7 +105,7 @@
       </div>
     </div>
     <div class="analogy mt">
-      <p style="margin:6px 0"><strong>isolation = 꺼진 방문을 닫아 쓰레기가 안 새게</strong>, <strong>level shifter = 다른 언어를 쓰는 두 방 사이의 통역사</strong>, <strong>retention = 불 끄기 전 자동저장</strong>. 이 셋만 기억하면 UPF의 80%는 끝입니다.</p>
+      <p style="margin:6px 0"><strong>isolation = 꺼진 방문을 닫아 쓰레기가 안 새게</strong>, <strong>level shifter = 다른 언어를 쓰는 두 방 사이의 통역사</strong>, <strong>retention = 불 끄기 전 책갈피를 끼워 두기</strong>. 이 셋만 기억하면 UPF의 80%는 끝입니다.</p>
     </div>
   </section>
 
@@ -187,7 +187,7 @@
         </ul>
       </div>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: feature flag로 모듈을 껐는데 <strong>다른 모듈이 그 응답을 그대로 믿고 쓰다가 null 참조</strong>로 터지는 상황. power-aware sim은 바로 그 "꺼진 모듈을 잘못 참조하는" 버그를 전원 레벨에서 잡아냅니다.</p></div>
+    <div class="note mt"><p style="margin:6px 0">한 줄로: 전원이 꺼진 부분은 "응답할 수 없는 상태"인데, 옆 블록이 그걸 모르고 그 출력을 멀쩡한 값으로 믿고 쓰다가 오동작합니다. power-aware sim은 바로 이 "꺼진 부분을 잘못 참조하는" 버그를 전원 레벨에서 잡아냅니다.</p></div>
   </section>
 
   <!-- 8. 왜 X 처리가 핵심인가 (작은 코드 느낌) -->
@@ -260,7 +260,7 @@
         </ul>
       </div>
     </div>
-    <div class="dev-bridge mt"><p style="margin:6px 0">개발자 비유: 로컬 유닛 테스트(시뮬)는 정확하지만 전체 시스템을 못 돌립니다. <strong>스테이징 서버(에뮬)에서 실제 OS·앱을 띄워 E2E로 검증</strong>하는 것과 같습니다. 단, 에뮬은 시뮬보다 디버깅 가시성이 떨어지는 트레이드오프가 있습니다.</p></div>
+    <div class="note mt"><p style="margin:6px 0">비유하자면: 시뮬은 실험실에서 부품을 한 점씩 정밀 측정하는 것이고, 에뮬은 <strong>완성한 기계를 시험 트랙에서 실제로 가동해 보는 것</strong>입니다. 대신 트레이드오프가 있습니다 — 빠르게 통째로 돌리는 만큼, 에뮬은 시뮬처럼 내부 신호를 속속들이 들여다보기는 어렵습니다.</p></div>
   </section>
 
   <!-- 10. 시뮬 vs 에뮬 vs FPGA 비교표 -->
