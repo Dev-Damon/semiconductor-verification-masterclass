@@ -43,11 +43,11 @@ body{
 .slide{
   position:absolute;inset:0;
   display:none;
-  flex-direction:column;justify-content:center;
+  flex-direction:column;justify-content:safe center;
   padding:6vh 8vw;
   opacity:0;transform:translateY(14px);
   transition:opacity .35s ease, transform .35s ease;
-  overflow:auto;
+  overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
 }
 .slide.active{display:flex;opacity:1;transform:none}
 .slide > *{max-width:1100px;width:100%;margin-inline:auto}
@@ -166,7 +166,11 @@ svg{max-width:100%;height:auto}
 
 /* responsive */
 @media(max-width:760px){
-  .slide{padding:7vh 6vw}
+  .slide{padding:5vh 6vw 92px;justify-content:flex-start}
   .grid2,.grid3{grid-template-columns:1fr}
   .flow{flex-direction:column}.flow .arrow{transform:rotate(90deg)}
+  .hud{padding:0 12px;font-size:12px}
+  .hud .title{max-width:44%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  h1{font-size:clamp(26px,7vw,40px)}
+  .title-slide .hint{margin-top:24px}
 }
