@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>검증 엔지니어 학습 로드맵</title>
+<style>
+:root{
+  --bg:#0a0e16; --panel:#121a29; --panel2:#172236; --line:#22304a;
+  --ink:#e8eef7; --muted:#b7c2d4; --dim:#8493ab;
+  --accent:#38e1c6; --accent2:#5b9cff; --warn:#ffce6b; --good:#5ee6a0; --danger:#ff7a85;
+  --code:#0b1220;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic','Segoe UI',system-ui,sans-serif;
+  line-height:1.7;-webkit-text-size-adjust:100%}
+.topbar{position:sticky;top:0;z-index:20;background:rgba(10,14,22,.82);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);padding:11px 18px;display:flex;gap:12px;align-items:center;font-size:14px}
+.topbar a{color:var(--dim);text-decoration:none;border:1px solid var(--line);background:var(--panel);
+  padding:6px 12px;border-radius:9px;white-space:nowrap}
+.topbar a:hover{color:var(--ink);border-color:var(--accent)}
+.topbar .t{color:var(--muted);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wrap{max-width:880px;margin:0 auto;padding:30px 20px 100px}
+h1,h2,h3,h4{line-height:1.25;font-weight:800;letter-spacing:-.01em}
+h1{font-size:clamp(26px,5vw,38px);margin:.2em 0 .5em}
+h2{font-size:clamp(20px,3.5vw,27px);margin:1.7em 0 .6em;padding-bottom:.3em;border-bottom:1px solid var(--line)}
+h3{font-size:clamp(17px,2.6vw,20px);margin:1.5em 0 .5em;color:#dfe8f5}
+h4{font-size:16px;margin:1.2em 0 .4em;color:var(--muted)}
+p{margin:.7em 0}
+a{color:var(--accent2)}
+a:hover{color:var(--accent)}
+strong{color:#fff}
+em{color:var(--good);font-style:normal}
+hr{border:0;border-top:1px solid var(--line);margin:2.2em 0}
+code{font-family:'JetBrains Mono','Cascadia Code','D2Coding',Consolas,monospace;
+  background:var(--panel2);color:var(--accent);padding:2px 6px;border-radius:5px;font-size:.88em}
+pre{background:var(--code);border:1px solid var(--line);border-radius:12px;padding:15px 17px;overflow:auto}
+pre code{background:none;color:#cfe0f5;padding:0;font-size:13.5px;line-height:1.6}
+blockquote{margin:1.1em 0;padding:12px 16px;border-left:3px solid var(--accent);
+  background:linear-gradient(180deg,rgba(56,225,198,.07),transparent);border-radius:0 10px 10px 0;color:var(--muted)}
+blockquote p{margin:.35em 0}
+ul,ol{padding-left:1.35em;margin:.6em 0}
+li{margin:.32em 0}
+li::marker{color:var(--accent)}
+table{width:100%;border-collapse:collapse;margin:1.1em 0;font-size:14.5px;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--accent);font-weight:700;white-space:nowrap}
+tr:nth-child(even) td{background:rgba(255,255,255,.018)}
+.toc{margin:1.4em 0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 18px}
+.toc>summary{cursor:pointer;font-weight:700;color:var(--accent);padding:8px 0;list-style:none}
+.toc>summary::before{content:"▸ ";color:var(--dim)}
+.toc[open]>summary::before{content:"▾ "}
+.toc ul{font-size:14px}
+.toc a{color:var(--muted);text-decoration:none}
+.toc a:hover{color:var(--accent)}
+.footer{max-width:880px;margin:0 auto;padding:24px 20px 60px;color:var(--dim);font-size:13px;border-top:1px solid var(--line)}
+@media(max-width:560px){ table{font-size:13px} th,td{padding:7px 9px} .wrap{padding:22px 14px 80px} }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="index.html">← 강의 홈</a>
+  <span class="t">검증 엔지니어 학습 로드맵</span>
+</div>
+<div class="wrap">
+<details class="toc" open><summary>목차</summary><ul>
+<li><a href="#검증-엔지니어-취업--학습-로드맵">검증 엔지니어 취업 — 학습 로드맵</a><ul>
+<li><a href="#0-큰-그림-총-115주">0. 큰 그림 (총 ~11.5주)</a></li>
+<li><a href="#phase-0--소자물리-15주--11일--하루-5h--개념-이해">Phase 0 · 소자물리 (1.5주 = 11일 / 하루 5h / 개념 이해)</a><ul>
+<li><a href="#-하루-5시간-쪼개는-법">📐 하루 5시간 쪼개는 법</a></li>
+<li><a href="#-11일-캘린더">🗓️ 11일 캘린더</a></li>
+<li><a href="#-일자별-자가점검-질문-인출-점검--말로-설명하기">✅ 일자별 자가점검 질문 (인출 점검 — 말로 설명하기)</a></li>
+<li><a href="#-d1-상세-가이드-foundations">🎯 D1 상세 가이드 (Foundations)</a></li>
+</ul>
+</li>
+<li><a href="#phase-1--검증-기초체력-1주--기계공학부-필수-갭-메우기">Phase 1 · 검증 기초체력 (1주) — 기계공학부 필수 갭 메우기</a></li>
+<li><a href="#phase-2--hdl-verilog--systemverilog-2주--핸즈온">Phase 2 · HDL: Verilog / SystemVerilog (2주) — 핸즈온</a></li>
+<li><a href="#phase-3--uvm-25주--검증의-심장-가장-중요">Phase 3 · UVM (2.5주) — 검증의 심장 ⭐가장 중요</a></li>
+<li><a href="#phase-4--프로토콜-apb--axi--cache-coherency-15주">Phase 4 · 프로토콜: APB / AXI / Cache Coherency (1.5주)</a></li>
+<li><a href="#phase-5--시뮬레이션socdft-2주">Phase 5 · 시뮬레이션·SoC·DFT (2주)</a></li>
+<li><a href="#phase-6--통합--면접-1주---실제-취업-면접은-여기까지-끝낸-뒤">Phase 6 · 통합 + 면접 (1주) ← 🎯 실제 취업 면접은 여기까지 끝낸 뒤</a></li>
+<li><a href="#실습-환경-무료">실습 환경 (무료)</a></li>
+<li><a href="#원본-학습목표-커버리지-체크리스트">원본 학습목표 커버리지 체크리스트</a></li>
+<li><a href="#일일-운영-원칙">일일 운영 원칙</a></li>
+</ul>
+</li>
+</ul></details>
+<h1 id="검증-엔지니어-취업--학습-로드맵">검증 엔지니어 취업 — 학습 로드맵</h1>
+<blockquote>
+<p><strong>목표 직무:</strong> 디지털 검증(Design Verification) 엔지니어
+<strong>학습자 배경:</strong> 기계공학부 (수학·물리 OK / 디지털·HDL·프로그래밍은 신규)
+<strong>구성:</strong> ① 소자물리 1.5주(개념 이해) → ② 검증 10주(개념+핸즈온, 취업 수준)
+원본 목표: <a href="goals.html">원본-학습목표.md</a></p>
+</blockquote>
+<h2 id="0-큰-그림-총-115주">0. 큰 그림 (총 ~11.5주)</h2>
+<table>
+<thead>
+<tr>
+<th>단계</th>
+<th>기간</th>
+<th>수준</th>
+<th>핵심</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Phase 0 · 소자물리</strong></td>
+<td>1.5주 (9일)</td>
+<td>개념 이해</td>
+<td>면접 교양 수준까지만, 깊게 파지 않음</td>
+</tr>
+<tr>
+<td><strong>Phase 1 · 검증 기초체력</strong></td>
+<td>1주</td>
+<td>선수지식</td>
+<td>디지털 논리 + 프로그래밍 갭 메우기</td>
+</tr>
+<tr>
+<td><strong>Phase 2 · HDL</strong></td>
+<td>2주</td>
+<td>핸즈온</td>
+<td>Verilog/SystemVerilog 직접 작성</td>
+</tr>
+<tr>
+<td><strong>Phase 3 · UVM</strong></td>
+<td>2.5주</td>
+<td>핸즈온</td>
+<td>검증 방법론의 심장</td>
+</tr>
+<tr>
+<td><strong>Phase 4 · 프로토콜</strong></td>
+<td>1.5주</td>
+<td>개념+분석</td>
+<td>APB/AXI/Cache Coherency</td>
+</tr>
+<tr>
+<td><strong>Phase 5 · 시뮬·SoC·DFT</strong></td>
+<td>2주</td>
+<td>개념+실무</td>
+<td>빌드/타이밍/부팅/전력/테스트</td>
+</tr>
+<tr>
+<td><strong>Phase 6 · 통합·면접</strong></td>
+<td>1주</td>
+<td>종합</td>
+<td>미니프로젝트 + 면접 드릴</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>⚠️ <strong>잠은 줄이지 말 것.</strong> 기술 학습은 수면 중 장기기억 고착이 핵심. 하루 딥워크 5~6h + 수면 7h가 "8h 갈아넣기"보다 시험·면접에서 강하다.</p>
+<p>🎯 <strong>실제 취업 면접은 Phase 0~6을 모두 끝낸 뒤, Phase 6에서 준비해 본다.</strong> 각 Phase 중간의 자가점검 질문/체크포인트는 "그날 배운 걸 굳히는 인출 학습"이지 면접이 아니다. (소자물리는 검증 직무 비중이 작아 교양 수준까지만.)</p>
+</blockquote>
+<hr />
+<h2 id="phase-0--소자물리-15주--11일--하루-5h--개념-이해">Phase 0 · 소자물리 (1.5주 = 11일 / 하루 5h / 개념 이해)</h2>
+<p>YouTube 「기초반도체공학」 33강(9h 4m)을 <strong>개념 이해 수준</strong>으로. 우리 슬라이드(<code>semiconductor-device-physics</code>의 <code>dp0~dp5-3</code>)를 예습·복습 짝으로.
+<strong>구성: D1~D8 신규 학습(33강 전부) + D9~D11 신규 0, 개념 굳히기(인출 복습).</strong></p>
+<blockquote>
+<p>🔎 <strong>오해 주의 — 실제 취업 면접은 여기서 보지 않습니다.</strong> 면접은 <strong>모든 Phase(0~6)를 끝낸 뒤</strong> Phase 6의 통합 면접 준비를 거쳐 한 번 봅니다. Phase 0의 D9~D11과 일자별 자가점검 질문은 <strong>그날 배운 개념을 '인출(능동적 회상)'로 굳히는 학습 도구</strong>일 뿐, 면접 시점이 아닙니다. (소자물리는 검증 직무에선 비중이 작아 '교양 수준'까지만.)</p>
+</blockquote>
+<h3 id="-하루-5시간-쪼개는-법">📐 하루 5시간 쪼개는 법</h3>
+<p><strong>학습일(D1~D8):</strong>
+- 🎬 <strong>2.5h — 신규 영상.</strong> 1.25배속, <strong>수식 나오는 구간만 1배속</strong>, 필기 필수(밴드 그림은 직접 그리며).
+- ✍️ <strong>1.5h — 그날 핵심 유도를 손으로 다시.</strong> 영상 안 보고 백지에 재현 + 간단 문제 1~2개.
+- 🔁 <strong>1h — 복습.</strong> 전날 내용 5분 회상(스페이싱) + 해당 <strong>슬라이드로 그날 내용 정리</strong>. <em>예습·복습에 슬라이드를 쓰면 되감기가 줄어 체감 30% 단축.</em></p>
+<p><strong>복습·인출일(D9~D11): 신규 영상 0.</strong> (※ 실제 면접 아님 — 개념을 인출로 굳히는 날)
+- 🗣️ <strong>2.5h — 자기설명(인출).</strong> 슬라이드를 덮고 자가점검 질문/Q&amp;A를 <strong>말로 설명</strong>(녹음해 빈틈 확인).
+- ✍️ <strong>1.5h — 약점만 재유도 / 막히는 영상 구간만 핀포인트 재시청.</strong>
+- 🔁 <strong>1h — 큰 그림 1분 스토리 말하기</strong>(밴드→pn→다이오드→MS→MOS→MOSFET) + 녹음 듣고 셀프 피드백.</p>
+<h3 id="-11일-캘린더">🗓️ 11일 캘린더</h3>
+<blockquote>
+<p>영상 길이 합은 하루 60~95분 → 2.5h 영상 예산(1.25배속) 안에 들어옴. <strong>D7이 가장 빡셈(95분)</strong>: 밀리면 #28을 D8로 넘기세요.</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>일</th>
+<th>영상(#번호)</th>
+<th>분량</th>
+<th>슬라이드(예습/정리)</th>
+<th>그날 주제</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>D1</strong></td>
+<td>0.0–0.1 (#1–2)</td>
+<td>29m</td>
+<td>dp0</td>
+<td>전기장·전위·<strong>밴드·페르미</strong> = 새 언어 → <a href="#-d1-상세-가이드-foundations">D1 상세 가이드</a></td>
+</tr>
+<tr>
+<td><strong>D2</strong></td>
+<td>1.1–1.4 (#3–6)</td>
+<td>70m</td>
+<td>dp1-1, dp1-2, dp1-3</td>
+<td>pn접합 정성 + 내부전위 + 공핍층 + 바이어스</td>
+</tr>
+<tr>
+<td><strong>D3</strong></td>
+<td>1.5–2.1 (#7–10)</td>
+<td>60m</td>
+<td>dp1-3, dp1-4, dp2-1</td>
+<td>정전용량·항복·응용 + 다이오드 진입</td>
+</tr>
+<tr>
+<td><strong>D4</strong></td>
+<td>2.2–2.5 (#11–14)</td>
+<td>74m</td>
+<td>dp2-1, dp2-2</td>
+<td>소수캐리어 확산·분포 + I-V + 비이상</td>
+</tr>
+<tr>
+<td><strong>D5</strong></td>
+<td>2.6–3.4 (#15–19)</td>
+<td>68m</td>
+<td>dp2-2, dp3</td>
+<td>확산용량 + MS접합(Schottky/Ohmic)</td>
+</tr>
+<tr>
+<td><strong>D6</strong></td>
+<td>3.5–4.3 (#20–23)</td>
+<td>64m</td>
+<td>dp3, dp4-1</td>
+<td>이종접합 + MOS 3영역·파라미터</td>
+</tr>
+<tr>
+<td><strong>D7</strong> ⚠️</td>
+<td>4.4–5.2 (#24–28)</td>
+<td>96m</td>
+<td>dp4-2, dp5-1, dp5-2</td>
+<td>MOS 수식·C-V·비이상 + MOSFET 동작·영역</td>
+</tr>
+<tr>
+<td><strong>D8</strong></td>
+<td>5.3–5.7 (#29–33)</td>
+<td>83m</td>
+<td>dp5-2, dp5-3</td>
+<td>MOSFET I-V·바디효과·subthreshold·단채널·스케일링</td>
+</tr>
+<tr>
+<td><strong>D9</strong></td>
+<td>신규 0</td>
+<td>—</td>
+<td>dp0·dp1·dp2</td>
+<td><strong>복습·인출:</strong> 0~2장(밴드/pn/다이오드) 자기설명</td>
+</tr>
+<tr>
+<td><strong>D10</strong></td>
+<td>신규 0</td>
+<td>—</td>
+<td>dp3·dp4·dp5</td>
+<td><strong>복습·인출:</strong> 3~5장(MS/MOS/MOSFET) 자기설명</td>
+</tr>
+<tr>
+<td><strong>D11</strong></td>
+<td>신규 0</td>
+<td>—</td>
+<td>전 범위</td>
+<td><strong>통합 인출:</strong> 큰그림 1분 스토리 + 약점 최종 점검</td>
+</tr>
+</tbody>
+</table>
+<h3 id="-일자별-자가점검-질문-인출-점검--말로-설명하기">✅ 일자별 자가점검 질문 (인출 점검 — 말로 설명하기)</h3>
+<blockquote>
+<p>이 질문들은 <strong>그날 학습을 굳히는 회상(retrieval) 도구</strong>다. 실제 면접 대비가 아니라 "내가 이해했나" 확인용. 실전 면접 준비는 전 Phase 후 <strong>Phase 6</strong>에서.</p>
+</blockquote>
+<ul>
+<li><strong>D1</strong>: ① <code>E=−dV/dx</code>에서 전위가 평평하면 E는? ② 전도대/가전자대/밴드갭/페르미 준위 각각 뭔가? ③ 정공은 실제 입자인가? 전자와 부호·이동방향 차이는?</li>
+<li><strong>D2</strong>: ① pn 붙이면 왜 공핍층이 생기나(확산↔드리프트 평형)? ② built-in potential은 어디서 오고, 도핑 높이면? ③ 단측 접합에서 공핍층은 주로 어느 쪽으로 퍼지나?</li>
+<li><strong>D3</strong>: ① 순/역방향에서 전위장벽·공핍층 변화? ② 공핍 정전용량이 전압따라 변하는 이유? ③ Zener vs Avalanche 항복 차이?</li>
+<li><strong>D4</strong>: ① 다이오드 전류를 나르는 주역은 소수캐리어다 — 왜? ② 소수캐리어가 지수적으로 줄어드는 이유? ③ <code>I=I₀(e^{V/V_T}−1)</code> 각 부분의 의미?</li>
+<li><strong>D5</strong>: ① diffusion capacitance는 언제(순/역) 중요? ② Schottky vs Ohmic을 가르는 핵심 요인(일함수)? ③ 정류작용이 생기는 직관?</li>
+<li><strong>D6</strong>: ① MOS 축적/공핍/반전을 게이트 전압으로 설명? ② 문턱전압의 직관적 정의? ③ 이종접합은 왜 쓰나?</li>
+<li><strong>D7</strong>: ① 문턱전압을 정하는 항들(일함수차·산화막전하·도핑)? ② MOSFET이 왜 "스위치"인가(채널 형성)? ③ linear↔saturation을 가르는 pinch-off란?</li>
+<li><strong>D8</strong>: ① 포화에서 V_DS 올려도 I_D 거의 일정한 이유? ② 바디효과가 V_th에 주는 영향? ③ subthreshold swing이 뭐고 ~60mV/dec 한계의 의미? ④ 단채널효과·스케일링이 왜 중요?</li>
+</ul>
+<h3 id="-d1-상세-가이드-foundations">🎯 D1 상세 가이드 (Foundations)</h3>
+<p><strong>왜 D1이 제일 중요한가:</strong> 0장의 밴드·페르미·정공은 기계공학부 커리큘럼에 없던 <strong>완전히 새 언어</strong>다. 여기가 흔들리면 1~5장 전체가 무너진다. <strong>이날만 영상 두 번 봐도 된다.</strong></p>
+<p><strong>꼭 잡고 갈 4개념:</strong>
+1. <strong><code>E = −dV/dx</code></strong> — 전기장은 "전위 언덕의 기울기(내리막 방향)". 기계과의 위치에너지/힘 관계와 동일. <em>전위 평평 → 전기장 0.</em>
+2. <strong>에너지밴드</strong> — 전자가 앉을 수 있는 "자리의 지도". 전도대(E_c, 자유전자)·가전자대(E_v, 묶인전자)·그 사이 못 들어가는 틈 밴드갭(E_g). <em>세로축 = 전자 에너지(위로 갈수록 불안정).</em>
+3. <strong>페르미 준위(E_F)</strong> — "전자가 어디까지 차 있나"의 기준선. 0K 직관에서 출발해, 유한 온도에선 점유확률 50% 지점. <em>평형에서 수평.</em>
+4. <strong>정공(hole)</strong> — 전자가 빠진 "빈자리". 부호 +q, 전기장 방향으로 이동(전자와 반대). 실제 입자가 아니라 빈자리의 이동.</p>
+<p><strong>기계과 강점 활용:</strong> <code>E=−dV/dx</code>, 가우스 법칙, (다음 장의) 확산은 <strong>열전달의 푸리에 법칙·플럭스와 1:1 대응</strong>. 수식 자체는 부담 없으니 <em>물리적 그림</em>에 집중.</p>
+<p><strong>D1 끝 자가테스트:</strong> 위 4개를 백지에 그림+한 줄로 설명 가능하면 통과. 안 되면 dp0 + #2 한 번 더.</p>
+<p><strong>Phase 0 최종 합격선:</strong> "밴드다이어그램으로 pn접합·MOS를 그려 설명하고, MOSFET이 왜 스위치인지 1분 안에 말한다." → 검증 직무 면접엔 이걸로 충분. <strong>더 깊이(2D 정전기학·정밀 캐리어 통계 등)는 파지 말 것.</strong></p>
+<hr />
+<h2 id="phase-1--검증-기초체력-1주--기계공학부-필수-갭-메우기">Phase 1 · 검증 기초체력 (1주) — 기계공학부 필수 갭 메우기</h2>
+<p>검증은 "이해"가 아니라 "<strong>코딩 기술</strong>"이라, 선수지식 없이는 UVM에서 무너진다.</p>
+<ul>
+<li><strong>디지털 논리</strong> (2~3일): 조합/순차 회로, 플립플롭, FSM, 셋업/홀드 직관</li>
+<li>우리 자료: 기본 <code>ch0-2</code>(디지털 회로 복습), <code>ch0-3</code>(검증이란)</li>
+<li>심화 예습: <code>adv-ch0-2</code>(타이밍·CDC)</li>
+<li><strong>프로그래밍/OOP</strong> (2~3일): UVM이 객체지향이라 필수. Python을 이미 한다면 클래스/상속/팩토리 개념만 빠르게.</li>
+<li><strong>실습 환경 셋업</strong> (Phase 2 시작 전 완료) → 아래 <a href="#실습-환경-무료">실습 환경</a> 참고</li>
+</ul>
+<hr />
+<h2 id="phase-2--hdl-verilog--systemverilog-2주--핸즈온">Phase 2 · HDL: Verilog / SystemVerilog (2주) — 핸즈온</h2>
+<table>
+<thead>
+<tr>
+<th>주</th>
+<th>자료</th>
+<th>핸즈온 랩</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>2주차</strong> Verilog</td>
+<td><code>ch1-1</code> → <code>adv-ch1-1</code> (NBA 스케줄링·race·latch 추론)</td>
+<td><strong>랩1: 4-bit 카운터 + 테스트벤치</strong>, <strong>랩2: 동기 FIFO</strong> (Icarus+GTKWave 파형 확인)</td>
+</tr>
+<tr>
+<td><strong>3주차</strong> SystemVerilog</td>
+<td><code>ch1-2</code> → <code>adv-ch1-2</code> (clocking block·constraint·SVA)</td>
+<td><strong>랩3: FIFO에 constrained-random 자극</strong>, <strong>랩4: SVA로 full/empty assertion</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>미니프로젝트 ①:</strong> FIFO를 SystemVerilog 테스트벤치로 랜덤 검증 + 커버리지 측정. → <strong>상세 스펙: <a href="project-fifo.html">미니프로젝트-01-FIFO.md</a></strong>
+<strong>체크포인트:</strong> <code>always_ff</code> vs <code>always_comb</code>, blocking/non-blocking 차이를 코드로 설명 가능?</p>
+<hr />
+<h2 id="phase-3--uvm-25주--검증의-심장-가장-중요">Phase 3 · UVM (2.5주) — 검증의 심장 ⭐가장 중요</h2>
+<p>면접·실무의 핵심. 여기에 시간을 가장 많이.</p>
+<table>
+<thead>
+<tr>
+<th>단계</th>
+<th>자료</th>
+<th>핸즈온</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UVM 구조 이해</td>
+<td><code>ch2-1</code> → <code>adv-ch2-1</code> (phase·objection·factory·sequencer 핸드셰이크)</td>
+<td>EDA Playground UVM "hello world" 돌려보기</td>
+</tr>
+<tr>
+<td>컴포넌트 작성</td>
+<td>동일</td>
+<td>driver→monitor→scoreboard→agent 직접 작성</td>
+</tr>
+<tr>
+<td>C-test/DPI</td>
+<td><code>ch2-2</code> → <code>adv-ch2-2</code> (베어메탈 C, DPI-C)</td>
+<td>DPI로 C ↔ SV 연동 미니 예제</td>
+</tr>
+</tbody>
+</table>
+<p><strong>미니프로젝트 ②(취업 포트폴리오급):</strong> 간단한 DUT(APB 슬레이브 레지스터 블록)에 대한 <strong>완전한 UVM 환경</strong> 구축 — agent/sequence/scoreboard/coverage. → 이게 검증 면접에서 가장 강력한 무기.
+<strong>체크포인트:</strong> "objection이 왜 필요한가?", "factory override는 언제 쓰나?"를 내 코드로 설명.</p>
+<hr />
+<h2 id="phase-4--프로토콜-apb--axi--cache-coherency-15주">Phase 4 · 프로토콜: APB / AXI / Cache Coherency (1.5주)</h2>
+<table>
+<thead>
+<tr>
+<th>자료</th>
+<th>포인트</th>
+<th>핸즈온</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ch3-1</code>→<code>adv-ch3-1</code></td>
+<td>APB SETUP/ACCESS, wait state</td>
+<td>Phase 3의 APB DUT 파형으로 직접 확인</td>
+</tr>
+<tr>
+<td><code>ch3-2</code>→<code>adv-ch3-2</code></td>
+<td>AXI 5채널·핸드셰이크·버스트·WSTRB</td>
+<td>AXI-Lite 프로토콜 체커(SVA) 작성</td>
+</tr>
+<tr>
+<td><code>ch3-3</code>→<code>adv-ch3-3</code></td>
+<td>MESI 전이표·스누프·ACE/CHI</td>
+<td>전이표 직접 그려보며 이해(코딩 X)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>체크포인트:</strong> AXI에서 VALID/READY 핸드셰이크 규칙, WRAP 버스트 주소 계산을 설명 가능?</p>
+<hr />
+<h2 id="phase-5--시뮬레이션socdft-2주">Phase 5 · 시뮬레이션·SoC·DFT (2주)</h2>
+<table>
+<thead>
+<tr>
+<th>주제</th>
+<th>자료</th>
+<th>원본목표 대응</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Compile/Elab/Sim 3단계</td>
+<td><code>ch4-1</code>→<code>adv-ch4-1</code></td>
+<td>✅ 3 step</td>
+</tr>
+<tr>
+<td>Xcelium/VCS 도구</td>
+<td><code>ch4-2</code>→<code>adv-ch4-2</code></td>
+<td>✅ Simulator tool</td>
+</tr>
+<tr>
+<td>GLS·SDF·타이밍</td>
+<td><code>ch4-3</code>→<code>adv-ch4-3</code></td>
+<td>✅ Gate Level Sim/Timing</td>
+</tr>
+<tr>
+<td>SoC 부팅 플로우</td>
+<td><code>ch5-1</code>→<code>adv-ch5-1</code></td>
+<td>✅ Booting Flow</td>
+</tr>
+<tr>
+<td>DVFS</td>
+<td><code>ch5-2</code>→<code>adv-ch5-2</code></td>
+<td>✅ DVFS</td>
+</tr>
+<tr>
+<td>UPF Power-Aware·에뮬</td>
+<td><code>ch5-3</code>→<code>adv-ch5-3</code></td>
+<td>✅ UPF/Emulation</td>
+</tr>
+<tr>
+<td>JTAG·iJTAG·JTAG2APB</td>
+<td><code>ch6-1</code>→<code>adv-ch6-1</code></td>
+<td>✅ IST/POST</td>
+</tr>
+<tr>
+<td>MBIST·Scan·POST</td>
+<td><code>ch6-2</code>→<code>adv-ch6-2</code></td>
+<td>✅ MBIST/Scan</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Phase 5는 대부분 "<strong>이론적 이해</strong>" 영역(직접 환경 구축은 상용툴 필요). 개념·흐름·용어를 면접 답변 가능 수준으로.</p>
+</blockquote>
+<hr />
+<h2 id="phase-6--통합--면접-1주---실제-취업-면접은-여기까지-끝낸-뒤">Phase 6 · 통합 + 면접 (1주) ← 🎯 실제 취업 면접은 여기까지 끝낸 뒤</h2>
+<p><strong>Phase 0~5를 모두 마친 지금이 처음으로 "실전 면접"을 준비하는 시점.</strong> (앞선 Phase들의 자가점검은 학습용 인출이었고, 여기서 비로소 면접 모드로 전환.)</p>
+<ul>
+<li><strong>Git in HW팀:</strong> <code>ch7-1</code>→<code>adv-ch7-1</code> (LFS, tape-out 태깅) — 원본목표 ✅ Git</li>
+<li><strong>미니프로젝트 마감:</strong> Phase 3의 UVM 환경을 GitHub에 정리 (README + 파형 + 커버리지 리포트) → <strong>포트폴리오</strong></li>
+<li><strong>실전 면접 준비(검증 중심):</strong> <code>interview-drills.pdf</code>(검증 꼬리질문 36개) 반복. "정의 → 왜 → 예시 한 줄" 두괄식.</li>
+<li><strong>소자물리 빠른 복습(가볍게):</strong> 밴드로 pn·MOS 설명 + "MOSFET이 왜 스위치인가" 1분 — 검증 면접에서 가끔 묻는 수준만.</li>
+<li><strong>전 범위 모의면접:</strong> UVM·프로토콜·시뮬·DFT 중심 + 소자물리 약간, 랜덤 질문으로 마무리.</li>
+</ul>
+<hr />
+<h2 id="실습-환경-무료">실습 환경 (무료)</h2>
+<blockquote>
+<p><strong>단계별 설치·사용법 상세: <a href="lab-setup.html">실습환경-셋업.md</a></strong></p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>도구</th>
+<th>용도</th>
+<th>설치</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>EDA Playground</strong></td>
+<td>UVM·SystemVerilog (상용 시뮬 온라인)</td>
+<td>브라우저, 설치 0 ⭐UVM은 이걸로</td>
+</tr>
+<tr>
+<td><strong>Icarus Verilog + GTKWave</strong></td>
+<td>Verilog 시뮬 + 파형</td>
+<td>Windows 설치 / 가벼움</td>
+</tr>
+<tr>
+<td><strong>cocotb</strong></td>
+<td>Python 기반 테스트벤치</td>
+<td><code>pip install cocotb</code> (기계공학부 Python 강점 활용)</td>
+</tr>
+<tr>
+<td><strong>Verilator</strong></td>
+<td>초고속 시뮬(대형)</td>
+<td>WSL 권장(선택)</td>
+</tr>
+</tbody>
+</table>
+<p>권장: <strong>UVM = EDA Playground</strong>, <strong>로컬 HDL 연습 = Icarus+GTKWave 또는 cocotb</strong>.</p>
+<hr />
+<h2 id="원본-학습목표-커버리지-체크리스트">원본 학습목표 커버리지 체크리스트</h2>
+<ul>
+<li>☐ Verilog / SystemVerilog / UVM → Phase 2, 3</li>
+<li>☐ AMBA (APB, AXI) → Phase 4</li>
+<li>☐ Cache Coherency → Phase 4</li>
+<li>☐ Git → Phase 6</li>
+<li>☐ GLS &amp; Timing Check 이론 → Phase 5</li>
+<li>☐ Compile/Elaboration/Simulation 3단계 → Phase 5</li>
+<li>☐ C-test &amp; UVM-test 환경 구축 → Phase 3</li>
+<li>☐ UPF Power-Aware Sim &amp; 에뮬 → Phase 5</li>
+<li>☐ SoC Booting Flow → Phase 5</li>
+<li>☐ Simulator(Xcelium/VCS) → Phase 5</li>
+<li>☐ IST/POST(JTAG·iJTAG·JTAG2APB·MBIST·Scan) → Phase 5</li>
+<li>☐ DVFS → Phase 5</li>
+</ul>
+<hr />
+<h2 id="일일-운영-원칙">일일 운영 원칙</h2>
+<ol>
+<li><strong>딥워크 5~6h + 수면 7h.</strong> 잠 줄이기 금지.</li>
+<li>검증은 <strong>읽기 &lt; 코딩.</strong> 한 챕터 읽으면 반드시 손으로 한 번 짠다.</li>
+<li>막히면 혼자 30분 → 안 풀리면 넘어가고 표시, 다음 날 복습 때 재도전.</li>
+<li>매주 끝에 <strong>그 주 미니 체크포인트</strong> 질문에 말로 답해보기(면접 시뮬).</li>
+<li>각 챕터: 기본 슬라이드(개념) → 핸즈온 → 심화 슬라이드(실무 디테일) → 드릴 순서.</li>
+</ol>
+</div>
+<div class="footer">반도체 검증 마스터클래스 · 학습 자료 · 이 페이지는 <code>docs/*.md</code>에서 자동 생성됩니다.</div>
+</body>
+</html>
