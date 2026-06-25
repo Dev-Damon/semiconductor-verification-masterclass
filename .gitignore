@@ -1,3 +1,8 @@
+# PDF 빌드 산출물 / 도구 의존성
+dist/
+node_modules/
+package-lock.json
+
 # OS / Google Drive 부산물
 Thumbs.db
 ehthumbs.db

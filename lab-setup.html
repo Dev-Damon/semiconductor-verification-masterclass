@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>실습 환경 셋업</title>
+<style>
+:root{
+  --bg:#0a0e16; --panel:#121a29; --panel2:#172236; --line:#22304a;
+  --ink:#e8eef7; --muted:#b7c2d4; --dim:#8493ab;
+  --accent:#38e1c6; --accent2:#5b9cff; --warn:#ffce6b; --good:#5ee6a0; --danger:#ff7a85;
+  --code:#0b1220;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic','Segoe UI',system-ui,sans-serif;
+  line-height:1.7;-webkit-text-size-adjust:100%}
+.topbar{position:sticky;top:0;z-index:20;background:rgba(10,14,22,.82);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);padding:11px 18px;display:flex;gap:12px;align-items:center;font-size:14px}
+.topbar a{color:var(--dim);text-decoration:none;border:1px solid var(--line);background:var(--panel);
+  padding:6px 12px;border-radius:9px;white-space:nowrap}
+.topbar a:hover{color:var(--ink);border-color:var(--accent)}
+.topbar .t{color:var(--muted);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wrap{max-width:880px;margin:0 auto;padding:30px 20px 100px}
+h1,h2,h3,h4{line-height:1.25;font-weight:800;letter-spacing:-.01em}
+h1{font-size:clamp(26px,5vw,38px);margin:.2em 0 .5em}
+h2{font-size:clamp(20px,3.5vw,27px);margin:1.7em 0 .6em;padding-bottom:.3em;border-bottom:1px solid var(--line)}
+h3{font-size:clamp(17px,2.6vw,20px);margin:1.5em 0 .5em;color:#dfe8f5}
+h4{font-size:16px;margin:1.2em 0 .4em;color:var(--muted)}
+p{margin:.7em 0}
+a{color:var(--accent2)}
+a:hover{color:var(--accent)}
+strong{color:#fff}
+em{color:var(--good);font-style:normal}
+hr{border:0;border-top:1px solid var(--line);margin:2.2em 0}
+code{font-family:'JetBrains Mono','Cascadia Code','D2Coding',Consolas,monospace;
+  background:var(--panel2);color:var(--accent);padding:2px 6px;border-radius:5px;font-size:.88em}
+pre{background:var(--code);border:1px solid var(--line);border-radius:12px;padding:15px 17px;overflow:auto}
+pre code{background:none;color:#cfe0f5;padding:0;font-size:13.5px;line-height:1.6}
+blockquote{margin:1.1em 0;padding:12px 16px;border-left:3px solid var(--accent);
+  background:linear-gradient(180deg,rgba(56,225,198,.07),transparent);border-radius:0 10px 10px 0;color:var(--muted)}
+blockquote p{margin:.35em 0}
+ul,ol{padding-left:1.35em;margin:.6em 0}
+li{margin:.32em 0}
+li::marker{color:var(--accent)}
+table{width:100%;border-collapse:collapse;margin:1.1em 0;font-size:14.5px;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--accent);font-weight:700;white-space:nowrap}
+tr:nth-child(even) td{background:rgba(255,255,255,.018)}
+.toc{margin:1.4em 0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 18px}
+.toc>summary{cursor:pointer;font-weight:700;color:var(--accent);padding:8px 0;list-style:none}
+.toc>summary::before{content:"▸ ";color:var(--dim)}
+.toc[open]>summary::before{content:"▾ "}
+.toc ul{font-size:14px}
+.toc a{color:var(--muted);text-decoration:none}
+.toc a:hover{color:var(--accent)}
+.footer{max-width:880px;margin:0 auto;padding:24px 20px 60px;color:var(--dim);font-size:13px;border-top:1px solid var(--line)}
+@media(max-width:560px){ table{font-size:13px} th,td{padding:7px 9px} .wrap{padding:22px 14px 80px} }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="index.html">← 강의 홈</a>
+  <span class="t">실습 환경 셋업</span>
+</div>
+<div class="wrap">
+<details class="toc" open><summary>목차</summary><ul>
+<li><a href="#실습-환경-셋업-무료--windows-기준">실습 환경 셋업 (무료) — Windows 기준</a><ul>
+<li><a href="#0-한눈-요약">0. 한눈 요약</a></li>
+<li><a href="#1-eda-playground-uvm의-정답-설치-0">1. EDA Playground (UVM의 정답, 설치 0)</a></li>
+<li><a href="#2-icarus-verilog--gtkwave-로컬-verilog-연습">2. Icarus Verilog + GTKWave (로컬 Verilog 연습)</a><ul>
+<li><a href="#설치-windows">설치 (Windows)</a></li>
+<li><a href="#동작-확인">동작 확인</a></li>
+<li><a href="#기본-사용-흐름">기본 사용 흐름</a></li>
+</ul>
+</li>
+<li><a href="#3-cocotb-python으로-테스트벤치--기계공학부-python-강점">3. cocotb (Python으로 테스트벤치 — 기계공학부 Python 강점)</a></li>
+<li><a href="#4-verilator-선택--빠르지만-진입장벽">4. Verilator (선택 — 빠르지만 진입장벽)</a></li>
+<li><a href="#5-권장-셋업-순서-체크리스트">5. 권장 셋업 순서 (체크리스트)</a></li>
+</ul>
+</li>
+</ul></details>
+<h1 id="실습-환경-셋업-무료--windows-기준">실습 환경 셋업 (무료) — Windows 기준</h1>
+<blockquote>
+<p><a href="roadmap.html">학습 로드맵</a>의 Phase 2부터 사용. <strong>검증은 직접 코딩해야 늘기 때문에</strong>, Phase 2 시작 전에 환경부터 만든다.
+결론: <strong>UVM은 EDA Playground(설치 0)</strong>, <strong>로컬 Verilog 연습은 Icarus+GTKWave</strong>, <strong>Python 강점 살리려면 cocotb</strong>.</p>
+</blockquote>
+<hr />
+<h2 id="0-한눈-요약">0. 한눈 요약</h2>
+<table>
+<thead>
+<tr>
+<th>도구</th>
+<th>용도</th>
+<th>설치 난이도</th>
+<th>언제</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>EDA Playground</strong></td>
+<td>SystemVerilog/UVM, 상용급 시뮬 온라인</td>
+<td>없음(브라우저)</td>
+<td>Phase 3 UVM ⭐</td>
+</tr>
+<tr>
+<td><strong>Icarus Verilog (iverilog)</strong></td>
+<td>Verilog/SV 시뮬</td>
+<td>쉬움</td>
+<td>Phase 2</td>
+</tr>
+<tr>
+<td><strong>GTKWave</strong></td>
+<td>파형(.vcd) 뷰어</td>
+<td>쉬움</td>
+<td>Phase 2~</td>
+</tr>
+<tr>
+<td><strong>cocotb</strong></td>
+<td>Python 테스트벤치</td>
+<td>보통(pip)</td>
+<td>Phase 2~3 선택</td>
+</tr>
+<tr>
+<td><strong>Verilator</strong></td>
+<td>초고속 시뮬(대형/회귀)</td>
+<td>어려움(WSL 권장)</td>
+<td>선택</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1-eda-playground-uvm의-정답-설치-0">1. EDA Playground (UVM의 정답, 설치 0)</h2>
+<p>브라우저만 있으면 된다. <strong>UVM은 무조건 이걸로 시작</strong>하세요(로컬에 UVM 깔기는 초보에게 지옥).</p>
+<ol>
+<li>https://edaplayground.com 접속 → 무료 회원가입(이메일).</li>
+<li>좌측 패널:
+   - <strong>Testbench + Design</strong> 두 파일 편집.
+   - <strong>Languages &amp; Libraries</strong> → <code>SystemVerilog/Verilog</code>, <strong>UVM</strong> 버전 선택(예: UVM 1.2).
+   - <strong>Tools &amp; Simulators</strong> → 무료로 쓸 수 있는 시뮬레이터(예: <em>Aldec Riviera-PRO</em>, <em>Synopsys VCS</em>) 선택.
+   - <strong>Open EPWave after run</strong> 체크 → 실행 후 파형 자동.</li>
+<li><strong>Run</strong> → 우측에 로그, 파형(EPWave) 표시.</li>
+<li>작업물은 <strong>Save</strong>로 URL 생김 → 포트폴리오/공유에 사용.</li>
+</ol>
+<blockquote>
+<p>장점: 설치·라이선스 0, 상용 시뮬과 거의 동일 경험. 단점: 대형 프로젝트엔 부적합(미니프로젝트엔 충분).</p>
+</blockquote>
+<hr />
+<h2 id="2-icarus-verilog--gtkwave-로컬-verilog-연습">2. Icarus Verilog + GTKWave (로컬 Verilog 연습)</h2>
+<h3 id="설치-windows">설치 (Windows)</h3>
+<ul>
+<li><strong>방법 A (권장, winget):</strong>
+  <code>powershell
+  winget install IcarusVerilog.IcarusVerilog
+  winget install GTKWave.GTKWave</code></li>
+<li><strong>방법 B:</strong> <a href="https://bleyer.org/icarus">bleyer.org/icarus</a> 설치 파일(GTKWave 포함) 다운로드 → 설치 시 <strong>PATH 추가</strong> 체크.</li>
+</ul>
+<h3 id="동작-확인">동작 확인</h3>
+<pre><code class="language-powershell">iverilog -V
+</code></pre>
+<h3 id="기본-사용-흐름">기본 사용 흐름</h3>
+<pre><code class="language-powershell"># 1) 컴파일 (디자인 + 테스트벤치)
+iverilog -g2012 -o sim.out design.v tb.v
+# 2) 실행 → .vcd 생성($dumpfile/$dumpvars가 tb에 있어야 함)
+vvp sim.out
+# 3) 파형 보기
+gtkwave dump.vcd
+</code></pre>
+<blockquote>
+<p><code>-g2012</code> = SystemVerilog 2012 문법 일부 지원. iverilog는 <strong>UVM은 안 됨</strong>(UVM은 EDA Playground로).</p>
+</blockquote>
+<hr />
+<h2 id="3-cocotb-python으로-테스트벤치--기계공학부-python-강점">3. cocotb (Python으로 테스트벤치 — 기계공학부 Python 강점)</h2>
+<p>HDL은 <code>iverilog</code>로 시뮬하고, <strong>자극·체크는 Python으로</strong> 짠다. UVM 진입 전 "검증 사고"를 Python으로 익히기 좋다.</p>
+<pre><code class="language-powershell">python -m pip install cocotb cocotb-bus
+# 시뮬레이터로 icarus 사용
+</code></pre>
+<ul>
+<li>디자인은 Verilog(<code>design.v</code>), 테스트는 Python(<code>test_xxx.py</code>).</li>
+<li><code>Makefile</code> 또는 <code>cocotb-config</code> 기반 실행. (cocotb 공식 quickstart 따라 1개 예제만 돌려보면 감 잡힘)</li>
+<li>장점: 파이썬 자료구조·랜덤·assert로 빠르게 자극/스코어보드 작성.</li>
+</ul>
+<hr />
+<h2 id="4-verilator-선택--빠르지만-진입장벽">4. Verilator (선택 — 빠르지만 진입장벽)</h2>
+<p>대형/회귀 시뮬에 압도적으로 빠르나, Windows 네이티브는 까다로워 <strong>WSL2(Ubuntu) 권장</strong>.</p>
+<pre><code class="language-bash"># WSL Ubuntu
+sudo apt update &amp;&amp; sudo apt install verilator gtkwave
+</code></pre>
+<blockquote>
+<p>미니프로젝트 단계에선 <strong>불필요</strong>. 나중에 회귀 자동화할 때 고려.</p>
+</blockquote>
+<hr />
+<h2 id="5-권장-셋업-순서-체크리스트">5. 권장 셋업 순서 (체크리스트)</h2>
+<ul>
+<li>☐ EDA Playground 가입 + UVM "hello world" 1회 Run (Phase 3 전)</li>
+<li>☐ <code>winget</code>으로 iverilog + GTKWave 설치, <code>iverilog -V</code> 확인</li>
+<li>☐ 빈 폴더에서 <code>design.v</code>+<code>tb.v</code>로 <strong>카운터</strong> 1개 시뮬 → GTKWave로 파형 확인 (= Phase 2 랩1)</li>
+<li>☐ (선택) cocotb 설치 + 공식 예제 1개 Run</li>
+<li>☐ Git 저장소 하나 만들어 실습물 버전관리 시작(= 나중에 포트폴리오)</li>
+</ul>
+<blockquote>
+<p>막히면: 로컬 설치로 시간 빼앗기지 말고 <strong>EDA Playground로 먼저 진도</strong>를 빼세요. 환경은 거들 뿐, 핵심은 코드량.</p>
+</blockquote>
+</div>
+<div class="footer">반도체 검증 마스터클래스 · 학습 자료 · 이 페이지는 <code>docs/*.md</code>에서 자동 생성됩니다.</div>
+</body>
+</html>

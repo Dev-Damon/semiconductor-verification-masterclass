@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>미니프로젝트 ① 동기 FIFO</title>
+<style>
+:root{
+  --bg:#0a0e16; --panel:#121a29; --panel2:#172236; --line:#22304a;
+  --ink:#e8eef7; --muted:#b7c2d4; --dim:#8493ab;
+  --accent:#38e1c6; --accent2:#5b9cff; --warn:#ffce6b; --good:#5ee6a0; --danger:#ff7a85;
+  --code:#0b1220;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic','Segoe UI',system-ui,sans-serif;
+  line-height:1.7;-webkit-text-size-adjust:100%}
+.topbar{position:sticky;top:0;z-index:20;background:rgba(10,14,22,.82);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);padding:11px 18px;display:flex;gap:12px;align-items:center;font-size:14px}
+.topbar a{color:var(--dim);text-decoration:none;border:1px solid var(--line);background:var(--panel);
+  padding:6px 12px;border-radius:9px;white-space:nowrap}
+.topbar a:hover{color:var(--ink);border-color:var(--accent)}
+.topbar .t{color:var(--muted);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wrap{max-width:880px;margin:0 auto;padding:30px 20px 100px}
+h1,h2,h3,h4{line-height:1.25;font-weight:800;letter-spacing:-.01em}
+h1{font-size:clamp(26px,5vw,38px);margin:.2em 0 .5em}
+h2{font-size:clamp(20px,3.5vw,27px);margin:1.7em 0 .6em;padding-bottom:.3em;border-bottom:1px solid var(--line)}
+h3{font-size:clamp(17px,2.6vw,20px);margin:1.5em 0 .5em;color:#dfe8f5}
+h4{font-size:16px;margin:1.2em 0 .4em;color:var(--muted)}
+p{margin:.7em 0}
+a{color:var(--accent2)}
+a:hover{color:var(--accent)}
+strong{color:#fff}
+em{color:var(--good);font-style:normal}
+hr{border:0;border-top:1px solid var(--line);margin:2.2em 0}
+code{font-family:'JetBrains Mono','Cascadia Code','D2Coding',Consolas,monospace;
+  background:var(--panel2);color:var(--accent);padding:2px 6px;border-radius:5px;font-size:.88em}
+pre{background:var(--code);border:1px solid var(--line);border-radius:12px;padding:15px 17px;overflow:auto}
+pre code{background:none;color:#cfe0f5;padding:0;font-size:13.5px;line-height:1.6}
+blockquote{margin:1.1em 0;padding:12px 16px;border-left:3px solid var(--accent);
+  background:linear-gradient(180deg,rgba(56,225,198,.07),transparent);border-radius:0 10px 10px 0;color:var(--muted)}
+blockquote p{margin:.35em 0}
+ul,ol{padding-left:1.35em;margin:.6em 0}
+li{margin:.32em 0}
+li::marker{color:var(--accent)}
+table{width:100%;border-collapse:collapse;margin:1.1em 0;font-size:14.5px;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--accent);font-weight:700;white-space:nowrap}
+tr:nth-child(even) td{background:rgba(255,255,255,.018)}
+.toc{margin:1.4em 0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 18px}
+.toc>summary{cursor:pointer;font-weight:700;color:var(--accent);padding:8px 0;list-style:none}
+.toc>summary::before{content:"▸ ";color:var(--dim)}
+.toc[open]>summary::before{content:"▾ "}
+.toc ul{font-size:14px}
+.toc a{color:var(--muted);text-decoration:none}
+.toc a:hover{color:var(--accent)}
+.footer{max-width:880px;margin:0 auto;padding:24px 20px 60px;color:var(--dim);font-size:13px;border-top:1px solid var(--line)}
+@media(max-width:560px){ table{font-size:13px} th,td{padding:7px 9px} .wrap{padding:22px 14px 80px} }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="index.html">← 강의 홈</a>
+  <span class="t">미니프로젝트 ① 동기 FIFO</span>
+</div>
+<div class="wrap">
+<details class="toc" open><summary>목차</summary><ul>
+<li><a href="#미니프로젝트-①--동기-fifo-설계--검증">미니프로젝트 ① — 동기 FIFO 설계 + 검증</a><ul>
+<li><a href="#0-단계별-진행-phase-2-2주에-맞춤">0. 단계별 진행 (Phase 2 2주에 맞춤)</a></li>
+<li><a href="#1-사양-synchronous-fifo">1. 사양 (Synchronous FIFO)</a><ul>
+<li><a href="#포트">포트</a></li>
+<li><a href="#동작-규칙">동작 규칙</a></li>
+</ul>
+</li>
+<li><a href="#2-검증-포인트-꼭-테스트할-시나리오">2. 검증 포인트 (꼭 테스트할 시나리오)</a><ul>
+<li><a href="#셀프-체크-모델스코어보드">셀프 체크 모델(스코어보드)</a></li>
+</ul>
+</li>
+<li><a href="#3-systemverilog-assertion-랩4">3. SystemVerilog Assertion (랩4)</a><ul>
+<li><a href="#커버리지랩4">커버리지(랩4)</a></li>
+</ul>
+</li>
+<li><a href="#4-완료-기준definition-of-done">4. 완료 기준(Definition of Done)</a></li>
+<li><a href="#5-다음-단계">5. 다음 단계</a></li>
+</ul>
+</li>
+</ul></details>
+<h1 id="미니프로젝트-①--동기-fifo-설계--검증">미니프로젝트 ① — 동기 FIFO 설계 + 검증</h1>
+<blockquote>
+<p><a href="roadmap.html">학습 로드맵</a> <strong>Phase 2(HDL)</strong>의 첫 핸즈온. 환경은 <a href="lab-setup.html">실습환경-셋업</a> 참고.
+목표: "RTL을 직접 짜고, <strong>테스트벤치로 버그를 잡는다</strong>"는 검증의 본질을 처음부터 끝까지 경험.</p>
+</blockquote>
+<p>FIFO를 고른 이유: 검증 입문의 <strong>표준 예제</strong>다. 조합/순차, 포인터, full/empty 경계조건, 동시 read/write 등 검증 포인트가 풍부하고, 면접 단골이다.</p>
+<hr />
+<h2 id="0-단계별-진행-phase-2-2주에-맞춤">0. 단계별 진행 (Phase 2 2주에 맞춤)</h2>
+<table>
+<thead>
+<tr>
+<th>랩</th>
+<th>산출물</th>
+<th>도구</th>
+<th>배우는 것</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>랩1</strong></td>
+<td>4-bit 카운터 + TB</td>
+<td>iverilog+GTKWave</td>
+<td>시뮬/파형 흐름 익히기(워밍업)</td>
+</tr>
+<tr>
+<td><strong>랩2</strong></td>
+<td><strong>동기 FIFO RTL</strong></td>
+<td>iverilog</td>
+<td>순차회로·포인터·플래그</td>
+</tr>
+<tr>
+<td><strong>랩3</strong></td>
+<td>FIFO <strong>Verilog 방향성 TB</strong></td>
+<td>iverilog+GTKWave</td>
+<td>자극·기대값·경계조건</td>
+</tr>
+<tr>
+<td><strong>랩4</strong></td>
+<td>FIFO <strong>SystemVerilog 랜덤 TB + SVA + 커버리지</strong></td>
+<td>EDA Playground</td>
+<td>constrained-random·assertion·coverage</td>
+</tr>
+</tbody>
+</table>
+<p>랩4까지가 <strong>미니프로젝트 ①</strong>. 결과물은 Git에 정리(= 포트폴리오 씨앗).</p>
+<hr />
+<h2 id="1-사양-synchronous-fifo">1. 사양 (Synchronous FIFO)</h2>
+<p>단일 클럭 동기 FIFO. 파라미터화.</p>
+<table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>기본값</th>
+<th>의미</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DATA_WIDTH</code></td>
+<td>8</td>
+<td>데이터 비트폭</td>
+</tr>
+<tr>
+<td><code>DEPTH</code></td>
+<td>16</td>
+<td>엔트리 수(2의 거듭제곱)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="포트">포트</h3>
+<table>
+<thead>
+<tr>
+<th>신호</th>
+<th>방향</th>
+<th>폭</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>clk</code></td>
+<td>in</td>
+<td>1</td>
+<td>클럭</td>
+</tr>
+<tr>
+<td><code>rst_n</code></td>
+<td>in</td>
+<td>1</td>
+<td>비동기/동기 리셋(active-low)</td>
+</tr>
+<tr>
+<td><code>wr_en</code></td>
+<td>in</td>
+<td>1</td>
+<td>쓰기 요청</td>
+</tr>
+<tr>
+<td><code>din</code></td>
+<td>in</td>
+<td>DATA_WIDTH</td>
+<td>입력 데이터</td>
+</tr>
+<tr>
+<td><code>rd_en</code></td>
+<td>in</td>
+<td>1</td>
+<td>읽기 요청</td>
+</tr>
+<tr>
+<td><code>dout</code></td>
+<td>out</td>
+<td>DATA_WIDTH</td>
+<td>출력 데이터</td>
+</tr>
+<tr>
+<td><code>full</code></td>
+<td>out</td>
+<td>1</td>
+<td>가득 참</td>
+</tr>
+<tr>
+<td><code>empty</code></td>
+<td>out</td>
+<td>1</td>
+<td>비어 있음</td>
+</tr>
+<tr>
+<td><code>count</code></td>
+<td>out</td>
+<td>$clog2(DEPTH)+1</td>
+<td>(선택) 현재 적재 수</td>
+</tr>
+</tbody>
+</table>
+<h3 id="동작-규칙">동작 규칙</h3>
+<ul>
+<li><code>wr_en &amp; !full</code> → <code>din</code>을 write 포인터 위치에 저장, wr_ptr++.</li>
+<li><code>rd_en &amp; !empty</code> → rd_ptr 위치 데이터를 <code>dout</code>으로, rd_ptr++.</li>
+<li><code>full</code>일 때 write 무시, <code>empty</code>일 때 read 무시(언더/오버플로 금지).</li>
+<li>동시 read+write(full도 empty도 아닐 때)는 둘 다 정상 수행.</li>
+<li>리셋 시 포인터·플래그 초기화(empty=1, full=0).</li>
+</ul>
+<blockquote>
+<p>구현 힌트: 깊이가 2^n이면 <strong>n+1비트 포인터</strong>로 wrap 비트까지 비교해 full/empty 구분(고전 기법). 또는 <code>count</code> 레지스터로 판단(더 쉬움 — 입문엔 이쪽 권장).</p>
+</blockquote>
+<hr />
+<h2 id="2-검증-포인트-꼭-테스트할-시나리오">2. 검증 포인트 (꼭 테스트할 시나리오)</h2>
+<p>방향성 테스트(랩3)에서 아래를 <strong>순서대로</strong> 확인:
+1. 리셋 직후 <code>empty==1</code>, <code>full==0</code>.
+2. 1개 write → empty 풀림. 1개 read → 값 일치 + 다시 empty.
+3. <strong>가득 채우기</strong>(DEPTH번 write) → 마지막에 <code>full==1</code>.
+4. full 상태에서 추가 write → <strong>무시되는지</strong>(데이터 안 깨지는지).
+5. <strong>전부 빼기</strong> → 순서(FIFO=선입선출) 정확? 마지막에 <code>empty==1</code>.
+6. empty 상태에서 read → 무시되는지.
+7. 동시 read+write 반복 → 데이터 정합성.
+8. (랜덤, 랩4) wr_en/rd_en 랜덤 토글 수천 사이클 → 레퍼런스 모델과 불일치 0.</p>
+<h3 id="셀프-체크-모델스코어보드">셀프 체크 모델(스코어보드)</h3>
+<p>TB 안에 <strong>소프트웨어 큐</strong>(SV <code>queue</code> 또는 cocotb <code>list</code>)를 두고, DUT에 push할 때 큐에도 push, pop할 때 큐 front와 <code>dout</code> 비교 → 불일치 시 에러. <em>이게 스코어보드의 원형이고, UVM scoreboard로 그대로 확장된다.</em></p>
+<hr />
+<h2 id="3-systemverilog-assertion-랩4">3. SystemVerilog Assertion (랩4)</h2>
+<p>면접에서 "SVA 써봤냐"는 단골. 최소 3개:</p>
+<pre><code class="language-systemverilog">// 1) full일 때 write 들어와도 count 안 늘어남
+assert property (@(posedge clk) disable iff(!rst_n)
+  (full &amp;&amp; wr_en &amp;&amp; !rd_en) |=&gt; (count == $past(count)));
+// 2) empty면 dout 유효치 않음 / read 무시
+assert property (@(posedge clk) disable iff(!rst_n)
+  (empty &amp;&amp; rd_en &amp;&amp; !wr_en) |=&gt; (count == $past(count)));
+// 3) full과 empty가 동시에 1이면 안 됨
+assert property (@(posedge clk) disable iff(!rst_n) !(full &amp;&amp; empty));
+</code></pre>
+<h3 id="커버리지랩4">커버리지(랩4)</h3>
+<ul>
+<li><code>full</code>==1 도달, <code>empty</code>==1 도달, 동시 read+write 발생 각각 covered.</li>
+<li><code>count</code>가 0~DEPTH 전 구간을 거쳤는지(covergroup bins).</li>
+</ul>
+<hr />
+<h2 id="4-완료-기준definition-of-done">4. 완료 기준(Definition of Done)</h2>
+<ul>
+<li>☐ FIFO RTL이 합성가능 스타일(<code>always_ff</code>/<code>always @(posedge clk)</code>)로 작성됨</li>
+<li>☐ 방향성 TB로 위 시나리오 1~7 통과, GTKWave 파형으로 full/empty 전이 확인</li>
+<li>☐ SV 랜덤 TB가 스코어보드로 수천 사이클 자동 검증, <strong>불일치 0</strong></li>
+<li>☐ SVA 3개 통과, 커버리지 항목 100%</li>
+<li>☐ <strong>일부러 버그를 심어</strong>(예: full 조건 <code>&gt;</code>→<code>&gt;=</code> 오류) TB가 그 버그를 <strong>잡는지</strong> 확인 ← 검증의 핵심 역량 증명</li>
+<li>☐ Git 저장소에 RTL/TB/파형/README 정리</li>
+</ul>
+<blockquote>
+<p><strong>포트폴리오 팁:</strong> README에 "검증 시나리오 표 + 심은 버그를 TB가 잡은 로그 + 커버리지 캡처"를 넣으면, 신입 검증 지원에서 강력한 증거가 된다.</p>
+</blockquote>
+<hr />
+<h2 id="5-다음-단계">5. 다음 단계</h2>
+<p>FIFO를 SV/UVM로 끝냈다면 → <strong>Phase 3 미니프로젝트 ②: APB 슬레이브 레지스터 블록 UVM 환경</strong>으로 확장. (driver/monitor/scoreboard/agent를 FIFO에서 배운 스코어보드 개념 위에 얹는다.)</p>
+</div>
+<div class="footer">반도체 검증 마스터클래스 · 학습 자료 · 이 페이지는 <code>docs/*.md</code>에서 자동 생성됩니다.</div>
+</body>
+</html>
