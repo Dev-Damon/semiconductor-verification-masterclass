@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>보너스 · DV 실무 도구·스크립팅 입문</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-title="보너스 · DV 실무 도구 · 스크립팅 입문">
+<div class="deck">
+
+  <!-- 1 -->
+  <section class="slide title-slide">
+    <div class="part-badge">보너스 · 실무 도구</div>
+    <h1>DV 실무 도구 · 스크립팅 입문</h1>
+    <p class="hook">검증 지식은 갖췄습니다. 그런데 실무 DV는 하루 종일 <strong class="hl">리눅스에서 스크립트로 시뮬레이터를 돌립니다.</strong>
+      이 한 챕터가 "무경험자 티"를 가장 크게 지워줍니다.</p>
+    <div class="hint">← → 또는 <kbd>Space</kbd> 로 넘기기 · 화면 좌/우 끝 클릭도 가능</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide">
+    <div class="kicker">왜 이걸 배우나</div>
+    <h2>채용공고가 대놓고 요구하는 부분</h2>
+    <p class="lead">설계검증 직무 공고의 우대사항에는 거의 항상 <strong class="hl">Linux · shell · Tcl · Perl · Python</strong>이 들어갑니다. 검증 방법론(UVM)만큼이나 "환경을 돌리는 손"을 봅니다.</p>
+    <div class="grid2 mt">
+      <div class="card"><h3><span class="ico">🧠</span> 아는 것 (이미 함)</h3><p>SystemVerilog·UVM·AXI·커버리지·GLS — "무엇을 검증하는가".</p></div>
+      <div class="card" style="border-color:var(--accent)"><h3><span class="ico">🛠️</span> 돌리는 것 (이 챕터)</h3><p>리눅스에서 <strong>컴파일→시뮬→회귀→커버리지→파형디버그</strong>를 스크립트로 자동화하는 흐름.</p></div>
+    </div>
+    <div class="note mt">면접에서 "회귀는 어떻게 돌리나요?", "Makefile 써봤나요?", "로그에서 fail을 어떻게 찾죠?"가 나오면 — 이 챕터의 답이 곧 실무 감각의 증거입니다.</div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide">
+    <div class="kicker">① 리눅스 기본기</div>
+    <h2>DV 엔지니어가 실제로 매일 치는 명령</h2>
+    <div class="grid2">
+      <div>
+        <p>검증 서버는 대부분 <strong>원격 리눅스(CentOS/RHEL)</strong>입니다. GUI 없이 터미널로 삽니다.</p>
+        <dl class="kv">
+          <dt>탐색</dt><dd><code>ls</code> <code>cd</code> <code>pwd</code> <code>find . -name "*.sv"</code></dd>
+          <dt>내용찾기</dt><dd><code>grep -rn "UVM_ERROR" log/</code></dd>
+          <dt>보기/편집</dt><dd><code>less sim.log</code> · <code>vim tb.sv</code></dd>
+          <dt>원격/잡</dt><dd><code>ssh</code> · <code>bsub</code>(LSF) 로 grid에 잡 제출</dd>
+        </dl>
+      </div>
+      <div class="analogy">
+        <p style="margin:6px 0"><strong>가장 많이 쓰는 한 줄</strong>은 결국 이겁니다:</p>
+        <pre class="code sm"><code><span class="cmt"># 방금 돌린 로그에서 에러만 뽑기</span>
+grep -E "UVM_ERROR|UVM_FATAL|Error-" sim.log
+
+<span class="cmt"># 여러 로그에서 실패한 테스트 찾기</span>
+grep -l "UVM_FATAL" log/*.log</code></pre>
+        <p class="dim" style="margin:6px 0">"수천 줄 로그에서 fail 원인 한 줄을 찾는 법" — 실무의 절반입니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide">
+    <div class="kicker">② 프로젝트 구조 & Makefile</div>
+    <h2>Make로 컴파일·시뮬을 한 명령에</h2>
+    <p>수십 개 파일을 매번 손으로 컴파일할 순 없습니다. <strong class="hl">Makefile</strong>에 타깃을 만들어 <code>make sim TEST=...</code> 한 줄로 돌립니다.</p>
+    <pre class="code"><code><span class="cmt"># Makefile (Synopsys VCS 예시)</span>
+TEST ?= axi_base_test
+SEED ?= 1
+
+comp:                         <span class="cmt"># 1) compile + elaborate</span>
+	vlogan -sverilog -full64 -ntb_opts uvm -f filelist.f
+	vcs -full64 -debug_access+all -kdb -o simv
+
+sim: comp                     <span class="cmt"># 2) simulate</span>
+	./simv +UVM_TESTNAME=$(TEST) +ntb_random_seed=$(SEED) \
+	       -cm line+cond+fsm+tgl +UVM_VERBOSITY=UVM_LOW -l sim.log
+
+regress:                      <span class="cmt"># 3) 야간 회귀</span>
+	python3 run_regress.py --tests testlist.f --seeds 50</code></pre>
+    <div class="note">→ <code>make sim TEST=axi_burst_test SEED=7</code> 처럼 인자를 바꿔 다양한 테스트/시드를 돌립니다. compile→elaboration→simulation 3단계가 <code>comp</code>/<code>sim</code> 타깃에 그대로 대응됩니다.</div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide">
+    <div class="kicker">③ 시뮬레이터 실행 커맨드</div>
+    <h2>VCS vs Xcelium — 런타임 옵션</h2>
+    <table class="compare">
+      <tr><th>목적</th><th>Synopsys VCS</th><th>Cadence Xcelium</th></tr>
+      <tr><td>UVM 테스트 선택</td><td colspan="2"><code>+UVM_TESTNAME=axi_burst_test</code> (공통)</td></tr>
+      <tr><td>랜덤 시드</td><td><code>+ntb_random_seed=7</code></td><td><code>+svseed=7</code> (또는 random)</td></tr>
+      <tr><td>커버리지</td><td><code>-cm line+cond+fsm+tgl</code></td><td><code>-coverage all</code></td></tr>
+      <tr><td>파형 덤프</td><td><code>+fsdb+...</code> / Verdi</td><td><code>-input dump.tcl</code> / SimVision</td></tr>
+      <tr><td>로그</td><td colspan="2"><code>-l sim.log</code> (공통)</td></tr>
+    </table>
+    <pre class="code sm mt"><code><span class="cmt"># Xcelium 단일 명령(3-step 통합)</span>
+xrun -uvm -sv -access +rwc -coverage all -f filelist.f \
+     +UVM_TESTNAME=axi_burst_test +svseed=random -l xrun.log</code></pre>
+    <div class="note">두 툴 다 "테스트 이름 + 시드 + 커버리지 + 로그"를 인자로 준다는 <strong>구조는 동일</strong>합니다. 이름만 외우면 됩니다.</div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide">
+    <div class="kicker">④ Tcl — 시뮬레이터를 조종하는 언어</div>
+    <h2>Tcl은 EDA 툴의 공용 리모컨</h2>
+    <div class="grid2">
+      <div>
+        <p><strong class="hl">Tcl</strong>은 시뮬레이터(UCLI/SimVision)뿐 아니라 합성(<code>dc_shell</code>)·STA(<code>pt_shell</code>)·PnR까지 <strong>거의 모든 EDA 툴의 제어 언어</strong>입니다. 하나 배우면 여러 툴에 씁니다.</p>
+        <ul>
+          <li>신호 강제·해제: <code>force</code> / <code>release</code></li>
+          <li>실행 제어: <code>run</code>, breakpoint</li>
+          <li>파형 덤프 설정, 커버리지 리포트</li>
+        </ul>
+      </div>
+      <div class="diagram" style="text-align:left">
+        <pre class="code sm"><code><span class="cmt"># run.tcl (VCS UCLI 예시)</span>
+<span class="fn">force</span> tb.rst_n 0
+<span class="fn">run</span> 100ns
+<span class="fn">force</span> tb.rst_n 1
+<span class="fn">force</span> -deposit tb.cnt 8'h00
+<span class="fn">run</span> 10us
+<span class="fn">dump</span> -file wave.fsdb -type FSDB
+<span class="fn">quit</span></code></pre>
+        <p class="dim" style="margin:6px 0">→ <code>simv -ucli -i run.tcl</code> 로 실행. "리셋 걸고, 10us 돌리고, 파형 남기고 종료".</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <div class="kicker">⑤ Python / Perl — 자동화의 접착제</div>
+    <h2>회귀 러너 · 로그 파싱 · 리포트</h2>
+    <p>수백 개 시드를 돌리고 결과를 모아 "무엇이 몇 개 실패했는지"를 표로 만드는 건 <strong class="hl">Python/Perl</strong>의 일입니다. (요즘은 Python이 대세, 레거시엔 Perl)</p>
+    <pre class="code"><code><span class="cmt"># run_regress.py — 테스트×시드 돌리고 fail 집계 (개념)</span>
+<span class="kw">import</span> subprocess, glob, re
+
+tests = open(<span class="str">"testlist.f"</span>).read().split()
+fails = []
+<span class="kw">for</span> t <span class="kw">in</span> tests:
+    <span class="kw">for</span> seed <span class="kw">in</span> range(1, SEEDS+1):
+        subprocess.run([<span class="str">"./simv"</span>, <span class="str">f"+UVM_TESTNAME={t}"</span>,
+            <span class="str">f"+ntb_random_seed={seed}"</span>, <span class="str">"-l"</span>, <span class="str">f"log/{t}_{seed}.log"</span>])
+        log = open(<span class="str">f"log/{t}_{seed}.log"</span>).read()
+        <span class="kw">if</span> re.search(<span class="str">r"UVM_(ERROR|FATAL)"</span>, log):
+            fails.append((t, seed))          <span class="cmt"># 실패 시드 반드시 기록!</span>
+
+<span class="fn">print</span>(<span class="str">f"FAIL {len(fails)} / {len(tests)*SEEDS}"</span>)</code></pre>
+    <div class="note">핵심 실무 습관: <strong>실패한 시드를 로깅</strong>해야 그 시드로 재현·디버그가 됩니다. "랜덤이라 재현 안 돼요"는 실격.</div>
+  </section>
+
+  <!-- 8 -->
+  <section class="slide">
+    <div class="kicker">⑥ 회귀 & 커버리지 흐름</div>
+    <h2>야간 회귀에서 사인오프까지</h2>
+    <div class="diagram" style="text-align:left">
+      <div class="flow" style="justify-content:flex-start">
+        <div class="box">testlist</div><span class="arrow">→</span>
+        <div class="box on">LSF grid<br><span class="dim" style="font-size:12px">수백 잡 병렬</span></div><span class="arrow">→</span>
+        <div class="box">로그 파싱<br><span class="dim" style="font-size:12px">pass/fail</span></div><span class="arrow">→</span>
+        <div class="box on" style="border-color:var(--accent)">커버리지 merge<br><span class="dim" style="font-size:12px">urg / imc</span></div><span class="arrow">→</span>
+        <div class="box">구멍 분석<br><span class="dim" style="font-size:12px">→ 다음 회귀</span></div>
+      </div>
+    </div>
+    <pre class="code sm mt"><code><span class="cmt"># 여러 run의 커버리지 DB를 하나로 병합 → HTML 리포트</span>
+urg -dir simv.vdb/*        <span class="cmt"># VCS</span>
+imc -exec "merge cov_work/*; report -html"   <span class="cmt"># Xcelium</span></code></pre>
+    <div class="grid2 mt">
+      <div class="note"><strong>LSF</strong>(<code>bsub</code>)는 회사 서버 팜에 잡을 뿌려 밤새 병렬 실행하는 스케줄러. DV는 이걸로 수천 시뮬을 돌립니다.</div>
+      <div class="takeaway"><p style="margin:6px 0">"밤새 회귀 → 아침에 fail 리스트 + 커버리지 리포트 확인 → 구멍 메우기" — 이 하루 루틴을 말할 수 있으면 실무자로 보입니다.</p></div>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <div class="kicker">⑦ 파형 디버깅</div>
+    <h2>Verdi / FSDB — fail을 눈으로 쫓기</h2>
+    <div class="grid2">
+      <div>
+        <p>테스트가 fail하면 <strong class="hl">파형</strong>을 봅니다. 신호 값이 시간축으로 어떻게 변했는지 추적해 원인 지점을 찾습니다.</p>
+        <ul>
+          <li><strong>FSDB</strong>: 파형 파일 포맷(빠름). <code>$fsdbDumpvars</code>로 덤프</li>
+          <li><strong>Verdi</strong>(Synopsys): 대표 파형/디버그 툴. 신호 추적·드라이버 역추적</li>
+          <li>Xcelium은 <strong>SimVision/Indago</strong></li>
+        </ul>
+        <p class="dim" style="margin:6px 0">디버그 순서: 에러 로그의 시각(time) 확인 → 그 시각으로 파형 점프 → 관련 신호 추가 → 값이 틀어진 지점을 위로 역추적.</p>
+      </div>
+      <div class="diagram" style="text-align:left">
+        <pre class="code sm"><code><span class="cmt">// TB에서 파형 덤프 켜기 (SV)</span>
+<span class="kw">initial</span> <span class="kw">begin</span>
+  $fsdbDumpfile(<span class="str">"wave.fsdb"</span>);
+  $fsdbDumpvars(0, tb_top);  <span class="cmt">// 전 계층 덤프</span>
+<span class="kw">end</span></code></pre>
+        <p class="dim" style="margin:6px 0">주의: 전 신호를 덤프하면 파일이 거대해지고 느려집니다 — 필요한 계층만 덤프하는 게 실무 감각.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="slide">
+    <div class="kicker">⑧ 버전관리 실무</div>
+    <h2>Git · Perforce — 검증 코드도 자산</h2>
+    <div class="grid2">
+      <div class="card"><h3><span class="ico">🌿</span> Git</h3><p>RTL·TB·스크립트 버전관리. 브랜치·코드리뷰·CI 회귀 트리거. 대용량 파형·라이브러리는 <strong>.gitignore</strong> 또는 <strong>Git LFS</strong>.</p></div>
+      <div class="card"><h3><span class="ico">🗄️</span> Perforce</h3><p>반도체 대기업이 즐겨 쓰는 중앙식 VCS. 초대용량 파일·세밀한 권한·파일 잠금에 강함. AD테크 같은 디자인하우스도 종종 사용.</p></div>
+    </div>
+    <pre class="code sm mt"><code><span class="cmt"># tape-out/릴리스 스냅샷을 태그로 고정 (재현성)</span>
+git tag -a rtl_v1.2_tapeout -m "block A signoff"
+git push origin rtl_v1.2_tapeout</code></pre>
+    <div class="note">면접 포인트: "특정 커밋/태그 = 특정 칩 RTL"이라는 <strong>재현성</strong> 개념. 회귀 결과를 커밋과 연결해 추적합니다.</div>
+  </section>
+
+  <!-- 11 -->
+  <section class="slide">
+    <div class="kicker">면접 예상 질문</div>
+    <h2>도구·실무 흐름으로 이렇게 답한다</h2>
+    <div class="qa"><div class="q">회귀는 어떻게 돌리나요?</div><div class="a">testlist에 테스트 목록을 두고, Makefile/Python 러너로 각 테스트를 여러 시드로 LSF grid에 병렬 제출합니다. 야간에 수백~수천 잡을 돌린 뒤 로그를 파싱해 pass/fail을 집계하고, 각 run의 커버리지 DB를 urg/imc로 merge해 통합 리포트를 봅니다. 실패한 시드는 반드시 로깅해 재현·디버그합니다.</div></div>
+    <div class="qa"><div class="q">시뮬레이션이 fail했습니다. 어떻게 디버깅하나요?</div><div class="a">먼저 로그에서 UVM_ERROR/FATAL과 그 발생 시각을 찾고, FSDB 파형을 Verdi로 열어 그 시각으로 점프합니다. 관련 신호를 추가해 값이 틀어진 지점을 드라이버 역추적으로 위로 따라가며 원인(자극·체크·RTL)을 좁힙니다. 재현되면 그 시드로 반복해 수정합니다.</div></div>
+    <div class="qa"><div class="q">Tcl이나 Makefile은 어디에 쓰나요?</div><div class="a">Makefile로 compile→elaboration→simulation 타깃을 만들어 <code>make sim TEST=</code> 한 줄로 돌립니다. Tcl은 시뮬레이터(UCLI)뿐 아니라 합성 dc_shell·STA pt_shell 등 EDA 툴 공용 제어 언어라, 리셋 강제·실행 제어·파형 덤프 스크립트에 씁니다.</div></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <div class="kicker">핵심 요약</div>
+    <h2>실무 도구 — 한 손에</h2>
+    <div class="grid2">
+      <div><ul>
+        <li><strong>Linux</strong>: <code>grep/find/less/vim</code>, 로그에서 fail 찾기</li>
+        <li><strong>Makefile</strong>: <code>comp/sim/regress</code> 타깃 = 3단계 자동화</li>
+        <li><strong>시뮬</strong>: <code>+UVM_TESTNAME</code> <code>+seed</code> <code>-cm/-coverage</code> <code>-l log</code></li>
+        <li><strong>Tcl</strong>: 시뮬·합성·STA 공용 리모컨(force/run/dump)</li>
+        <li><strong>Python/Perl</strong>: 회귀 러너·로그 파싱·리포트(실패 시드 로깅)</li>
+        <li><strong>회귀</strong>: LSF grid → merge(urg/imc) → 구멍 분석</li>
+        <li><strong>디버그</strong>: FSDB + Verdi 역추적 · <strong>Git/Perforce</strong> 재현성</li>
+      </ul></div>
+      <div class="takeaway"><p style="margin:6px 0;font-size:17px;color:var(--ink)">"저는 리눅스에서 Makefile로 <strong class="hl">compile→sim→회귀</strong>를 돌리고, LSF로 병렬화해 커버리지를 merge하며, fail은 <strong class="hl">FSDB 파형을 Verdi로 역추적</strong>해 디버그합니다." — 이 한 문장이 '실무 준비됨'의 신호입니다.</p></div>
+    </div>
+    <div class="note mt">← 목차로 돌아가 다른 챕터와 함께 보세요. 이 도구 흐름은 검증 4-1(3단계)·4-2(시뮬레이터)와 짝을 이룹니다.</div>
+  </section>
+
+</div>
+<script src="../assets/slides.js"></script>
+</body>
+</html>
